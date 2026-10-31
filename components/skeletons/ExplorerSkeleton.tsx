@@ -65,99 +65,99 @@ export function ExplorerSidebarSkeleton() {
 
 export function ExplorerDetailSkeleton() {
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in duration-150">
+    <div className="flex flex-col gap-3 lg:gap-3.5 animate-in fade-in duration-150">
       {/* HERO STAGE: 3D Visualizer & Profile Card Skeleton */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+      <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-3 sm:p-3.5 lg:p-4 shadow-xl flex flex-col lg:flex-row items-stretch gap-4 backdrop-blur-md">
         {/* Left: 3D Visualizer Canvas Skeleton */}
-        <div className="lg:col-span-7 flex flex-col">
-          <div className="w-full h-[360px] sm:h-[420px] rounded-2xl border border-zinc-800/90 bg-zinc-950 shadow-2xl flex flex-col justify-between p-4 relative overflow-hidden">
+        <div className="w-full lg:w-[320px] xl:w-[360px] shrink-0">
+          <div className="w-full h-[235px] sm:h-[250px] lg:h-[255px] rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-lg flex flex-col justify-between p-3 relative overflow-hidden">
             {/* Top Bar Badges */}
             <div className="flex items-center justify-between z-10">
-              <div className="h-6 w-24 rounded-lg bg-zinc-900/90 border border-zinc-800 animate-pulse" />
-              <div className="h-6 w-14 rounded-lg bg-zinc-900/90 border border-zinc-800 animate-pulse" />
+              <div className="h-5 w-20 rounded-md bg-zinc-900/90 border border-zinc-800 animate-pulse" />
+              <div className="h-5 w-12 rounded-md bg-zinc-900/90 border border-zinc-800 animate-pulse" />
             </div>
 
             {/* Central Canvas Wireframe & Shimmer */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-8 pointer-events-none">
-              <div className="relative w-48 h-48 sm:w-56 sm:h-56 rounded-full bg-accent/5 border border-accent/15 flex items-center justify-center animate-pulse">
-                <div className="w-32 h-32 rounded-full border border-zinc-800/80 flex items-center justify-center">
-                  <div className="w-16 h-16 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center">
-                    <div className="w-6 h-6 rounded-md bg-accent/20" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-4 pointer-events-none">
+              <div className="relative w-32 h-32 rounded-full bg-accent/5 border border-accent/15 flex items-center justify-center animate-pulse">
+                <div className="w-20 h-20 rounded-full border border-zinc-800/80 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+                    <div className="w-4 h-4 rounded-md bg-accent/20" />
                   </div>
                 </div>
               </div>
-              <div className="h-3 w-36 rounded bg-zinc-900/80 border border-zinc-850 mt-4 animate-pulse" />
+              <div className="h-2.5 w-28 rounded bg-zinc-900/80 border border-zinc-850 mt-2 animate-pulse" />
             </div>
 
             {/* Bottom Controls Pill */}
             <div className="flex items-center justify-center z-10">
-              <div className="h-7 w-36 rounded-full bg-zinc-900/90 border border-zinc-800/80 animate-pulse" />
+              <div className="h-6 w-28 rounded-full bg-zinc-900/90 border border-zinc-800/80 animate-pulse" />
             </div>
           </div>
         </div>
 
         {/* Right: Exercise Profile & Records Skeleton */}
-        <div className="lg:col-span-5 flex flex-col justify-between gap-4 p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md">
+        <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5 gap-2.5">
           <div>
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="h-5 w-24 rounded-md bg-accent/10 border border-accent/20 animate-pulse" />
-              <div className="h-5 w-16 rounded bg-zinc-800/80 border border-zinc-700/60 animate-pulse" />
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <div className="h-4 w-20 rounded-md bg-accent/10 border border-accent/20 animate-pulse" />
+              <div className="h-4 w-14 rounded bg-zinc-800/80 border border-zinc-700/60 animate-pulse" />
             </div>
 
-            <div className="h-7 w-4/5 rounded-lg bg-zinc-800 mt-2 mb-2 animate-pulse" />
-            <div className="h-3.5 w-44 rounded bg-zinc-800/60 flex items-center gap-1.5 animate-pulse" />
+            <div className="h-6 w-3/4 rounded-lg bg-zinc-800 mt-1 mb-1 animate-pulse" />
+            <div className="h-3 w-36 rounded bg-zinc-800/60 flex items-center gap-1.5 animate-pulse" />
           </div>
 
           {/* PR & 1RM Hero Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {/* PR Card */}
-            <div className="p-3.5 rounded-xl bg-accent/10 border border-accent/25 flex flex-col justify-between gap-2 shadow-sm">
+            <div className="p-2.5 rounded-xl bg-accent/10 border border-accent/25 flex flex-col justify-between gap-1.5 shadow-sm">
               <div className="flex items-center justify-between">
-                <div className="h-3 w-20 rounded bg-accent/20 animate-pulse" />
-                <div className="w-3.5 h-3.5 rounded bg-accent/30" />
+                <div className="h-2.5 w-16 rounded bg-accent/20 animate-pulse" />
+                <div className="w-3 h-3 rounded bg-accent/30" />
               </div>
-              <div className="h-6 w-24 rounded bg-accent/30 animate-pulse my-0.5" />
-              <div className="h-2.5 w-16 rounded bg-accent/20 animate-pulse" />
+              <div className="h-5 w-20 rounded bg-accent/30 animate-pulse my-0.5" />
+              <div className="h-2 w-14 rounded bg-accent/20 animate-pulse" />
             </div>
 
             {/* 1RM Estimado Card */}
-            <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between gap-2 shadow-sm">
+            <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between gap-1.5 shadow-sm">
               <div className="flex items-center justify-between">
-                <div className="h-3 w-20 rounded bg-zinc-800 animate-pulse" />
-                <div className="w-3.5 h-3.5 rounded bg-zinc-800" />
+                <div className="h-2.5 w-16 rounded bg-zinc-800 animate-pulse" />
+                <div className="w-3 h-3 rounded bg-zinc-800" />
               </div>
-              <div className="h-6 w-20 rounded bg-zinc-800 animate-pulse my-0.5" />
-              <div className="h-2.5 w-20 rounded bg-zinc-850 animate-pulse" />
+              <div className="h-5 w-16 rounded bg-zinc-800 animate-pulse my-0.5" />
+              <div className="h-2 w-16 rounded bg-zinc-850 animate-pulse" />
             </div>
           </div>
 
           {/* Muscle Activation Guide */}
-          <div className="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex flex-col gap-2">
-            <div className="h-3 w-28 rounded bg-zinc-800/80 animate-pulse" />
+          <div className="p-2.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex flex-col gap-1.5">
+            <div className="h-2.5 w-24 rounded bg-zinc-800/80 animate-pulse" />
             <div className="flex flex-wrap gap-1.5">
-              <div className="h-6 w-32 rounded-md bg-red-500/10 border border-red-500/20 animate-pulse" />
-              <div className="h-6 w-20 rounded-md bg-zinc-900 border border-zinc-800 animate-pulse" />
-              <div className="h-6 w-24 rounded-md bg-zinc-900 border border-zinc-800 animate-pulse" />
+              <div className="h-5 w-28 rounded-md bg-red-500/10 border border-red-500/20 animate-pulse" />
+              <div className="h-5 w-16 rounded-md bg-zinc-900 border border-zinc-800 animate-pulse" />
+              <div className="h-5 w-20 rounded-md bg-zinc-900 border border-zinc-800 animate-pulse" />
             </div>
           </div>
         </div>
       </div>
 
       {/* Progression Chart Skeleton */}
-      <div className="p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="p-3 sm:p-3.5 lg:p-4 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm flex flex-col gap-2.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <div className="h-4 w-40 rounded bg-zinc-800 animate-pulse" />
-            <div className="h-3 w-64 rounded bg-zinc-800/60 mt-1.5 animate-pulse" />
+            <div className="h-4 w-36 rounded bg-zinc-800 animate-pulse" />
+            <div className="h-3 w-56 rounded bg-zinc-800/60 mt-1 animate-pulse" />
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-7 w-20 rounded-lg bg-zinc-900 border border-zinc-800 animate-pulse" />
-            <div className="h-7 w-24 rounded-lg bg-zinc-900 border border-zinc-800 animate-pulse" />
+            <div className="h-6 w-16 rounded-lg bg-zinc-900 border border-zinc-800 animate-pulse" />
+            <div className="h-6 w-20 rounded-lg bg-zinc-900 border border-zinc-800 animate-pulse" />
           </div>
         </div>
 
         {/* Chart Canvas Simulating Progression Graph */}
-        <div className="h-[260px] w-full rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-4 flex items-end justify-between gap-2.5 relative overflow-hidden">
+        <div className="h-[210px] w-full rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-3 flex items-end justify-between gap-2.5 relative overflow-hidden">
           {/* Subtle grid lines background */}
           <div className="absolute inset-0 flex flex-col justify-between p-4 pointer-events-none opacity-20">
             <div className="border-b border-dashed border-zinc-700 w-full" />
@@ -218,7 +218,7 @@ export function ExplorerDetailSkeleton() {
 
 export function ExplorerSkeleton() {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 py-6">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 py-2.5 lg:py-3">
       {/* Left Sidebar Skeleton */}
       <div className="lg:col-span-4 xl:col-span-4">
         <ExplorerSidebarSkeleton />

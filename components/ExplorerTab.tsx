@@ -236,9 +236,9 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
   const activeMedia = currentMedia || (detailData ? getExerciseMedia(detailData.exercise.name) : null);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 py-4 lg:py-5">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 py-2.5 lg:py-3">
       {/* Left Sidebar: Exercise List */}
-      <div className="lg:col-span-4 xl:col-span-4 flex flex-col gap-3.5 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5.5rem)]">
+      <div className="lg:col-span-4 xl:col-span-4 flex flex-col gap-3.5 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)]">
         {/* Search */}
         <div className="relative">
           <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
@@ -422,21 +422,21 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
           <>
 
             {/* Above-the-fold Viewport Stage: Exercise Profile + Progression Chart fill the screen */}
-            <div className="flex flex-col gap-4 lg:gap-5 lg:min-h-[calc(100vh-5.5rem)] justify-between">
+            <div className="flex flex-col gap-3 lg:gap-3.5">
               {/* HERO STAGE: Anatomical Visualizer & Exercise Profile */}
-              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 sm:p-5 shadow-xl flex flex-col lg:flex-row items-stretch gap-5 backdrop-blur-md">
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-3 sm:p-3.5 lg:p-4 shadow-xl flex flex-col lg:flex-row items-stretch gap-4 backdrop-blur-md">
                 {/* 3D Animation Showcase (Prominent and Impressive) */}
-                <div className="w-full lg:w-[380px] xl:w-[420px] shrink-0">
+                <div className="w-full lg:w-[320px] xl:w-[360px] shrink-0">
                   <ExerciseAnimationView
                     media={activeMedia}
-                    className="w-full h-[280px] sm:h-[300px] lg:h-[310px] rounded-xl shadow-lg"
+                    className="w-full h-[235px] sm:h-[250px] lg:h-[255px] rounded-xl shadow-lg"
                   />
                 </div>
 
                 {/* Right: Exercise Name, Metric, Category, Session Count & Anatomy */}
-                <div className="flex-1 min-w-0 flex flex-col justify-between py-1 gap-3">
+                <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5 gap-2.5">
                   <div>
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                       <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md bg-accent/10 border border-accent/30 text-accent-light font-semibold">
                         {MUSCLE_LABELS[activeMedia.primaryMuscle] || activeMedia.primaryMuscle}
                       </span>
@@ -464,11 +464,11 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       )}
                     </div>
 
-                    <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-100 truncate" title={detailData.exercise.name}>
+                    <h1 className="text-lg sm:text-xl font-bold tracking-tight text-zinc-100 truncate" title={detailData.exercise.name}>
                       {detailData.exercise.name}
                     </h1>
 
-                    <p className="text-xs text-zinc-400 flex items-center gap-1.5 mt-1">
+                    <p className="text-xs text-zinc-400 flex items-center gap-1.5 mt-0.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                       <span>
                         {detailData.sessions.length} entrenamientos {activeSeason ? "en esta temporada" : "registrados"}
@@ -478,10 +478,10 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
 
                   {/* PR & 1RM Hero Cards */}
                   {activeSeason && seasonColor ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       {/* Season PR Card */}
                       <div
-                        className="p-3 rounded-xl border flex flex-col justify-between shadow-xs"
+                        className="p-2.5 rounded-xl border flex flex-col justify-between shadow-xs"
                         style={{
                           background: `linear-gradient(to bottom right, ${hexToRgba(seasonColor, 0.18)}, rgba(24, 24, 27, 0.95), rgba(24, 24, 27, 0.95))`,
                           borderColor: hexToRgba(seasonColor, 0.4),
@@ -494,15 +494,15 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                           >
                             PR Season
                           </span>
-                          <FlameIcon className="w-4 h-4" style={{ color: seasonColor }} />
+                          <FlameIcon className="w-3.5 h-3.5" style={{ color: seasonColor }} />
                         </div>
                         <div
-                          className="text-lg font-mono tabular-nums font-bold mt-1"
+                          className="text-base sm:text-lg font-mono tabular-nums font-bold mt-0.5"
                           style={{ color: seasonColor }}
                         >
                           {detailData.exercise.seasonBest?.label || "Sin registros"}
                         </div>
-                        <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between mt-1">
+                        <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between mt-0.5">
                           <span>{detailData.exercise.seasonBest?.date || "—"}</span>
                           {detailData.exercise.estimated1RM && (
                             <span className="font-sans font-medium" style={{ color: seasonColor }}>
@@ -513,17 +513,17 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       </div>
 
                       {/* ALL-TIME PR Card */}
-                      <div className="p-3 rounded-xl bg-gradient-to-br from-yellow-500/10 via-zinc-900 to-zinc-900 border border-yellow-500/30 flex flex-col justify-between shadow-xs">
+                      <div className="p-2.5 rounded-xl bg-gradient-to-br from-yellow-500/10 via-zinc-900 to-zinc-900 border border-yellow-500/30 flex flex-col justify-between shadow-xs">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] uppercase tracking-wider text-yellow-400 font-bold">
                             ALL-TIME PR
                           </span>
-                          <CrownIcon className="w-4 h-4 text-yellow-400" />
+                          <CrownIcon className="w-3.5 h-3.5 text-yellow-400" />
                         </div>
-                        <div className="text-lg font-mono tabular-nums font-bold text-yellow-200 mt-1">
+                        <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-200 mt-0.5">
                           {detailData.exercise.allTimeBest?.label || "—"}
                         </div>
-                        <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between mt-1">
+                        <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between mt-0.5">
                           <span>{detailData.exercise.allTimeBest?.date || "Sin registro"}</span>
                           {detailData.exercise.allTimeEstimated1RM && (
                             <span className="text-yellow-400/90 font-sans">
@@ -534,37 +534,37 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       {/* PR Card (All-Time) */}
-                      <div className="p-3 rounded-xl bg-gradient-to-br from-accent/15 via-zinc-900 to-zinc-900 border border-accent/30 flex flex-col justify-between shadow-xs">
+                      <div className="p-2.5 rounded-xl bg-gradient-to-br from-accent/15 via-zinc-900 to-zinc-900 border border-accent/30 flex flex-col justify-between shadow-xs">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] uppercase tracking-wider text-accent-light font-bold">
                             Récord Personal (PR)
                           </span>
-                          <TrophyIcon className="w-4 h-4 text-accent-light" />
+                          <TrophyIcon className="w-3.5 h-3.5 text-accent-light" />
                         </div>
-                        <div className="text-lg font-mono tabular-nums font-bold text-accent-lighter mt-1">
+                        <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-accent-lighter mt-0.5">
                           {detailData.exercise.allTimeBest?.label || "—"}
                         </div>
-                        <span className="text-[10px] font-mono text-zinc-500 mt-1">
+                        <span className="text-[10px] font-mono text-zinc-500 mt-0.5">
                           {detailData.exercise.allTimeBest?.date || "Sin registro"}
                         </span>
                       </div>
 
                       {/* 1RM Estimado Card */}
-                      <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between shadow-xs">
+                      <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between shadow-xs">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
                             1RM Estimado
                           </span>
-                          <FlameIcon className="w-4 h-4 text-zinc-500" />
+                          <FlameIcon className="w-3.5 h-3.5 text-zinc-500" />
                         </div>
-                        <div className="text-lg font-mono tabular-nums font-bold text-zinc-200 mt-1">
+                        <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-zinc-200 mt-0.5">
                           {detailData.exercise.estimated1RM
                             ? `${detailData.exercise.estimated1RM} ${getUnit(detailData.exercise.metricType)}`
                             : "—"}
                         </div>
-                        <span className="text-[10px] text-zinc-500 mt-1">
+                        <span className="text-[10px] text-zinc-500 mt-0.5">
                           Fórmula Brzycki
                         </span>
                       </div>
@@ -572,19 +572,19 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                   )}
 
                   {/* Muscle Activation Guide */}
-                  <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80">
-                    <span className="text-[10px] uppercase tracking-wider text-zinc-500 block mb-1.5 font-medium">
+                  <div className="p-2.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80">
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-500 block mb-1 font-medium">
                       Activación Anatómica
                     </span>
                     <div className="flex flex-wrap gap-1.5">
-                      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-500/10 border border-red-500/30 text-[11px] text-red-300 font-semibold">
+                      <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/30 text-[10px] sm:text-[11px] text-red-300 font-semibold">
                         <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
                         {MUSCLE_LABELS[activeMedia.primaryMuscle]} (Primario)
                       </span>
                       {activeMedia.secondaryMuscles.map((sec, i) => (
                         <span
                           key={i}
-                          className="px-2 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400"
+                          className="px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-[10px] sm:text-[11px] text-zinc-400"
                         >
                           {MUSCLE_LABELS[sec] || sec}
                         </span>
@@ -595,8 +595,8 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
               </div>
 
               {/* Progression Chart Card */}
-              <div className="p-4 sm:p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm shadow-xl">
-                <div className="flex items-center justify-between mb-3">
+              <div className="p-3 sm:p-3.5 lg:p-4 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm shadow-xl">
+                <div className="flex items-center justify-between mb-2">
                   <div>
                     <h3 className="text-sm font-semibold tracking-tight text-zinc-100 flex items-center gap-2">
                       <span>Curva de Progresión</span>
@@ -624,7 +624,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 </div>
 
                 {detailData.chartPoints.length === 0 ? (
-                  <div className="py-16 text-center text-xs text-zinc-500">
+                  <div className="py-12 text-center text-xs text-zinc-500">
                     No hay sesiones de este ejercicio en la {activeSeason?.endDate ? `season "${activeSeason?.name}"` : `season activa (${activeSeason?.name})`}.
                   </div>
                 ) : (
@@ -639,7 +639,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                     seasonColor={seasonColor || undefined}
                     allTimeBestLabel={detailData.exercise.allTimeBest?.label}
                     seasonBestLabel={detailData.exercise.seasonBest?.label}
-                    height={260}
+                    height={210}
                     onPointClick={(pt) => {
                       if (pt.workoutId) {
                         handleOpenWorkout(pt.workoutId);
@@ -651,7 +651,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
             </div>
 
             {/* Historical Sessions List: Placed cleanly below the viewport fold */}
-            <div className="flex flex-col gap-3 pt-6 border-t border-zinc-800/80">
+            <div className="flex flex-col gap-3 pt-4 border-t border-zinc-800/80">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs uppercase tracking-wider text-zinc-400 font-semibold flex items-center gap-2">
                   <CalendarIcon className="w-3.5 h-3.5 text-zinc-500" />

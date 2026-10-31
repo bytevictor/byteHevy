@@ -271,7 +271,7 @@ export function ProgressionChart({
   metricName = "Carga Top",
   secondaryMetricName = "1RM Est.",
   showSecondaryLine = false,
-  height = 220,
+  height = 210,
   mode: controlledMode,
   defaultMode = "session",
   onModeChange,
@@ -680,7 +680,7 @@ export function ProgressionChart({
     };
 
     return (
-      <div className="relative w-full rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-2 sm:p-3 backdrop-blur-sm">
+      <div className="relative w-full rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-1.5 sm:p-2 backdrop-blur-sm">
         <svg
           viewBox={`0 0 ${svgW} ${svgH}`}
           className="w-full overflow-visible"
