@@ -71,7 +71,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
           setCurrentMedia(res.data);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [detailData?.exercise.name]);
 
   // Fetch exercises list on mount or when activeSeasonId changes
@@ -238,7 +238,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 py-4 lg:py-5">
       {/* Left Sidebar: Exercise List */}
-      <div className="lg:col-span-4 xl:col-span-4 flex flex-col gap-3.5">
+      <div className="lg:col-span-4 xl:col-span-4 flex flex-col gap-3.5 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5.5rem)]">
         {/* Search */}
         <div className="relative">
           <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
@@ -271,11 +271,10 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
             <button
               key={cat.id}
               onClick={() => setCategoryFilter(cat.id)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
-                categoryFilter === cat.id
+              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${categoryFilter === cat.id
                   ? "bg-zinc-800 text-zinc-100 border border-zinc-700 shadow-sm"
                   : "bg-zinc-900/50 text-zinc-400 hover:text-zinc-200 border border-zinc-850 hover:bg-zinc-800/40"
-              }`}
+                }`}
             >
               {cat.label}
             </button>
@@ -324,7 +323,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
         </div>
 
         {/* List of Exercises */}
-        <div className="flex flex-col gap-2 max-h-[calc(100vh-270px)] overflow-y-auto pr-1">
+        <div className="flex flex-col gap-2 flex-1 max-h-[calc(100vh-270px)] overflow-y-auto pr-1">
           {filteredExercises.map((ex, idx) => {
             const isSelected = selectedId === ex.id;
             const media = getExerciseMedia(ex.name);
@@ -340,20 +339,18 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
               <button
                 key={ex.id}
                 onClick={() => setSelectedId(ex.id)}
-                className={`group flex items-center gap-3 text-left p-2.5 rounded-xl border transition-all duration-150 cursor-pointer ${
-                  isSelected
+                className={`group flex items-center gap-3 text-left p-2.5 rounded-xl border transition-all duration-150 cursor-pointer ${isSelected
                     ? "bg-zinc-850/90 border-accent/50 shadow-lg ring-1 ring-accent/20"
                     : "bg-zinc-900/40 border-zinc-800/70 hover:bg-zinc-850/50 hover:border-zinc-755"
-                }`}
+                  }`}
               >
                 {/* 3D Visual Thumbnail */}
                 <div className="relative shrink-0">
                   <div
-                    className={`w-12 h-12 rounded-lg bg-white overflow-hidden flex items-center justify-center p-0.5 border transition-all ${
-                      isSelected
+                    className={`w-12 h-12 rounded-lg bg-white overflow-hidden flex items-center justify-center p-0.5 border transition-all ${isSelected
                         ? "border-accent-light ring-2 ring-accent/20"
                         : "border-zinc-300 group-hover:border-zinc-200"
-                    }`}
+                      }`}
                   >
                     <img
                       src={media.gifUrl}
@@ -373,20 +370,18 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                   <div className="flex items-center justify-between gap-1.5 mb-1">
                     <span
-                      className={`text-xs font-semibold truncate ${
-                        isSelected
+                      className={`text-xs font-semibold truncate ${isSelected
                           ? "text-zinc-100"
                           : "text-zinc-300 group-hover:text-zinc-100"
-                      }`}
+                        }`}
                     >
                       {ex.name}
                     </span>
                     <span
-                      className={`text-[10px] font-mono tabular-nums px-2 py-0.5 rounded-md border font-medium shrink-0 ${
-                        isSelected
+                      className={`text-[10px] font-mono tabular-nums px-2 py-0.5 rounded-md border font-medium shrink-0 ${isSelected
                           ? "bg-accent/20 border-accent/40 text-accent-lighter font-bold shadow-sm"
                           : "bg-zinc-800/80 border-zinc-700/50 text-zinc-300"
-                      }`}
+                        }`}
                     >
                       {displaySessionCount} ses
                     </span>
@@ -395,16 +390,14 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                   <div className="flex items-center justify-between text-xs gap-1">
                     <span className="text-[11px] text-zinc-400 truncate max-w-[110px] flex items-center gap-1.5">
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          isSelected ? "bg-accent-light" : "bg-zinc-600"
-                        }`}
+                        className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-accent-light" : "bg-zinc-600"
+                          }`}
                       />
                       {muscleName}
                     </span>
                     <span
-                      className={`text-xs font-mono tabular-nums font-semibold shrink-0 ${
-                        isSelected ? "text-accent-light" : "text-zinc-300"
-                      }`}
+                      className={`text-xs font-mono tabular-nums font-semibold shrink-0 ${isSelected ? "text-accent-light" : "text-zinc-300"
+                        }`}
                     >
                       {displayTopLabel}
                     </span>
@@ -428,235 +421,237 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
         ) : detailData && activeMedia ? (
           <>
 
-            {/* HERO STAGE: Compact Visualizer & Exercise Profile */}
-            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-3.5 sm:p-4 shadow-xl flex flex-col md:flex-row items-stretch gap-4 backdrop-blur-md">
-              {/* 3D Animation Showcase */}
-              <div className="w-full sm:w-52 md:w-56 lg:w-60 shrink-0">
-                <ExerciseAnimationView
-                  media={activeMedia}
-                  compact
-                  className="w-full h-40 sm:h-44 md:h-full min-h-[160px] max-h-[185px] rounded-xl shadow-md"
-                />
-              </div>
+            {/* Above-the-fold Viewport Stage: Exercise Profile + Progression Chart fill the screen */}
+            <div className="flex flex-col gap-4 lg:gap-5 lg:min-h-[calc(100vh-5.5rem)] justify-between">
+              {/* HERO STAGE: Anatomical Visualizer & Exercise Profile */}
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 sm:p-5 shadow-xl flex flex-col lg:flex-row items-stretch gap-5 backdrop-blur-md">
+                {/* 3D Animation Showcase (Prominent and Impressive) */}
+                <div className="w-full lg:w-[380px] xl:w-[420px] shrink-0">
+                  <ExerciseAnimationView
+                    media={activeMedia}
+                    className="w-full h-[280px] sm:h-[300px] lg:h-[310px] rounded-xl shadow-lg"
+                  />
+                </div>
 
-              {/* Center: Exercise Name, Metric, Category, Session Count & Anatomy */}
-              <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5 gap-2.5">
-                <div>
-                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                    <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md bg-accent/10 border border-accent/30 text-accent-light font-semibold">
-                      {MUSCLE_LABELS[activeMedia.primaryMuscle] || activeMedia.primaryMuscle}
-                    </span>
-                    <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700/80 text-zinc-400 font-medium">
-                      {detailData.exercise.metricType.replace("_", " ")}
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-850 border border-zinc-700/60 text-zinc-400 font-normal">
-                      {activeMedia.equipment}
-                    </span>
-                    {activeSeason && seasonColor && (
-                      <span
-                        className="text-[10px] font-mono px-2 py-0.5 rounded-full border font-medium flex items-center gap-1.5"
-                        style={{
-                          backgroundColor: hexToRgba(seasonColor, 0.16),
-                          borderColor: hexToRgba(seasonColor, 0.35),
-                          color: seasonColor,
-                        }}
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full"
-                          style={{ backgroundColor: seasonColor }}
-                        />
-                        <span>Season: {activeSeason.name}</span>
+                {/* Right: Exercise Name, Metric, Category, Session Count & Anatomy */}
+                <div className="flex-1 min-w-0 flex flex-col justify-between py-1 gap-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md bg-accent/10 border border-accent/30 text-accent-light font-semibold">
+                        {MUSCLE_LABELS[activeMedia.primaryMuscle] || activeMedia.primaryMuscle}
                       </span>
-                    )}
+                      <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700/80 text-zinc-400 font-medium">
+                        {detailData.exercise.metricType.replace("_", " ")}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-850 border border-zinc-700/60 text-zinc-400 font-normal">
+                        {activeMedia.equipment}
+                      </span>
+                      {activeSeason && seasonColor && (
+                        <span
+                          className="text-[10px] font-mono px-2 py-0.5 rounded-full border font-medium flex items-center gap-1.5"
+                          style={{
+                            backgroundColor: hexToRgba(seasonColor, 0.16),
+                            borderColor: hexToRgba(seasonColor, 0.35),
+                            color: seasonColor,
+                          }}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full"
+                            style={{ backgroundColor: seasonColor }}
+                          />
+                          <span>Season: {activeSeason.name}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-100 truncate" title={detailData.exercise.name}>
+                      {detailData.exercise.name}
+                    </h1>
+
+                    <p className="text-xs text-zinc-400 flex items-center gap-1.5 mt-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      <span>
+                        {detailData.sessions.length} entrenamientos {activeSeason ? "en esta temporada" : "registrados"}
+                      </span>
+                    </p>
                   </div>
 
-                  <h1 className="text-lg sm:text-xl font-bold tracking-tight text-zinc-100 truncate" title={detailData.exercise.name}>
-                    {detailData.exercise.name}
-                  </h1>
+                  {/* PR & 1RM Hero Cards */}
+                  {activeSeason && seasonColor ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Season PR Card */}
+                      <div
+                        className="p-3 rounded-xl border flex flex-col justify-between shadow-xs"
+                        style={{
+                          background: `linear-gradient(to bottom right, ${hexToRgba(seasonColor, 0.18)}, rgba(24, 24, 27, 0.95), rgba(24, 24, 27, 0.95))`,
+                          borderColor: hexToRgba(seasonColor, 0.4),
+                        }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span
+                            className="text-[10px] uppercase tracking-wider font-bold truncate"
+                            style={{ color: seasonColor }}
+                          >
+                            PR Season
+                          </span>
+                          <FlameIcon className="w-4 h-4" style={{ color: seasonColor }} />
+                        </div>
+                        <div
+                          className="text-lg font-mono tabular-nums font-bold mt-1"
+                          style={{ color: seasonColor }}
+                        >
+                          {detailData.exercise.seasonBest?.label || "Sin registros"}
+                        </div>
+                        <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between mt-1">
+                          <span>{detailData.exercise.seasonBest?.date || "—"}</span>
+                          {detailData.exercise.estimated1RM && (
+                            <span className="font-sans font-medium" style={{ color: seasonColor }}>
+                              1RM: {detailData.exercise.estimated1RM} kg
+                            </span>
+                          )}
+                        </div>
+                      </div>
 
-                  <p className="text-xs text-zinc-400 flex items-center gap-1.5 mt-0.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    <span>
-                      {detailData.sessions.length} entrenamientos {activeSeason ? "en esta temporada" : "registrados"}
-                    </span>
-                  </p>
-                </div>
+                      {/* ALL-TIME PR Card */}
+                      <div className="p-3 rounded-xl bg-gradient-to-br from-yellow-500/10 via-zinc-900 to-zinc-900 border border-yellow-500/30 flex flex-col justify-between shadow-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] uppercase tracking-wider text-yellow-400 font-bold">
+                            ALL-TIME PR
+                          </span>
+                          <CrownIcon className="w-4 h-4 text-yellow-400" />
+                        </div>
+                        <div className="text-lg font-mono tabular-nums font-bold text-yellow-200 mt-1">
+                          {detailData.exercise.allTimeBest?.label || "—"}
+                        </div>
+                        <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between mt-1">
+                          <span>{detailData.exercise.allTimeBest?.date || "Sin registro"}</span>
+                          {detailData.exercise.allTimeEstimated1RM && (
+                            <span className="text-yellow-400/90 font-sans">
+                              1RM: {detailData.exercise.allTimeEstimated1RM} kg
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* PR Card (All-Time) */}
+                      <div className="p-3 rounded-xl bg-gradient-to-br from-accent/15 via-zinc-900 to-zinc-900 border border-accent/30 flex flex-col justify-between shadow-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] uppercase tracking-wider text-accent-light font-bold">
+                            Récord Personal (PR)
+                          </span>
+                          <TrophyIcon className="w-4 h-4 text-accent-light" />
+                        </div>
+                        <div className="text-lg font-mono tabular-nums font-bold text-accent-lighter mt-1">
+                          {detailData.exercise.allTimeBest?.label || "—"}
+                        </div>
+                        <span className="text-[10px] font-mono text-zinc-500 mt-1">
+                          {detailData.exercise.allTimeBest?.date || "Sin registro"}
+                        </span>
+                      </div>
 
-                {/* Muscle Activation Guide */}
-                <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-zinc-800/60">
-                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mr-0.5">
-                    Activación:
-                  </span>
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-[10px] text-red-300 font-semibold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                    {MUSCLE_LABELS[activeMedia.primaryMuscle]} (Primario)
-                  </span>
-                  {activeMedia.secondaryMuscles.map((sec, i) => (
-                    <span
-                      key={i}
-                      className="px-2 py-0.5 rounded bg-zinc-850 border border-zinc-800 text-[10px] text-zinc-400"
-                    >
-                      {MUSCLE_LABELS[sec] || sec}
+                      {/* 1RM Estimado Card */}
+                      <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between shadow-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
+                            1RM Estimado
+                          </span>
+                          <FlameIcon className="w-4 h-4 text-zinc-500" />
+                        </div>
+                        <div className="text-lg font-mono tabular-nums font-bold text-zinc-200 mt-1">
+                          {detailData.exercise.estimated1RM
+                            ? `${detailData.exercise.estimated1RM} ${getUnit(detailData.exercise.metricType)}`
+                            : "—"}
+                        </div>
+                        <span className="text-[10px] text-zinc-500 mt-1">
+                          Fórmula Brzycki
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Muscle Activation Guide */}
+                  <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80">
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-500 block mb-1.5 font-medium">
+                      Activación Anatómica
                     </span>
-                  ))}
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-500/10 border border-red-500/30 text-[11px] text-red-300 font-semibold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                        {MUSCLE_LABELS[activeMedia.primaryMuscle]} (Primario)
+                      </span>
+                      {activeMedia.secondaryMuscles.map((sec, i) => (
+                        <span
+                          key={i}
+                          className="px-2 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400"
+                        >
+                          {MUSCLE_LABELS[sec] || sec}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Right: PR & 1RM Hero Cards */}
-              <div className="w-full sm:w-60 lg:w-68 shrink-0 flex flex-col justify-center gap-2">
-                {activeSeason && seasonColor ? (
-                  <>
-                    {/* Season PR Card */}
-                    <div
-                      className="p-2.5 rounded-xl border flex flex-col justify-between shadow-xs"
-                      style={{
-                        background: `linear-gradient(to bottom right, ${hexToRgba(seasonColor, 0.18)}, rgba(24, 24, 27, 0.95), rgba(24, 24, 27, 0.95))`,
-                        borderColor: hexToRgba(seasonColor, 0.4),
-                      }}
-                    >
-                      <div className="flex items-center justify-between">
+              {/* Progression Chart Card */}
+              <div className="p-4 sm:p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm shadow-xl">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-sm font-semibold tracking-tight text-zinc-100 flex items-center gap-2">
+                      <span>Curva de Progresión</span>
+                      {activeSeason && seasonColor && (
                         <span
-                          className="text-[10px] uppercase tracking-wider font-bold truncate"
-                          style={{ color: seasonColor }}
+                          className="text-[10px] font-mono px-2 py-0.5 rounded border font-medium flex items-center gap-1"
+                          style={{
+                            backgroundColor: hexToRgba(seasonColor, 0.16),
+                            borderColor: hexToRgba(seasonColor, 0.35),
+                            color: seasonColor,
+                          }}
                         >
-                          PR Season
+                          <span
+                            className="w-1.5 h-1.5 rounded-full"
+                            style={{ backgroundColor: seasonColor }}
+                          />
+                          <span>{activeSeason.name}</span>
                         </span>
-                        <FlameIcon className="w-3.5 h-3.5" style={{ color: seasonColor }} />
-                      </div>
-                      <div
-                        className="text-base font-mono tabular-nums font-bold mt-0.5"
-                        style={{ color: seasonColor }}
-                      >
-                        {detailData.exercise.seasonBest?.label || "Sin registros"}
-                      </div>
-                      <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between mt-0.5">
-                        <span>{detailData.exercise.seasonBest?.date || "—"}</span>
-                        {detailData.exercise.estimated1RM && (
-                          <span className="font-sans font-medium" style={{ color: seasonColor }}>
-                            1RM: {detailData.exercise.estimated1RM} kg
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                      )}
+                    </h3>
+                    <p className="text-xs text-zinc-400">
+                      Evolución del Top Set real en cada entrenamiento
+                    </p>
+                  </div>
+                </div>
 
-                    {/* ALL-TIME PR Card */}
-                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-yellow-500/10 via-zinc-900 to-zinc-900 border border-yellow-500/30 flex flex-col justify-between shadow-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-wider text-yellow-400 font-bold">
-                          ALL-TIME PR
-                        </span>
-                        <CrownIcon className="w-3.5 h-3.5 text-yellow-400" />
-                      </div>
-                      <div className="text-base font-mono tabular-nums font-bold text-yellow-200 mt-0.5">
-                        {detailData.exercise.allTimeBest?.label || "—"}
-                      </div>
-                      <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between mt-0.5">
-                        <span>{detailData.exercise.allTimeBest?.date || "Sin registro"}</span>
-                        {detailData.exercise.allTimeEstimated1RM && (
-                          <span className="text-yellow-400/90 font-sans">
-                            1RM: {detailData.exercise.allTimeEstimated1RM} kg
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </>
+                {detailData.chartPoints.length === 0 ? (
+                  <div className="py-16 text-center text-xs text-zinc-500">
+                    No hay sesiones de este ejercicio en la season activa ({activeSeason?.name}).
+                  </div>
                 ) : (
-                  <>
-                    {/* PR Card (All-Time) */}
-                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-accent/15 via-zinc-900 to-zinc-900 border border-accent/30 flex flex-col justify-between shadow-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-wider text-accent-light font-bold">
-                          Récord Personal (PR)
-                        </span>
-                        <TrophyIcon className="w-3.5 h-3.5 text-accent-light" />
-                      </div>
-                      <div className="text-base font-mono tabular-nums font-bold text-accent-lighter mt-0.5">
-                        {detailData.exercise.allTimeBest?.label || "—"}
-                      </div>
-                      <span className="text-[10px] font-mono text-zinc-500 mt-0.5">
-                        {detailData.exercise.allTimeBest?.date || "Sin registro"}
-                      </span>
-                    </div>
-
-                    {/* 1RM Estimado Card */}
-                    <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between shadow-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
-                          1RM Estimado
-                        </span>
-                        <FlameIcon className="w-3.5 h-3.5 text-zinc-500" />
-                      </div>
-                      <div className="text-base font-mono tabular-nums font-bold text-zinc-200 mt-0.5">
-                        {detailData.exercise.estimated1RM
-                          ? `${detailData.exercise.estimated1RM} ${getUnit(detailData.exercise.metricType)}`
-                          : "—"}
-                      </div>
-                      <span className="text-[10px] text-zinc-500 mt-0.5">
-                        Fórmula Brzycki
-                      </span>
-                    </div>
-                  </>
+                  <ProgressionChart
+                    data={detailData.chartPoints}
+                    unit={getUnit(detailData.exercise.metricType)}
+                    metricName="Carga Top"
+                    secondaryMetricName="1RM Estimado"
+                    exerciseName={detailData.exercise.name}
+                    metricType={detailData.exercise.metricType}
+                    seasonName={activeSeason?.name}
+                    seasonColor={seasonColor || undefined}
+                    allTimeBestLabel={detailData.exercise.allTimeBest?.label}
+                    seasonBestLabel={detailData.exercise.seasonBest?.label}
+                    height={260}
+                    onPointClick={(pt) => {
+                      if (pt.workoutId) {
+                        handleOpenWorkout(pt.workoutId);
+                      }
+                    }}
+                  />
                 )}
               </div>
             </div>
 
-            {/* Progression Chart Card */}
-            <div className="p-3.5 sm:p-4 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm">
-              <div className="flex items-center justify-between mb-2.5">
-                <div>
-                  <h3 className="text-xs sm:text-sm font-semibold tracking-tight text-zinc-100 flex items-center gap-2">
-                    <span>Curva de Progresión</span>
-                    {activeSeason && seasonColor && (
-                      <span
-                        className="text-[10px] font-mono px-2 py-0.5 rounded border font-medium flex items-center gap-1"
-                        style={{
-                          backgroundColor: hexToRgba(seasonColor, 0.16),
-                          borderColor: hexToRgba(seasonColor, 0.35),
-                          color: seasonColor,
-                        }}
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full"
-                          style={{ backgroundColor: seasonColor }}
-                        />
-                        <span>{activeSeason.name}</span>
-                      </span>
-                    )}
-                  </h3>
-                  <p className="text-[11px] text-zinc-400">
-                    Evolución del Top Set real en cada entrenamiento
-                  </p>
-                </div>
-              </div>
-
-              {detailData.chartPoints.length === 0 ? (
-                <div className="py-12 text-center text-xs text-zinc-500">
-                  No hay sesiones de este ejercicio en la season activa ({activeSeason?.name}).
-                </div>
-              ) : (
-                <ProgressionChart
-                  data={detailData.chartPoints}
-                  unit={getUnit(detailData.exercise.metricType)}
-                  metricName="Carga Top"
-                  secondaryMetricName="1RM Estimado"
-                  exerciseName={detailData.exercise.name}
-                  metricType={detailData.exercise.metricType}
-                  seasonName={activeSeason?.name}
-                  seasonColor={seasonColor || undefined}
-                  allTimeBestLabel={detailData.exercise.allTimeBest?.label}
-                  seasonBestLabel={detailData.exercise.seasonBest?.label}
-                  height={210}
-                  onPointClick={(pt) => {
-                    if (pt.workoutId) {
-                      handleOpenWorkout(pt.workoutId);
-                    }
-                  }}
-                />
-              )}
-            </div>
-
-            {/* Historical Sessions List */}
-            <div className="flex flex-col gap-3">
+            {/* Historical Sessions List: Placed cleanly below the viewport fold */}
+            <div className="flex flex-col gap-3 pt-6 border-t border-zinc-800/80">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs uppercase tracking-wider text-zinc-400 font-semibold flex items-center gap-2">
                   <CalendarIcon className="w-3.5 h-3.5 text-zinc-500" />
@@ -833,9 +828,8 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                         return (
                           <tr
                             key={s.id}
-                            className={`hover:bg-zinc-800/30 transition-colors ${
-                              isSetTop ? "bg-accent/10 font-bold" : ""
-                            }`}
+                            className={`hover:bg-zinc-800/30 transition-colors ${isSetTop ? "bg-accent/10 font-bold" : ""
+                              }`}
                           >
                             <td className="py-2.5 px-3 text-zinc-400 font-normal">
                               #{s.setIndex}
