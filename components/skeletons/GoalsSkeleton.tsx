@@ -25,16 +25,24 @@ export function GoalsSkeleton() {
             </div>
           </div>
 
-          {/* Comparative Stats (Actual vs Ideal) */}
-          <div className="grid grid-cols-2 gap-2.5 pt-1">
+          {/* Comparative Stats (Season | Histórico | Ideal) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
             <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex flex-col gap-1.5">
-              <div className="h-2.5 w-16 rounded bg-zinc-800" />
-              <div className="h-5 w-24 rounded bg-zinc-700/80 mt-0.5" />
+              <div className="h-2.5 w-20 rounded bg-zinc-800" />
+              <div className="h-2 w-14 rounded bg-zinc-850" />
+              <div className="h-5 w-20 rounded bg-zinc-700/80 mt-1" />
               <div className="h-2 w-14 rounded bg-zinc-800" />
             </div>
             <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex flex-col gap-1.5">
-              <div className="h-2.5 w-16 rounded bg-accent/30" />
-              <div className="h-5 w-24 rounded bg-accent/40 mt-0.5" />
+              <div className="h-2.5 w-20 rounded bg-amber-400/30" />
+              <div className="h-2 w-14 rounded bg-emerald-500/30" />
+              <div className="h-5 w-20 rounded bg-amber-400/40 mt-1" />
+              <div className="h-2 w-14 rounded bg-zinc-800" />
+            </div>
+            <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex flex-col gap-1.5">
+              <div className="h-2.5 w-20 rounded bg-accent/30" />
+              <div className="h-2 w-16 rounded bg-zinc-800" />
+              <div className="h-5 w-20 rounded bg-accent/40 mt-1" />
               <div className="h-2 w-14 rounded bg-zinc-800" />
             </div>
           </div>

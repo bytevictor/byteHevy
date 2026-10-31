@@ -359,18 +359,22 @@ export function GoalsTab() {
                               }
                         }
                       >
-                        <div className="flex items-center justify-between gap-1">
+                        <div className="flex flex-col gap-0.5 min-w-0">
                           <span
-                            className="text-[10px] uppercase font-bold tracking-wider truncate flex items-center gap-1.5"
+                            className="text-[10px] uppercase font-bold tracking-wider flex items-center gap-1.5"
                             style={{ color: seasonColor }}
                           >
                             <span
                               className="w-1.5 h-1.5 rounded-full shrink-0"
                               style={{ backgroundColor: seasonColor }}
                             />
-                            <span className="truncate">Récord Season</span>
+                            <span>Récord Season</span>
                           </span>
-                          <span className="text-[9px] font-mono text-zinc-500 truncate max-w-[80px]" title={seasonTitle}>
+                          <span
+                            className="text-[10px] font-mono truncate"
+                            style={{ color: hexToRgba(seasonColor, 0.85) }}
+                            title={seasonTitle}
+                          >
                             {seasonTitle}
                           </span>
                         </div>
@@ -394,11 +398,23 @@ export function GoalsTab() {
 
                       {/* Card 2: Récord Histórico */}
                       <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex flex-col justify-between">
-                        <div className="flex items-center justify-between gap-1">
+                        <div className="flex flex-col gap-0.5 min-w-0">
                           <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider flex items-center gap-1">
-                            <CrownIcon className="w-3 h-3 text-amber-400" />
+                            <CrownIcon className="w-3 h-3 text-amber-400 shrink-0" />
                             <span>Récord Histórico</span>
                           </span>
+                          <div className="flex items-center">
+                            {goal.allTimeReached ? (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-mono font-semibold px-1.5 py-0.2 rounded bg-emerald-500/15 border border-emerald-500/35 text-emerald-400">
+                                <CheckIcon className="w-2.5 h-2.5 shrink-0" />
+                                <span>Conseguido</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-mono text-zinc-500 px-1.5 py-0.2 rounded bg-zinc-900 border border-zinc-800">
+                                <span>No conseguido</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="mt-1">
                           <span className="text-base font-mono font-bold text-amber-300 tabular-nums">
@@ -424,15 +440,27 @@ export function GoalsTab() {
                             : "bg-accent/10 border-accent/30 text-zinc-100"
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-1">
+                        <div className="flex flex-col gap-0.5 min-w-0">
                           <span
                             className={`text-[10px] uppercase font-bold tracking-wider flex items-center gap-1 ${
                               isCompleted ? "text-emerald-400" : "text-accent-light"
                             }`}
                           >
-                            <TargetIcon className="w-3 h-3" />
+                            <TargetIcon className="w-3 h-3 shrink-0" />
                             <span>Objetivo Ideal</span>
                           </span>
+                          <div className="flex items-center">
+                            {isCompleted ? (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-mono font-semibold px-1.5 py-0.2 rounded bg-emerald-500/15 border border-emerald-500/35 text-emerald-400">
+                                <CheckIcon className="w-2.5 h-2.5 shrink-0" />
+                                <span>En season</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-mono text-zinc-500 truncate" title="Meta temporada">
+                                Meta temporada
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="mt-1">
                           <span className="text-base font-mono font-bold tabular-nums">
