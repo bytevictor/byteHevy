@@ -25,12 +25,13 @@ export interface ChartDataPoint {
   topWeight?: number;         // Peso de la serie máxima
   topReps?: number;           // Reps de la serie máxima
   setsCount?: number;         // Número de series
-  est1RM?: number;            // 1RM estimado
+  est1RM?: number;            // 1RM estimado (top set)
+  avg1RM?: number;            // 1RM estimado medio de las series
 }
 
 export type ChartMode = "session" | "date";
 export type CurveType = "linear" | "smooth" | "flow";
-export type ChartMetricView = "top_set" | "avg_reps" | "est_1rm" | "volume";
+export type ChartMetricView = "top_set" | "avg_1rm";
 
 export interface ProgressionChartProps {
   data: ChartDataPoint[];
@@ -317,7 +318,7 @@ export function ProgressionChart({
 
     try {
       const savedMetric = localStorage.getItem("bytehevy_chart_metric") as ChartMetricView;
-      if (savedMetric && ["top_set", "avg_reps", "est_1rm", "volume"].includes(savedMetric)) {
+      if (savedMetric && (savedMetric === "top_set" || savedMetric === "avg_1rm")) {
         setInternalMetric(savedMetric);
       }
     } catch {}
@@ -383,68 +384,72 @@ export function ProgressionChart({
       .sort((a, b) => a._timestampMs - b._timestampMs);
   }, [data]);
 
-  // Metric selector options tailored to exercise unit
+  // Metric selector options tailored to exercise unit (simplified to Top Set & 1RM Medio)
   const availableMetrics = useMemo(() => {
     if (unit === "kg") {
       return [
-        { id: "top_set" as const, label: "Carga Top", title: "Carga de la serie más pesada (Top Set en kg)" },
-        { id: "avg_reps" as const, label: "Reps Medias", title: "Media de repeticiones de las series en la sesión" },
-        { id: "est_1rm" as const, label: "1RM (Fuerza)", title: "1RM estimado que combina peso y repeticiones (Epley)" },
-        { id: "volume" as const, label: "Volumen", title: "Carga total acumulada (Tonelaje kg)" },
+        {
+          id: "top_set" as const,
+          label: "Carga Top",
+          title: "Peso de la serie más pesada de la sesión (Top Set en kg)",
+        },
+        {
+          id: "avg_1rm" as const,
+          label: "1RM Medio",
+          title: "Estimación media de 1RM a lo largo de las series de la sesión (Epley)",
+        },
       ];
     }
     if (unit === "reps") {
       return [
-        { id: "top_set" as const, label: "Reps Máx", title: "Repeticiones de la mejor serie" },
-        { id: "avg_reps" as const, label: "Reps Medias", title: "Media de repeticiones por serie realizada" },
-        { id: "volume" as const, label: "Volumen", title: "Repeticiones totales acumuladas en la sesión" },
+        {
+          id: "top_set" as const,
+          label: "Reps Máx",
+          title: "Repeticiones de la mejor serie",
+        },
+        {
+          id: "avg_1rm" as const,
+          label: "Reps Medias",
+          title: "Media de repeticiones por serie realizada",
+        },
       ];
     }
     return [
       { id: "top_set" as const, label: "Máximo", title: "Valor máximo alcanzado en la sesión" },
-      { id: "volume" as const, label: "Total", title: "Total acumulado de la sesión" },
     ];
   }, [unit]);
 
   const activeMetric: ChartMetricView = useMemo(() => {
     const isWeight = unit === "kg";
     const isReps = unit === "reps";
-    if (internalMetric === "est_1rm" && !isWeight) return "top_set";
-    if (internalMetric === "avg_reps" && !isWeight && !isReps) return "top_set";
+    if (internalMetric === "avg_1rm" && !isWeight && !isReps) return "top_set";
     return internalMetric;
   }, [internalMetric, unit]);
 
   const currentUnit = useMemo(() => {
-    if (activeMetric === "avg_reps") return "reps";
-    if (activeMetric === "est_1rm") return "kg";
-    if (activeMetric === "volume") return unit === "reps" ? "reps" : "kg";
+    if (activeMetric === "avg_1rm") return unit === "reps" ? "reps" : "kg";
     return unit;
   }, [activeMetric, unit]);
 
   const currentMetricName = useMemo(() => {
-    if (activeMetric === "avg_reps") return "Media de Reps / Serie";
-    if (activeMetric === "est_1rm") return "1RM Estimado (Fuerza)";
-    if (activeMetric === "volume") return "Volumen Total de Sesión";
+    if (activeMetric === "avg_1rm") {
+      return unit === "reps" ? "Media de Reps / Serie" : "1RM Medio Estimado";
+    }
     return metricName;
-  }, [activeMetric, metricName]);
+  }, [activeMetric, metricName, unit]);
 
   const getPointValue = useCallback((d: ChartDataPoint): number => {
-    if (activeMetric === "avg_reps") {
-      if (typeof d.avgReps === "number" && !isNaN(d.avgReps)) return d.avgReps;
-      if (typeof d.topReps === "number" && !isNaN(d.topReps)) return d.topReps;
-      return d.primaryValue;
-    }
-    if (activeMetric === "est_1rm") {
+    if (activeMetric === "avg_1rm") {
+      if (unit === "reps") {
+        if (typeof d.avgReps === "number" && !isNaN(d.avgReps)) return d.avgReps;
+        return d.primaryValue;
+      }
+      if (typeof d.avg1RM === "number" && !isNaN(d.avg1RM) && d.avg1RM > 0) return d.avg1RM;
       if (typeof d.est1RM === "number" && !isNaN(d.est1RM) && d.est1RM > 0) return d.est1RM;
-      if (typeof d.secondaryValue === "number" && !isNaN(d.secondaryValue) && d.secondaryValue > 0) return d.secondaryValue;
-      return d.primaryValue;
-    }
-    if (activeMetric === "volume") {
-      if (typeof d.totalVolume === "number" && !isNaN(d.totalVolume)) return d.totalVolume;
       return d.primaryValue;
     }
     return d.primaryValue;
-  }, [activeMetric]);
+  }, [activeMetric, unit]);
 
   // Pre-calculate progressive PRs and all-time records for the active metric
   const pointMetricsMeta = useMemo(() => {
@@ -491,7 +496,7 @@ export function ProgressionChart({
     const peakPt = parsedData[peakIdx];
     const firstVal = pointMetricsMeta[0]?.val ?? 0;
     const lastVal = pointMetricsMeta[pointMetricsMeta.length - 1]?.val ?? 0;
-    const diff = lastVal - firstVal;
+    const diff = Number((lastVal - firstVal).toFixed(1));
     const diffPct = firstVal !== 0 ? Math.round((diff / Math.abs(firstVal)) * 100) : 0;
 
     const repsList = parsedData.map((d) => d.avgReps).filter((r): r is number => typeof r === "number" && r > 0);
@@ -952,12 +957,8 @@ export function ProgressionChart({
               <div className="text-xs font-mono font-medium text-zinc-100 flex items-center justify-between gap-3">
                 <span className="text-zinc-400 text-[10px]">{currentMetricName}:</span>
                 <span className="text-accent-light font-bold">
-                  {activeMetric === "avg_reps"
-                    ? `${activePt.val} reps`
-                    : activeMetric === "est_1rm"
-                    ? `${activePt.val} kg`
-                    : activeMetric === "volume"
-                    ? `${activePt.val.toLocaleString()} ${currentUnit}`
+                  {activeMetric === "avg_1rm"
+                    ? `${activePt.val} ${currentUnit}`
                     : activePt.d.label || `${activePt.val} ${currentUnit}`}
                 </span>
               </div>
@@ -970,22 +971,16 @@ export function ProgressionChart({
                     <span className="text-zinc-200 font-medium">{activePt.d.label}</span>
                   </div>
                 )}
-                {activeMetric !== "avg_reps" && activePt.d.avgReps !== undefined && (
+                {activeMetric === "top_set" && activePt.d.avg1RM !== undefined && activePt.d.avg1RM > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500">1RM Medio:</span>
+                    <span className="text-accent-light font-medium">{activePt.d.avg1RM} kg</span>
+                  </div>
+                )}
+                {activeMetric === "top_set" && unit === "reps" && activePt.d.avgReps !== undefined && (
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-500">Media reps:</span>
                     <span className="text-zinc-300">{activePt.d.avgReps} reps/serie</span>
-                  </div>
-                )}
-                {activeMetric !== "est_1rm" && activePt.d.est1RM !== undefined && activePt.d.est1RM > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-zinc-500">1RM Estimado:</span>
-                    <span className="text-zinc-300">{activePt.d.est1RM} kg</span>
-                  </div>
-                )}
-                {activeMetric !== "volume" && activePt.d.totalVolume !== undefined && activePt.d.totalVolume > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-zinc-500">Volumen sesión:</span>
-                    <span className="text-zinc-300">{activePt.d.totalVolume.toLocaleString()} {unit === "reps" ? "reps" : "kg"}</span>
                   </div>
                 )}
                 {activePt.d.setsCount !== undefined && (
@@ -1367,17 +1362,17 @@ export function ProgressionChart({
                       </div>
                     </div>
 
-                    {/* Progreso neto o Reps medias */}
+                    {/* Progreso neto */}
                     <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/80 flex flex-col justify-between">
                       <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-                        {kpis.globalAvgReps ? "Media reps global" : "Volumen total"}
+                        Progreso neto
                       </span>
                       <div className="mt-1">
-                        <span className="text-base font-bold font-mono text-accent-light">
-                          {kpis.globalAvgReps ? `${kpis.globalAvgReps} reps` : `${kpis.totalVolumeSum.toLocaleString()} kg`}
+                        <span className={`text-base font-bold font-mono ${kpis.diff >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                          {kpis.diff >= 0 ? `+${kpis.diff}` : `${kpis.diff}`} {currentUnit}
                         </span>
                         <span className="block text-[10px] font-mono text-zinc-500 mt-0.5">
-                          {kpis.diff >= 0 ? `+${kpis.diff} ${currentUnit} (${kpis.diffPct >= 0 ? "+" : ""}${kpis.diffPct}%)` : `${kpis.diff} ${currentUnit}`}
+                          {kpis.diffPct >= 0 ? `+${kpis.diffPct}%` : `${kpis.diffPct}%`} vs inicio
                         </span>
                       </div>
                     </div>

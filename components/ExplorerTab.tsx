@@ -618,7 +618,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       )}
                     </h3>
                     <p className="text-xs text-zinc-400">
-                      Evolución del Top Set real en cada entrenamiento
+                      Evolución de rendimiento, carga y 1RM estimado en cada sesión
                     </p>
                   </div>
                 </div>

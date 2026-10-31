@@ -83,6 +83,13 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
           <div className="relative" ref={dropdownRef}>
             {(() => {
               const activeColor = activeSeason ? getSeasonColor(activeSeason) : null;
+              const isOngoing = Boolean(
+                activeSeason &&
+                  (!activeSeason.endDate ||
+                    !activeSeason.endTimestamp ||
+                    activeSeason.endDate.trim() === "" ||
+                    activeSeason.endDate.trim().toLowerCase() === "actualidad")
+              );
               return (
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -129,11 +136,11 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
                     <span className="text-[9px] uppercase tracking-wider font-extrabold text-zinc-400 flex items-center gap-1">
                       {activeColor && (
                         <span
-                          className="w-1.5 h-1.5 rounded-full animate-pulse"
+                          className={`w-1.5 h-1.5 rounded-full ${isOngoing ? "animate-pulse" : ""}`}
                           style={{ backgroundColor: activeColor }}
                         />
                       )}
-                      {activeSeason ? "SEASON ACTIVA" : "SEASON"}
+                      {isOngoing ? "SEASON ACTIVA" : "SEASON"}
                     </span>
                     <span className="font-bold text-xs sm:text-sm text-zinc-100 truncate max-w-[110px] sm:max-w-[160px] md:max-w-[200px]">
                       {activeSeason ? activeSeason.name : "Histórico Completo"}

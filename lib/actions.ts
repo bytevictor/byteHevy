@@ -74,6 +74,7 @@ export interface ChartPoint {
   topReps?: number;
   setsCount?: number;
   est1RM?: number;
+  avg1RM?: number;
 }
 
 export interface ExerciseDetailData {
@@ -732,6 +733,26 @@ export async function getExerciseDetail(
     const totalReps = setsWithReps.reduce((sum, s) => sum + Number(s.reps), 0);
     const avgReps = setsWithReps.length > 0 ? Number((totalReps / setsWithReps.length).toFixed(1)) : undefined;
 
+    // Filter working sets (ignore warmup sets if present)
+    const workingSets = w.sets.filter((s) => s.setType !== "warmup");
+    const setsToEvaluate = workingSets.length > 0 ? workingSets : w.sets;
+
+    // Calculate Average 1RM across working sets of the session
+    const set1RMs: number[] = [];
+    for (const s of setsToEvaluate) {
+      const wt = Number(s.weightKg) || 0;
+      const rp = Number(s.reps) || 0;
+      if (wt > 0 && rp > 0) {
+        const sEst = calculate1RM(wt, rp);
+        if (sEst > 0) {
+          set1RMs.push(sEst);
+        }
+      }
+    }
+    const avg1RM = set1RMs.length > 0
+      ? Number((set1RMs.reduce((sum, val) => sum + val, 0) / set1RMs.length).toFixed(1))
+      : (est1RM ? Number(est1RM.toFixed(1)) : undefined);
+
     let totalVol = 0;
     for (const s of w.sets) {
       const wt = Number(s.weightKg) || 0;
@@ -780,6 +801,7 @@ export async function getExerciseDetail(
       topReps: topRepsVal,
       setsCount: w.sets.length,
       est1RM,
+      avg1RM,
     };
 
     chartPoints.push(point);
