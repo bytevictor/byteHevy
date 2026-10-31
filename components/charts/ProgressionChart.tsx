@@ -21,6 +21,7 @@ export interface ProgressionChartProps {
   unit: string;
   metricName?: string;
   secondaryMetricName?: string;
+  showSecondaryLine?: boolean;
   height?: number;
   mode?: ChartMode;
   defaultMode?: ChartMode;
@@ -281,6 +282,7 @@ export function ProgressionChart({
   unit,
   metricName = "Top Set",
   secondaryMetricName = "1RM Est.",
+  showSecondaryLine = false,
   height = 220,
   mode: controlledMode,
   defaultMode = "session",
@@ -388,7 +390,7 @@ export function ProgressionChart({
     if (typeof d.primaryValue === "number" && !isNaN(d.primaryValue)) {
       allValues.push(d.primaryValue);
     }
-    if (typeof d.secondaryValue === "number" && !isNaN(d.secondaryValue)) {
+    if (showSecondaryLine && typeof d.secondaryValue === "number" && !isNaN(d.secondaryValue)) {
       allValues.push(d.secondaryValue);
     }
   });
@@ -507,7 +509,7 @@ export function ProgressionChart({
             <span className="w-2.5 h-0.5 bg-accent rounded-full" />
             <span className="text-zinc-200">{metricName}</span>
           </div>
-          {hasSecondary && (
+          {showSecondaryLine && hasSecondary && (
             <div className="flex items-center gap-1.5 text-zinc-500">
               <span className="w-2.5 h-0.5 border-b border-dashed border-zinc-400" />
               <span>{secondaryMetricName}</span>
@@ -676,7 +678,7 @@ export function ProgressionChart({
           )}
 
           {/* Secondary dashed curve (1RM) */}
-          {hasSecondary && secondaryPathD && (
+          {showSecondaryLine && hasSecondary && secondaryPathD && (
             <path
               d={secondaryPathD}
               fill="none"

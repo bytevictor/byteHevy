@@ -470,7 +470,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                     Curva de Progresión
                   </h3>
                   <p className="text-xs text-zinc-400">
-                    Evolución del Top Set real frente al 1RM teórico estimado
+                    Evolución del Top Set real en cada entrenamiento
                   </p>
                 </div>
               </div>
