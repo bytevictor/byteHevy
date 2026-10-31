@@ -228,36 +228,6 @@ export function GoalsTab() {
         </button>
       </div>
 
-      {/* Season Active Banner */}
-      {activeSeason && (
-        <div className="p-3.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-200 shadow-md">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-              <CalendarIcon className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-amber-300">
-                  Season: {activeSeason.name}
-                </span>
-                <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-amber-400/20 text-amber-200 border border-amber-400/30">
-                  Progreso de temporada
-                </span>
-              </div>
-              <p className="text-[11px] text-zinc-400 mt-0.5">
-                Evaluando metas en base a los entrenamientos de esta temporada ({activeSeason.startDate} → {activeSeason.endDate || "Actualidad"}).
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setActiveSeasonId("all")}
-            className="px-3 py-1.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-medium transition-colors cursor-pointer self-start sm:self-center shrink-0"
-          >
-            Ver Histórico Completo
-          </button>
-        </div>
-      )}
 
       {/* Global Progress Strip */}
       {goals.length > 0 && (

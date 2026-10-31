@@ -68,11 +68,11 @@ export function ExerciseAnimationView({
   return (
     <div
       ref={containerRef}
-      className={`relative overflow-hidden rounded-2xl border border-zinc-800/90 bg-zinc-950 flex flex-col justify-between shadow-2xl transition-all ${
-        compact
-          ? "h-36"
-          : className && className.includes("h-")
+      className={`relative overflow-hidden rounded-2xl border border-zinc-800/90 bg-zinc-950 flex flex-col justify-between shadow-xl transition-all ${
+        className && className.includes("h-")
           ? ""
+          : compact
+          ? "h-40"
           : "h-[360px] sm:h-[420px]"
       } ${className}`}
     >
@@ -165,14 +165,16 @@ export function ExerciseAnimationView({
           </div>
         )}
 
-        {/* Top Badges Overlay */}
-        <div className="absolute top-3 left-3 z-10 pointer-events-none">
-          {/* Target muscle chip with active red dot */}
-          <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-950/80 border border-zinc-700/80 backdrop-blur-md text-[10px] font-mono text-zinc-200 shadow-md">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <span className="font-semibold uppercase tracking-wider">{primaryLabel}</span>
-          </span>
-        </div>
+        {/* Top Badges Overlay (only in full mode) */}
+        {!compact && (
+          <div className="absolute top-3 left-3 z-10 pointer-events-none">
+            {/* Target muscle chip with active red dot */}
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-950/80 border border-zinc-700/80 backdrop-blur-md text-[10px] font-mono text-zinc-200 shadow-md">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="font-semibold uppercase tracking-wider">{primaryLabel}</span>
+            </span>
+          </div>
+        )}
 
         {/* Subtle interactive hint */}
         <div className="absolute bottom-2.5 right-3 z-10 pointer-events-none opacity-0 group-hover/canvas:opacity-100 transition-opacity duration-200">
@@ -182,31 +184,33 @@ export function ExerciseAnimationView({
         </div>
       </div>
 
-      {/* Bottom Muscle & Equipment Bar */}
-      <div className="px-3.5 py-2.5 bg-zinc-950 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-2 z-10 text-[11px] font-mono">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Active target muscle */}
-          <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-accent/10 border border-accent/30 text-accent-lighter font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-            {primaryLabel}
-          </span>
-
-          {/* Secondary Muscles */}
-          {media.secondaryMuscles.map((sec, idx) => (
-            <span
-              key={idx}
-              className="px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400"
-            >
-              {MUSCLE_LABELS[sec] || sec}
+      {/* Bottom Muscle & Equipment Bar (only in full mode) */}
+      {!compact && (
+        <div className="px-3.5 py-2.5 bg-zinc-950 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-2 z-10 text-[11px] font-mono">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Active target muscle */}
+            <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-accent/10 border border-accent/30 text-accent-lighter font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+              {primaryLabel}
             </span>
-          ))}
-        </div>
 
-        <span className="text-zinc-400 text-[10px] flex items-center gap-1">
-          <span className="text-zinc-600">Equipo:</span>
-          <span className="text-zinc-300 font-medium">{media.equipment}</span>
-        </span>
-      </div>
+            {/* Secondary Muscles */}
+            {media.secondaryMuscles.map((sec, idx) => (
+              <span
+                key={idx}
+                className="px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400"
+              >
+                {MUSCLE_LABELS[sec] || sec}
+              </span>
+            ))}
+          </div>
+
+          <span className="text-zinc-400 text-[10px] flex items-center gap-1">
+            <span className="text-zinc-600">Equipo:</span>
+            <span className="text-zinc-300 font-medium">{media.equipment}</span>
+          </span>
+        </div>
+      )}
     </div>
   );
 }

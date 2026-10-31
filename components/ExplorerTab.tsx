@@ -234,7 +234,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
   const activeMedia = currentMedia || (detailData ? getExerciseMedia(detailData.exercise.name) : null);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 py-6">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 py-4 lg:py-5">
       {/* Left Sidebar: Exercise List */}
       <div className="lg:col-span-4 xl:col-span-4 flex flex-col gap-3.5">
         {/* Search */}
@@ -408,69 +408,48 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
       </div>
 
       {/* Main Right Pane: Progression & Detail */}
-      <div className="lg:col-span-8 xl:col-span-8 flex flex-col gap-6">
+      <div className="lg:col-span-8 xl:col-span-8 flex flex-col gap-4 sm:gap-4.5">
         {loadingDetail ? (
           <ExplorerDetailSkeleton />
         ) : detailData && activeMedia ? (
           <>
-            {/* Active Season Banner if season is active */}
-            {activeSeason && (
-              <div className="p-3.5 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-zinc-900/60 to-zinc-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-200 shadow-md">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-                    <CalendarIcon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-amber-300">
-                        Temporada: {activeSeason.name}
-                      </span>
-                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-amber-400/20 text-amber-200 border border-amber-400/30">
-                        Aislada
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-zinc-400 mt-0.5">
-                      {activeSeason.startDate} → {activeSeason.endDate || "Actualidad"} · Progresión sin interferencia de datos previos.
-                    </p>
-                  </div>
-                </div>
 
-                <button
-                  onClick={() => setActiveSeasonId("all")}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-medium transition-colors cursor-pointer self-start sm:self-center shrink-0"
-                >
-                  Ver Histórico Completo
-                </button>
-              </div>
-            )}
-
-            {/* HERO STAGE: 3D Anatomical Visualizer & Profile */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-              {/* Massive 3D Animation Showcase */}
-              <div className="lg:col-span-7 flex flex-col">
+            {/* HERO STAGE: Compact Visualizer & Exercise Profile */}
+            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-3.5 sm:p-4 shadow-xl flex flex-col md:flex-row items-stretch gap-4 backdrop-blur-md">
+              {/* 3D Animation Showcase */}
+              <div className="w-full sm:w-52 md:w-56 lg:w-60 shrink-0">
                 <ExerciseAnimationView
                   media={activeMedia}
-                  className="w-full h-[360px] sm:h-[420px] shadow-2xl"
+                  compact
+                  className="w-full h-40 sm:h-44 md:h-full min-h-[160px] max-h-[185px] rounded-xl shadow-md"
                 />
               </div>
 
-              {/* Exercise Profile, Records & Anatomy */}
-              <div className="lg:col-span-5 flex flex-col justify-between gap-4 p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md">
+              {/* Center: Exercise Name, Metric, Category, Session Count & Anatomy */}
+              <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5 gap-2.5">
                 <div>
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md bg-accent/10 border border-accent/30 text-accent-light font-semibold">
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md bg-accent/10 border border-accent/30 text-accent-light font-semibold">
                       {MUSCLE_LABELS[activeMedia.primaryMuscle] || activeMedia.primaryMuscle}
                     </span>
                     <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700/80 text-zinc-400 font-medium">
                       {detailData.exercise.metricType.replace("_", " ")}
                     </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-850 border border-zinc-700/60 text-zinc-400 font-normal">
+                      {activeMedia.equipment}
+                    </span>
+                    {activeSeason && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-medium">
+                        Season: {activeSeason.name}
+                      </span>
+                    )}
                   </div>
 
-                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-100 mb-1.5">
+                  <h1 className="text-lg sm:text-xl font-bold tracking-tight text-zinc-100 truncate" title={detailData.exercise.name}>
                     {detailData.exercise.name}
                   </h1>
 
-                  <p className="text-xs text-zinc-400 flex items-center gap-1.5">
+                  <p className="text-xs text-zinc-400 flex items-center gap-1.5 mt-0.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                     <span>
                       {detailData.sessions.length} entrenamientos {activeSeason ? "en esta temporada" : "registrados"}
@@ -478,117 +457,117 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                   </p>
                 </div>
 
-                {/* PR & 1RM Hero Cards (Season PR + ALL-TIME PR if season active) */}
+                {/* Muscle Activation Guide */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-zinc-800/60">
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mr-0.5">
+                    Activación:
+                  </span>
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-[10px] text-red-300 font-semibold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    {MUSCLE_LABELS[activeMedia.primaryMuscle]} (Primario)
+                  </span>
+                  {activeMedia.secondaryMuscles.map((sec, i) => (
+                    <span
+                      key={i}
+                      className="px-2 py-0.5 rounded bg-zinc-850 border border-zinc-800 text-[10px] text-zinc-400"
+                    >
+                      {MUSCLE_LABELS[sec] || sec}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right: PR & 1RM Hero Cards */}
+              <div className="w-full sm:w-60 lg:w-68 shrink-0 flex flex-col justify-center gap-2">
                 {activeSeason ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <>
                     {/* Season PR Card */}
-                    <div className="p-3.5 rounded-xl bg-gradient-to-br from-amber-500/15 via-zinc-900 to-zinc-900 border border-amber-500/30 flex flex-col justify-between shadow-sm">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] uppercase tracking-wider text-amber-300 font-bold truncate max-w-[120px]">
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500/15 via-zinc-900 to-zinc-900 border border-amber-500/30 flex flex-col justify-between shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-wider text-amber-300 font-bold truncate">
                           PR Season
                         </span>
-                        <FlameIcon className="w-4 h-4 text-amber-400" />
+                        <FlameIcon className="w-3.5 h-3.5 text-amber-400" />
                       </div>
-                      <div className="text-lg font-mono tabular-nums font-bold text-amber-200">
+                      <div className="text-base font-mono tabular-nums font-bold text-amber-200 mt-0.5">
                         {detailData.exercise.seasonBest?.label || "Sin registros"}
                       </div>
-                      <div className="text-[10px] font-mono text-zinc-500 mt-1 flex items-center justify-between">
+                      <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between mt-0.5">
                         <span>{detailData.exercise.seasonBest?.date || "—"}</span>
                         {detailData.exercise.estimated1RM && (
-                          <span className="text-amber-400/80 font-sans">
-                            1RM Season: {detailData.exercise.estimated1RM} kg
+                          <span className="text-amber-400/90 font-sans">
+                            1RM: {detailData.exercise.estimated1RM} kg
                           </span>
                         )}
                       </div>
                     </div>
 
                     {/* ALL-TIME PR Card */}
-                    <div className="p-3.5 rounded-xl bg-gradient-to-br from-yellow-500/10 via-zinc-900 to-zinc-900 border border-yellow-500/30 flex flex-col justify-between shadow-sm">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] uppercase tracking-wider text-yellow-400 font-bold flex items-center gap-1">
-                          <span>ALL-TIME PR</span>
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-yellow-500/10 via-zinc-900 to-zinc-900 border border-yellow-500/30 flex flex-col justify-between shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-wider text-yellow-400 font-bold">
+                          ALL-TIME PR
                         </span>
-                        <CrownIcon className="w-4 h-4 text-yellow-400" />
+                        <CrownIcon className="w-3.5 h-3.5 text-yellow-400" />
                       </div>
-                      <div className="text-lg font-mono tabular-nums font-bold text-yellow-200">
+                      <div className="text-base font-mono tabular-nums font-bold text-yellow-200 mt-0.5">
                         {detailData.exercise.allTimeBest?.label || "—"}
                       </div>
-                      <div className="text-[10px] font-mono text-zinc-500 mt-1 flex items-center justify-between">
+                      <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between mt-0.5">
                         <span>{detailData.exercise.allTimeBest?.date || "Sin registro"}</span>
                         {detailData.exercise.allTimeEstimated1RM && (
-                          <span className="text-yellow-400/80 font-sans">
+                          <span className="text-yellow-400/90 font-sans">
                             1RM: {detailData.exercise.allTimeEstimated1RM} kg
                           </span>
                         )}
                       </div>
                     </div>
-                  </div>
+                  </>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <>
                     {/* PR Card (All-Time) */}
-                    <div className="p-3.5 rounded-xl bg-gradient-to-br from-accent/15 via-zinc-900 to-zinc-900 border border-accent/30 flex flex-col justify-between shadow-sm">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] uppercase tracking-wider text-accent-light font-medium">
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-accent/15 via-zinc-900 to-zinc-900 border border-accent/30 flex flex-col justify-between shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-wider text-accent-light font-bold">
                           Récord Personal (PR)
                         </span>
-                        <TrophyIcon className="w-4 h-4 text-accent-light" />
+                        <TrophyIcon className="w-3.5 h-3.5 text-accent-light" />
                       </div>
-                      <div className="text-lg font-mono tabular-nums font-bold text-accent-lighter">
+                      <div className="text-base font-mono tabular-nums font-bold text-accent-lighter mt-0.5">
                         {detailData.exercise.allTimeBest?.label || "—"}
                       </div>
-                      <span className="text-[10px] font-mono text-zinc-500 mt-1">
+                      <span className="text-[10px] font-mono text-zinc-500 mt-0.5">
                         {detailData.exercise.allTimeBest?.date || "Sin registro"}
                       </span>
                     </div>
 
                     {/* 1RM Estimado Card */}
-                    <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between shadow-sm">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-medium">
+                    <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
                           1RM Estimado
                         </span>
-                        <FlameIcon className="w-4 h-4 text-zinc-500" />
+                        <FlameIcon className="w-3.5 h-3.5 text-zinc-500" />
                       </div>
-                      <div className="text-lg font-mono tabular-nums font-bold text-zinc-200">
+                      <div className="text-base font-mono tabular-nums font-bold text-zinc-200 mt-0.5">
                         {detailData.exercise.estimated1RM
                           ? `${detailData.exercise.estimated1RM} ${getUnit(detailData.exercise.metricType)}`
                           : "—"}
                       </div>
-                      <span className="text-[10px] text-zinc-500 mt-1">
+                      <span className="text-[10px] text-zinc-500 mt-0.5">
                         Fórmula Brzycki
                       </span>
                     </div>
-                  </div>
+                  </>
                 )}
-
-                {/* Muscle Activation Guide */}
-                <div className="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80">
-                  <span className="text-[10px] uppercase tracking-wider text-zinc-500 block mb-2 font-medium">
-                    Activación Anatómica
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-500/10 border border-red-500/30 text-[11px] text-red-300 font-semibold">
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                      {MUSCLE_LABELS[activeMedia.primaryMuscle]} (Primario)
-                    </span>
-                    {activeMedia.secondaryMuscles.map((sec, i) => (
-                      <span
-                        key={i}
-                        className="px-2 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400"
-                      >
-                        {MUSCLE_LABELS[sec] || sec}
-                      </span>
-                    ))}
-                  </div>
-                </div>
               </div>
             </div>
 
             {/* Progression Chart Card */}
-            <div className="p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm">
-              <div className="flex items-center justify-between mb-4">
+            <div className="p-3.5 sm:p-4 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm">
+              <div className="flex items-center justify-between mb-2.5">
                 <div>
-                  <h3 className="text-sm font-semibold tracking-tight text-zinc-100 flex items-center gap-2">
+                  <h3 className="text-xs sm:text-sm font-semibold tracking-tight text-zinc-100 flex items-center gap-2">
                     <span>Curva de Progresión</span>
                     {activeSeason && (
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
@@ -596,14 +575,14 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       </span>
                     )}
                   </h3>
-                  <p className="text-xs text-zinc-400">
+                  <p className="text-[11px] text-zinc-400">
                     Evolución del Top Set real en cada entrenamiento
                   </p>
                 </div>
               </div>
 
               {detailData.chartPoints.length === 0 ? (
-                <div className="py-16 text-center text-xs text-zinc-500">
+                <div className="py-12 text-center text-xs text-zinc-500">
                   No hay sesiones de este ejercicio en la season activa ({activeSeason?.name}).
                 </div>
               ) : (
@@ -617,7 +596,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                   seasonName={activeSeason?.name}
                   allTimeBestLabel={detailData.exercise.allTimeBest?.label}
                   seasonBestLabel={detailData.exercise.seasonBest?.label}
-                  height={260}
+                  height={210}
                   onPointClick={(pt) => {
                     if (pt.workoutId) {
                       handleOpenWorkout(pt.workoutId);
