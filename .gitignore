@@ -1,5 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# Mis datos iniciales de seed
+/data/seed_data
+
 # dependencies
 /node_modules
 /.pnp
@@ -42,4 +45,15 @@ next-env.d.ts
 
 # local sqlite database files (backed up via LXC container)
 data/*.db*
+
+# Media, GIFs, images and videos (kept locally on disk, never committed to git)
+/public/media/
+*.gif
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.mp4
+*.webm
+
 
