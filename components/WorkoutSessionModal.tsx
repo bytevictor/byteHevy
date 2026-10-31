@@ -108,6 +108,7 @@ export function WorkoutSessionModal({
                 highlightExerciseName &&
                 ex.name.toLowerCase().trim() === highlightExerciseName.toLowerCase().trim();
               const media = getExerciseMedia(ex.name);
+              const gifUrl = ex.gifUrl || media.gifUrl;
 
               return (
                 <div
@@ -123,9 +124,9 @@ export function WorkoutSessionModal({
                     <div className="flex items-center gap-3 min-w-0">
                       {/* 3D Visual thumbnail */}
                       <div className="w-10 h-10 rounded-lg overflow-hidden bg-white shrink-0 border border-zinc-800 flex items-center justify-center">
-                        {media.gifUrl ? (
+                        {gifUrl ? (
                           <img
-                            src={media.gifUrl}
+                            src={gifUrl}
                             alt={ex.name}
                             className="w-full h-full object-contain p-0.5"
                           />

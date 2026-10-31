@@ -93,6 +93,24 @@ export function ExerciseMediaManager() {
     loadExercises();
   }, [loadExercises]);
 
+  useEffect(() => {
+    const handleMediaUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent<{ exerciseName: string; media: ExerciseMedia }>;
+      if (!customEvent.detail) return;
+      const { exerciseName, media } = customEvent.detail;
+      setExercises((prev) =>
+        prev.map((ex) =>
+          ex.name.toLowerCase().trim() === exerciseName.toLowerCase().trim()
+            ? { ...ex, media, hasCustomMedia: true, updatedAt: Date.now() }
+            : ex
+        )
+      );
+    };
+
+    window.addEventListener("exercise-media-updated", handleMediaUpdated);
+    return () => window.removeEventListener("exercise-media-updated", handleMediaUpdated);
+  }, []);
+
   // 2. Buscar en el catálogo de 1.323 GIFs
   const executeCatalogSearch = useCallback(
     async (query: string, category: string) => {
@@ -196,6 +214,17 @@ export function ExerciseMediaManager() {
         );
 
         setSuccessToast(`¡Carátula guardada y descargada localmente para ${selectedExercise.name}!`);
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("exercise-media-updated", {
+              detail: {
+                exerciseName: selectedExercise.name,
+                media: updatedMedia,
+              },
+            })
+          );
+        }
       } else {
         setErrorToast(json.error || "No se pudo actualizar la carátula");
       }

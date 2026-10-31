@@ -1,5 +1,7 @@
 import { getDb, ensureSchema } from "./db";
 import crypto from "node:crypto";
+import { getExerciseMedia } from "./exercise-media";
+import { ExerciseMedia, MuscleGroup } from "@/types/exercise-media";
 
 export interface Season {
   id: string;
@@ -28,6 +30,8 @@ export interface ExerciseSummary {
   seasonBestLabel?: string | null;
   seasonBestValue?: number | null;
   inSeason?: boolean;
+  gifUrl?: string;
+  primaryMuscle?: MuscleGroup;
 }
 
 export interface SetDetail {
@@ -84,6 +88,7 @@ export interface ExerciseDetailData {
     id: string;
     name: string;
     metricType: "weight_reps" | "weighted_bodyweight" | "bodyweight_reps" | "seconds" | "cardio";
+    media?: ExerciseMedia;
     allTimeBest: {
       value: number;
       label: string;
@@ -270,9 +275,27 @@ export async function deleteSeason(id: string): Promise<boolean> {
   return true;
 }
 
+export async function getCachedMediaMap(db: ReturnType<typeof getDb>): Promise<Map<string, ExerciseMedia>> {
+  const map = new Map<string, ExerciseMedia>();
+  try {
+    const res = await db.execute("SELECT exercise_name, data_json FROM exercisedb_cache");
+    for (const row of res.rows) {
+      const key = String(row.exercise_name).toLowerCase().trim();
+      try {
+        map.set(key, JSON.parse(String(row.data_json)));
+      } catch {}
+    }
+  } catch (e) {
+    // Cache table might not exist or empty
+  }
+  return map;
+}
+
 export async function getExercisesList(seasonId?: string | null): Promise<ExerciseSummary[]> {
   const db = getDb();
   await ensureSchema(db);
+
+  const cacheMap = await getCachedMediaMap(db);
 
   let season: Season | null = null;
   if (seasonId && seasonId !== "all") {
@@ -464,6 +487,11 @@ export async function getExercisesList(seasonId?: string | null): Promise<Exerci
       }
     }
 
+    const cachedMedia = cacheMap.get(exName.toLowerCase().trim());
+    const fallbackMedia = getExerciseMedia(exName);
+    const resolvedGifUrl = cachedMedia?.gifUrl || fallbackMedia.gifUrl;
+    const resolvedPrimaryMuscle = cachedMedia?.primaryMuscle || fallbackMedia.primaryMuscle;
+
     results.push({
       id: exId,
       name: exName,
@@ -478,6 +506,8 @@ export async function getExercisesList(seasonId?: string | null): Promise<Exerci
       seasonBestLabel: season ? (seasonBestVal > 0 ? seasonBestLabel : null) : allTimeBestLabel,
       seasonBestValue: season ? (seasonBestVal > 0 ? seasonBestVal : null) : allTimeBestVal,
       inSeason: season ? seasonWorkouts.length > 0 : true,
+      gifUrl: resolvedGifUrl,
+      primaryMuscle: resolvedPrimaryMuscle,
     });
   }
 
@@ -868,11 +898,27 @@ export async function getExerciseDetail(
 
   sessions.reverse();
 
+  const exNameKey = String(ex.name).toLowerCase().trim();
+  let exerciseMedia: ExerciseMedia | undefined = undefined;
+  try {
+    const cacheRow = await db.execute({
+      sql: "SELECT data_json FROM exercisedb_cache WHERE exercise_name = ?",
+      args: [exNameKey],
+    });
+    if (cacheRow.rows.length > 0 && cacheRow.rows[0].data_json) {
+      exerciseMedia = JSON.parse(String(cacheRow.rows[0].data_json));
+    }
+  } catch {}
+  if (!exerciseMedia) {
+    exerciseMedia = getExerciseMedia(String(ex.name));
+  }
+
   return {
     exercise: {
       id: String(ex.id),
       name: String(ex.name),
       metricType,
+      media: exerciseMedia,
       allTimeBest: allTimeBestRecord,
       seasonBest: season ? seasonBestRecord : allTimeBestRecord,
       estimated1RM: season ? (seasonMaxEst1RM > 0 ? seasonMaxEst1RM : null) : (allTimeMaxEst1RM > 0 ? allTimeMaxEst1RM : null),
@@ -943,11 +989,15 @@ export interface GoalItem {
   currentDistanceKm?: number;
   current1RM?: number;
   currentLabel: string;
+  gifUrl?: string;
+  primaryMuscle?: MuscleGroup;
 }
 
 export async function getGoals(seasonId?: string | null): Promise<GoalItem[]> {
   const db = getDb();
   await ensureSchema(db);
+
+  const cacheMap = await getCachedMediaMap(db);
 
   const isExplicitSeason = Boolean(seasonId && seasonId !== "all");
   let season: Season | null = null;
@@ -1409,6 +1459,8 @@ export async function getGoals(seasonId?: string | null): Promise<GoalItem[]> {
       currentReps: activeCurrent.reps > 0 ? activeCurrent.reps : undefined,
       currentSeconds: activeCurrent.seconds > 0 ? activeCurrent.seconds : undefined,
       currentDistanceKm: activeCurrent.distanceKm > 0 ? activeCurrent.distanceKm : undefined,
+      gifUrl: cacheMap.get(exName.toLowerCase().trim())?.gifUrl || getExerciseMedia(exName).gifUrl,
+      primaryMuscle: cacheMap.get(exName.toLowerCase().trim())?.primaryMuscle || getExerciseMedia(exName).primaryMuscle,
     });
   }
 
@@ -1498,12 +1550,15 @@ export interface JournalWorkout {
     exerciseNotes: string;
     sets: SetDetail[];
     topSetLabel: string;
+    gifUrl?: string;
   }[];
 }
 
 export async function getJournalWorkouts(seasonId?: string | null): Promise<JournalWorkout[]> {
   const db = getDb();
   await ensureSchema(db);
+
+  const cacheMap = await getCachedMediaMap(db);
 
   let season: Season | null = null;
   if (seasonId && seasonId !== "all") {
@@ -1609,6 +1664,7 @@ export async function getJournalWorkouts(seasonId?: string | null): Promise<Jour
       return {
         ...ex,
         topSetLabel: topLabel,
+        gifUrl: cacheMap.get(ex.name.toLowerCase().trim())?.gifUrl || getExerciseMedia(ex.name).gifUrl,
       };
     });
 
@@ -1630,6 +1686,8 @@ export async function getJournalWorkouts(seasonId?: string | null): Promise<Jour
 export async function getWorkoutDetail(workoutId: string): Promise<JournalWorkout | null> {
   const db = getDb();
   await ensureSchema(db);
+
+  const cacheMap = await getCachedMediaMap(db);
 
   const wRes = await db.execute({
     sql: "SELECT id, title, start_time, start_timestamp, end_time, duration_seconds, description FROM workouts WHERE id = ?",
@@ -1723,6 +1781,7 @@ export async function getWorkoutDetail(workoutId: string): Promise<JournalWorkou
     return {
       ...ex,
       topSetLabel: topLabel,
+      gifUrl: cacheMap.get(ex.name.toLowerCase().trim())?.gifUrl || getExerciseMedia(ex.name).gifUrl,
     };
   });
 

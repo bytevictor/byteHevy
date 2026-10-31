@@ -104,6 +104,11 @@ export async function ensureSchema(db: Client) {
       created_at INTEGER DEFAULT (strftime('%s', 'now'))
     );`,
     `CREATE INDEX IF NOT EXISTS idx_seasons_start ON seasons(start_timestamp);`,
+    `CREATE TABLE IF NOT EXISTS exercisedb_cache (
+      exercise_name TEXT PRIMARY KEY,
+      data_json TEXT NOT NULL,
+      updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+    );`,
   ]);
 
   // Migration for seasons: ensure color column exists

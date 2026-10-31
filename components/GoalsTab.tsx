@@ -275,6 +275,7 @@ export function GoalsTab() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {goals.map((goal) => {
             const media = getExerciseMedia(goal.exerciseName);
+            const gifUrl = goal.gifUrl || media.gifUrl;
             const isCompleted = goal.isCompleted || goal.progressPct >= 100;
             const progress = Math.min(100, Math.max(0, goal.progressPct));
 
@@ -293,7 +294,7 @@ export function GoalsTab() {
                     {/* 3D Exercise Thumbnail */}
                     <div className="w-12 h-12 rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 flex-shrink-0 flex items-center justify-center relative">
                       <img
-                        src={media.gifUrl}
+                        src={gifUrl}
                         alt={goal.exerciseName}
                         className="w-full h-full object-cover"
                         loading="lazy"

@@ -5,6 +5,7 @@ import { ExerciseSummary, ExerciseDetailData, ExerciseSessionHistory, JournalWor
 import { ProgressionChart } from "./charts/ProgressionChart";
 import { ExerciseAnimationView } from "./ExerciseAnimationView";
 import { WorkoutSessionModal } from "./WorkoutSessionModal";
+import { ArtworkPickerModal } from "./ArtworkPickerModal";
 import { getExerciseMedia, MUSCLE_LABELS } from "@/lib/exercise-media";
 import { ExerciseMedia } from "@/types/exercise-media";
 import { ExplorerSkeleton, ExplorerDetailSkeleton } from "./skeletons/ExplorerSkeleton";
@@ -18,6 +19,7 @@ import {
   XIcon,
   InfoIcon,
   CrownIcon,
+  FilmIcon,
 } from "./Icons";
 import { useSeason } from "@/lib/season-context";
 import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
@@ -42,6 +44,8 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
   const [fullWorkoutModal, setFullWorkoutModal] = useState<JournalWorkout | null>(null);
   const [loadingFullWorkout, setLoadingFullWorkout] = useState<boolean>(false);
   const [currentMedia, setCurrentMedia] = useState<ExerciseMedia | null>(null);
+  const [mediaCache, setMediaCache] = useState<Record<string, ExerciseMedia>>({});
+  const [artworkPickerOpen, setArtworkPickerOpen] = useState(false);
 
   const handleOpenWorkout = async (workoutId: string) => {
     if (!workoutId) return;
@@ -59,16 +63,80 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
     }
   };
 
-  // Sync ExerciseDB media asynchronously with SQLite caching
+  // Populate mediaCache whenever exercises are loaded/updated
+  useEffect(() => {
+    if (!exercises || exercises.length === 0) return;
+    setMediaCache((prev) => {
+      const next = { ...prev };
+      for (const ex of exercises) {
+        const key = ex.name.toLowerCase().trim();
+        if (!next[key] && ex.gifUrl) {
+          const fallback = getExerciseMedia(ex.name);
+          next[key] = {
+            ...fallback,
+            gifUrl: ex.gifUrl,
+            primaryMuscle: ex.primaryMuscle || fallback.primaryMuscle,
+          };
+        }
+      }
+      return next;
+    });
+  }, [exercises]);
+
+  // Global listener for artwork changes from ExerciseMediaManager or ArtworkPickerModal
+  useEffect(() => {
+    const handleMediaUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent<{ exerciseName: string; media: ExerciseMedia }>;
+      if (!customEvent.detail) return;
+      const { exerciseName, media } = customEvent.detail;
+      const key = exerciseName.toLowerCase().trim();
+
+      setMediaCache((prev) => ({
+        ...prev,
+        [key]: media,
+      }));
+
+      setExercises((prev) =>
+        prev.map((ex) =>
+          ex.name.toLowerCase().trim() === key
+            ? { ...ex, gifUrl: media.gifUrl, primaryMuscle: media.primaryMuscle }
+            : ex
+        )
+      );
+
+      if (
+        detailData &&
+        detailData.exercise.name.toLowerCase().trim() === key
+      ) {
+        setCurrentMedia(media);
+      }
+    };
+
+    window.addEventListener("exercise-media-updated", handleMediaUpdated);
+    return () => window.removeEventListener("exercise-media-updated", handleMediaUpdated);
+  }, [detailData]);
+
+  // Sync ExerciseDB media asynchronously with SQLite caching and local mediaCache
   useEffect(() => {
     if (!detailData?.exercise.name) return;
-    setCurrentMedia(getExerciseMedia(detailData.exercise.name));
+    const key = detailData.exercise.name.toLowerCase().trim();
+    const cached = mediaCache[key] || detailData.exercise.media;
+
+    if (cached) {
+      setCurrentMedia(cached);
+    } else {
+      setCurrentMedia(getExerciseMedia(detailData.exercise.name));
+    }
 
     fetch(`/api/exercise-media/${encodeURIComponent(detailData.exercise.name)}`)
       .then((r) => r.json())
       .then((res) => {
         if (res.success && res.data) {
           setCurrentMedia(res.data);
+          setMediaCache((prev) => ({
+            ...prev,
+            [key]: res.data,
+          }));
         }
       })
       .catch(() => { });
@@ -233,7 +301,13 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
     );
   }
 
-  const activeMedia = currentMedia || (detailData ? getExerciseMedia(detailData.exercise.name) : null);
+  const activeMedia =
+    currentMedia ||
+    (detailData
+      ? mediaCache[detailData.exercise.name.toLowerCase().trim()] ||
+        detailData.exercise.media ||
+        getExerciseMedia(detailData.exercise.name)
+      : null);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 py-3 lg:py-4">
@@ -329,8 +403,12 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
         <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto pr-1.5 pb-4 custom-scrollbar">
           {filteredExercises.map((ex, idx) => {
             const isSelected = selectedId === ex.id;
-            const media = getExerciseMedia(ex.name);
-            const muscleName = MUSCLE_LABELS[media.primaryMuscle] || media.primaryMuscle;
+            const key = ex.name.toLowerCase().trim();
+            const cachedMedia = mediaCache[key];
+            const fallbackMedia = getExerciseMedia(ex.name);
+            const gifUrl = cachedMedia?.gifUrl || ex.gifUrl || fallbackMedia.gifUrl;
+            const primaryMuscle = cachedMedia?.primaryMuscle || ex.primaryMuscle || fallbackMedia.primaryMuscle;
+            const muscleName = MUSCLE_LABELS[primaryMuscle] || primaryMuscle;
             const displaySessionCount = activeSeason
               ? (ex.seasonSessionCount ?? ex.sessionCount)
               : ex.sessionCount;
@@ -356,7 +434,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       }`}
                   >
                     <img
-                      src={media.gifUrl}
+                      src={gifUrl}
                       alt={ex.name}
                       className="w-full h-full object-contain"
                       loading="lazy"
@@ -465,6 +543,15 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                           <span>Season: {activeSeason.name}</span>
                         </span>
                       )}
+
+                      <button
+                        onClick={() => setArtworkPickerOpen(true)}
+                        className="ml-auto text-[10px] font-mono px-2.5 py-0.5 rounded-lg bg-zinc-850 hover:bg-zinc-800 border border-zinc-700/80 hover:border-accent/50 text-zinc-300 hover:text-accent-light transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                        title="Cambiar carátula / GIF 3D de este ejercicio"
+                      >
+                        <FilmIcon className="w-3 h-3 text-accent-light" />
+                        <span>Cambiar GIF 3D</span>
+                      </button>
                     </div>
 
                     <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-100 truncate" title={detailData.exercise.name}>
@@ -906,6 +993,25 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
         onClose={() => setFullWorkoutModal(null)}
         highlightExerciseName={detailData?.exercise.name}
       />
+
+      {/* Artwork Picker Modal for changing 3D GIF */}
+      {detailData && (
+        <ArtworkPickerModal
+          isOpen={artworkPickerOpen}
+          onClose={() => setArtworkPickerOpen(false)}
+          exerciseName={detailData.exercise.name}
+          initialMuscle={activeMedia?.primaryMuscle}
+          currentGifUrl={activeMedia?.gifUrl}
+          onMediaAssigned={(newMedia) => {
+            setCurrentMedia(newMedia);
+            const key = detailData.exercise.name.toLowerCase().trim();
+            setMediaCache((prev) => ({
+              ...prev,
+              [key]: newMedia,
+            }));
+          }}
+        />
+      )}
     </div>
   );
 }
