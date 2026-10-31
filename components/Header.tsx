@@ -12,9 +12,10 @@ interface HeaderProps {
     workoutsCount: number;
     exercisesCount: number;
   };
+  loadingStats?: boolean;
 }
 
-export function Header({ activeTab, setActiveTab, stats }: HeaderProps) {
+export function Header({ activeTab, setActiveTab, stats, loadingStats = false }: HeaderProps) {
   const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: "explorer", label: "Explorador", icon: DumbbellIcon },
     { id: "goals", label: "Objetivos", icon: TargetIcon },
@@ -65,8 +66,17 @@ export function Header({ activeTab, setActiveTab, stats }: HeaderProps) {
 
         {/* Right: Overview / Stats */}
         <div className="flex items-center gap-2 shrink-0">
-          {stats && (
-            <div className="hidden md:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-900/60 border border-zinc-800/80 text-xs text-zinc-400 shadow-sm">
+          {loadingStats ? (
+            <div className="hidden md:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-900/60 border border-zinc-800/80 text-xs shadow-sm animate-pulse">
+              <span className="w-1.5 h-1.5 rounded-full bg-zinc-700" />
+              <div className="h-3 w-5 rounded bg-zinc-800" />
+              <div className="h-3 w-14 rounded bg-zinc-800/60" />
+              <span className="text-zinc-700">•</span>
+              <div className="h-3 w-5 rounded bg-zinc-800" />
+              <div className="h-3 w-14 rounded bg-zinc-800/60" />
+            </div>
+          ) : stats && stats.workoutsCount > 0 ? (
+            <div className="hidden md:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-900/60 border border-zinc-800/80 text-xs text-zinc-400 shadow-sm animate-in fade-in duration-200">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="font-medium text-zinc-300">{stats.exercisesCount}</span>
               <span>ejercicios</span>
@@ -74,7 +84,7 @@ export function Header({ activeTab, setActiveTab, stats }: HeaderProps) {
               <span className="font-medium text-zinc-300">{stats.workoutsCount}</span>
               <span>sesiones</span>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </header>

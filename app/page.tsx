@@ -14,6 +14,7 @@ export default function Home() {
     workoutsCount: 0,
     exercisesCount: 0,
   });
+  const [loadingStats, setLoadingStats] = useState(true);
   const [exercises, setExercises] = useState<ExerciseSummary[]>([]);
 
   const loadStats = async () => {
@@ -33,6 +34,8 @@ export default function Home() {
       }
     } catch (e) {
       console.error("Error loading app stats:", e);
+    } finally {
+      setLoadingStats(false);
     }
   };
 
@@ -46,6 +49,7 @@ export default function Home() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         stats={stats.workoutsCount > 0 ? stats : undefined}
+        loadingStats={loadingStats}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6">
