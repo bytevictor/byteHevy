@@ -643,6 +643,8 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       seasonColor={seasonColor || undefined}
                       allTimeBestLabel={detailData.exercise.allTimeBest?.label}
                       seasonBestLabel={detailData.exercise.seasonBest?.label}
+                      allTimeBestValue={detailData.exercise.allTimeBest?.value}
+                      allTimeBestAvg1RM={detailData.exercise.allTimeMaxAvg1RM ?? undefined}
                       onPointClick={(pt) => {
                         if (pt.workoutId) {
                           handleOpenWorkout(pt.workoutId);
@@ -717,6 +719,17 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                         {sess.topSet.isAllTimePR ? (
                           <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[10px] font-mono font-bold shadow-sm">
                             👑 ALL-TIME
+                          </span>
+                        ) : sess.topSet.isSeasonPR ? (
+                          <span
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border shadow-sm"
+                            style={{
+                              backgroundColor: "rgba(251, 191, 36, 0.15)",
+                              color: "#fbbf24",
+                              borderColor: "rgba(251, 191, 36, 0.35)",
+                            }}
+                          >
+                            🏆 PR SEASON
                           </span>
                         ) : sess.topSet.isPR ? (
                           <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent/20 text-accent-lighter border border-accent/40 text-[10px] font-mono font-bold shadow-sm">
@@ -857,6 +870,10 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                                 (activeModalSession.topSet.isAllTimePR ? (
                                   <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-400 text-zinc-950 font-bold">
                                     👑 ALL-TIME
+                                  </span>
+                                ) : activeModalSession.topSet.isSeasonPR ? (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-400/20 text-amber-300 border border-amber-400/40 font-bold">
+                                    🏆 PR SEASON
                                   </span>
                                 ) : activeModalSession.topSet.isPR ? (
                                   <span className="px-1.5 py-0.5 rounded text-[10px] bg-accent-light text-zinc-950 font-bold">

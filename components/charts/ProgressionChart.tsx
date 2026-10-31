@@ -17,7 +17,8 @@ export interface ChartDataPoint {
   primaryValue: number;      // Top set (kg, reps o segundos)
   secondaryValue?: number;    // 1RM estimado (opcional)
   label?: string;             // ej: "70 kg × 8"
-  isPR?: boolean;             // Insignia de récord
+  isPR?: boolean;             // Insignia de récord progresivo
+  isSeasonPR?: boolean;       // Insignia de récord de season
   isAllTimePR?: boolean;      // Insignia de récord histórico absoluto
   workoutTitle?: string;
   workoutId?: string;
@@ -55,6 +56,8 @@ export interface ProgressionChartProps {
   seasonColor?: string;
   allTimeBestLabel?: string;
   seasonBestLabel?: string;
+  allTimeBestValue?: number;
+  allTimeBestAvg1RM?: number;
 }
 
 const SPANISH_MONTHS: Record<string, number> = {
@@ -288,6 +291,8 @@ export function ProgressionChart({
   seasonColor,
   allTimeBestLabel,
   seasonBestLabel,
+  allTimeBestValue,
+  allTimeBestAvg1RM,
 }: ProgressionChartProps) {
   const [internalMode, setInternalMode] = useState<ChartMode>(defaultMode);
   const [internalCurve, setInternalCurve] = useState<CurveType>(defaultCurveType);
@@ -493,32 +498,58 @@ export function ProgressionChart({
     return d.primaryValue;
   }, [activeMetric, isRepsMetric]);
 
-  // Pre-calculate progressive PRs and all-time records for the active metric
+  // Pre-calculate progressive PRs, season PRs, and all-time records for the active metric
   const pointMetricsMeta = useMemo(() => {
     let runningBest = -Infinity;
-    const allTimeBestVal = parsedData.length > 0 ? Math.max(...parsedData.map((d) => getPointValue(d))) : 0;
+    const visiblePeakVal = parsedData.length > 0 ? Math.max(...parsedData.map((d) => getPointValue(d))) : 0;
+
+    // Target value for the true all-time historical best
+    let historicalAllTimeTarget = visiblePeakVal;
+    if (activeMetric === "top_set") {
+      if (allTimeBestValue !== undefined && allTimeBestValue > 0) {
+        historicalAllTimeTarget = allTimeBestValue;
+      }
+    } else if (activeMetric === "avg_1rm") {
+      if (allTimeBestAvg1RM !== undefined && allTimeBestAvg1RM > 0) {
+        historicalAllTimeTarget = allTimeBestAvg1RM;
+      }
+    }
+
+    const hasActiveSeason = !!seasonName;
 
     return parsedData.map((d) => {
       const val = getPointValue(d);
+
+      let isAllTime = false;
+      let isSeason = false;
+      let isProgressive = false;
+
       if (activeMetric === "top_set") {
-        return {
-          val,
-          isPR: !!d.isPR,
-          isAllTimePR: !!d.isAllTimePR,
-        };
+        isAllTime = !!d.isAllTimePR || (historicalAllTimeTarget > 0 && val >= historicalAllTimeTarget && val > 0);
+        if (!isAllTime && hasActiveSeason) {
+          isSeason = !!d.isSeasonPR || (val >= visiblePeakVal && val > 0 && visiblePeakVal > 0);
+        }
+        isProgressive = !!d.isPR;
+      } else {
+        isAllTime = historicalAllTimeTarget > 0 && val >= historicalAllTimeTarget && val > 0;
+        if (!isAllTime && hasActiveSeason) {
+          isSeason = val >= visiblePeakVal && val > 0 && visiblePeakVal > 0;
+        }
+        isProgressive = val > runningBest && val > 0;
       }
-      const isPR = val > runningBest && val > 0;
-      if (isPR) {
+
+      if (val > runningBest && val > 0) {
         runningBest = val;
       }
-      const isAllTimePR = val >= allTimeBestVal && val > 0 && allTimeBestVal > 0;
+
       return {
         val,
-        isPR,
-        isAllTimePR,
+        isPR: isProgressive,
+        isSeasonPR: isSeason,
+        isAllTimePR: isAllTime,
       };
     });
-  }, [parsedData, activeMetric, getPointValue]);
+  }, [parsedData, activeMetric, getPointValue, seasonName, allTimeBestValue, allTimeBestAvg1RM]);
 
   // Global KPIs across period
   const kpis = useMemo(() => {
@@ -645,6 +676,7 @@ export function ProgressionChart({
         index: i,
         val: meta?.val ?? getPointValue(d),
         isPR: meta?.isPR ?? false,
+        isSeasonPR: meta?.isSeasonPR ?? false,
         isAllTimePR: meta?.isAllTimePR ?? false,
       };
     });
@@ -834,44 +866,102 @@ export function ProgressionChart({
             const showPoint = activeCurve !== "flow" || isHovered;
             if (!showPoint) return null;
 
+            const isAllTime = pt.isAllTimePR;
+            const isSeason = !isAllTime && pt.isSeasonPR;
+            const isNormalPR = !isAllTime && !isSeason && pt.isPR;
+
             return (
               <g key={pt.index}>
-                {pt.isAllTimePR ? (
-                  <circle
-                    cx={pt.x}
-                    cy={pt.y}
-                    r={isHovered ? 8.5 : 6.5}
-                    fill="none"
-                    stroke="#fbbf24"
-                    strokeWidth="2"
-                    className="transition-all duration-200 animate-pulse"
-                  />
-                ) : pt.isPR ? (
-                  <circle
-                    cx={pt.x}
-                    cy={pt.y}
-                    r={isHovered ? 7.5 : 5.5}
-                    fill="none"
-                    stroke="var(--accent, #f59e0b)"
-                    strokeWidth="1.5"
-                    className="transition-all duration-200 animate-pulse"
-                  />
-                ) : null}
-                <circle
-                  cx={pt.x}
-                  cy={pt.y}
-                  r={isHovered ? 5.5 : pt.isAllTimePR ? 4.5 : pt.isPR ? 3.5 : 2.5}
-                  fill={pt.isAllTimePR ? "#fbbf24" : pt.isPR ? "var(--accent, #f59e0b)" : "#18181b"}
-                  stroke={pt.isAllTimePR ? "#fef08a" : pt.isPR ? "var(--accent-lighter, #fef3c7)" : "var(--accent, #f59e0b)"}
-                  strokeWidth={isHovered ? "2.5" : "1.5"}
-                  className="transition-all duration-200 cursor-pointer"
-                  onMouseEnter={() => onHoverChange(pt.index)}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onHoverChange(pt.index);
-                    onPointClick?.(pt.d);
-                  }}
-                />
+                {isAllTime ? (
+                  <g
+                    className="transition-all duration-200 cursor-pointer pointer-events-auto"
+                    onMouseEnter={() => onHoverChange(pt.index)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onHoverChange(pt.index);
+                      onPointClick?.(pt.d);
+                    }}
+                  >
+                    {/* Pulsing ring around crown */}
+                    <circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={isHovered ? 12 : 9.5}
+                      fill="rgba(251, 191, 36, 0.25)"
+                      stroke="#fbbf24"
+                      strokeWidth={isHovered ? "2" : "1.5"}
+                      className="animate-pulse"
+                    />
+                    <g
+                      transform={`translate(${pt.x - (isHovered ? 9 : 7.5)}, ${pt.y - (isHovered ? 9 : 7.5)}) scale(${(isHovered ? 18 : 15) / 24})`}
+                    >
+                      <path
+                        d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"
+                        fill="#fbbf24"
+                        stroke="#fef08a"
+                        strokeWidth="1.2"
+                        strokeLinejoin="round"
+                        style={{ filter: "drop-shadow(0 1px 3px rgba(245, 158, 11, 0.8))" }}
+                      />
+                    </g>
+                  </g>
+                ) : isSeason ? (
+                  <g>
+                    <circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={isHovered ? 8.5 : 6.5}
+                      fill="none"
+                      stroke="#fbbf24"
+                      strokeWidth="2"
+                      className="transition-all duration-200 animate-pulse"
+                    />
+                    <circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={isHovered ? 5.5 : 4.5}
+                      fill="#fbbf24"
+                      stroke="#fef08a"
+                      strokeWidth={isHovered ? "2.5" : "1.5"}
+                      className="transition-all duration-200 cursor-pointer"
+                      onMouseEnter={() => onHoverChange(pt.index)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onHoverChange(pt.index);
+                        onPointClick?.(pt.d);
+                      }}
+                    />
+                  </g>
+                ) : (
+                  <g>
+                    {isNormalPR && (
+                      <circle
+                        cx={pt.x}
+                        cy={pt.y}
+                        r={isHovered ? 7.5 : 5.5}
+                        fill="none"
+                        stroke="var(--accent, #f59e0b)"
+                        strokeWidth="1.5"
+                        className="transition-all duration-200 animate-pulse"
+                      />
+                    )}
+                    <circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={isHovered ? 5.5 : isNormalPR ? 3.5 : 2.5}
+                      fill={isNormalPR ? "var(--accent, #f59e0b)" : "#18181b"}
+                      stroke={isNormalPR ? "var(--accent-lighter, #fef3c7)" : "var(--accent, #f59e0b)"}
+                      strokeWidth={isHovered ? "2.5" : "1.5"}
+                      className="transition-all duration-200 cursor-pointer"
+                      onMouseEnter={() => onHoverChange(pt.index)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onHoverChange(pt.index);
+                        onPointClick?.(pt.d);
+                      }}
+                    />
+                  </g>
+                )}
               </g>
             );
           })}
@@ -973,12 +1063,24 @@ export function ProgressionChart({
                     {activePt.d.date}
                   </span>
                   {activePt.isAllTimePR ? (
-                    <span className="rounded bg-amber-400/20 px-1.5 py-0.2 text-[9px] font-mono font-bold text-amber-300 border border-amber-400/40">
-                      👑 ALL-TIME
+                    <span className="rounded bg-amber-400/20 px-1.5 py-0.2 text-[9px] font-mono font-bold text-amber-300 border border-amber-400/40 flex items-center gap-1 shadow-xs">
+                      <CrownIcon className="w-2.5 h-2.5 text-amber-400" />
+                      <span>ALL-TIME</span>
+                    </span>
+                  ) : activePt.isSeasonPR ? (
+                    <span
+                      className="rounded px-1.5 py-0.2 text-[9px] font-mono font-bold border flex items-center gap-1 shadow-xs"
+                      style={{
+                        backgroundColor: "rgba(251, 191, 36, 0.15)",
+                        color: "#fbbf24",
+                        borderColor: "rgba(251, 191, 36, 0.4)",
+                      }}
+                    >
+                      <span>🏆 PR SEASON</span>
                     </span>
                   ) : activePt.isPR ? (
-                    <span className="rounded bg-accent/20 px-1 py-0.2 text-[9px] font-mono font-semibold text-accent-lighter border border-accent/30">
-                      ★ PR
+                    <span className="rounded bg-accent/20 px-1 py-0.2 text-[9px] font-mono font-semibold text-accent-lighter border border-accent/30 flex items-center gap-1">
+                      <span>★ PR</span>
                     </span>
                   ) : null}
                 </div>
@@ -1186,12 +1288,18 @@ export function ProgressionChart({
                 <span>{secondaryMetricName}</span>
               </div>
             )}
-            <div className="flex items-center gap-1 text-zinc-500">
-              <span className="w-2 h-2 rounded-full border border-accent-light bg-accent/20" />
+            <div className="flex items-center gap-1 text-zinc-400" title="Récord progresivo dentro del periodo">
+              <span className="w-2 h-2 rounded-full border border-accent-light bg-accent/30" />
               <span>PR</span>
             </div>
-            <div className="flex items-center gap-1 text-zinc-500">
-              <span className="w-2 h-2 rounded-full border border-amber-400 bg-amber-400/30" />
+            {seasonName && (
+              <div className="flex items-center gap-1 text-amber-400/90 font-medium" title="Récord de la season actual">
+                <span className="w-2 h-2 rounded-full border border-amber-400 bg-amber-400 animate-pulse" />
+                <span>PR Season</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1 text-amber-400 font-medium" title="Récord histórico absoluto (todas las entradas)">
+              <CrownIcon className="w-3.5 h-3.5 text-amber-400" />
               <span>All-Time</span>
             </div>
           </div>
@@ -1242,13 +1350,13 @@ export function ProgressionChart({
                               }
                         }
                       >
-                        {seasonName}
+                        {seasonBestLabel ? `PR ${seasonName}: ${seasonBestLabel}` : seasonName}
                       </span>
                     )}
                     {allTimeBestLabel && (
-                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-zinc-800 text-zinc-300 border border-zinc-700 flex items-center gap-1">
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-zinc-800 text-amber-300 border border-amber-500/30 flex items-center gap-1 font-semibold">
                         <CrownIcon className="w-3 h-3 text-amber-400" />
-                        <span>Récord: {allTimeBestLabel}</span>
+                        <span>All-Time: {allTimeBestLabel}</span>
                       </span>
                     )}
                   </div>
