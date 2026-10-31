@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { JournalWorkout } from "@/lib/actions";
-import { BookOpenIcon, SearchIcon, ClockIcon, ChevronDownIcon, ChevronRightIcon, XIcon } from "./Icons";
+import { BookOpenIcon, SearchIcon, ClockIcon, ChevronDownIcon, ChevronRightIcon, XIcon, CalendarIcon } from "./Icons";
 import { JournalSkeleton } from "./skeletons/JournalSkeleton";
+import { useSeason } from "@/lib/season-context";
 
 export function JournalTab() {
+  const { activeSeasonId, activeSeason, setActiveSeasonId } = useSeason();
   const [workouts, setWorkouts] = useState<JournalWorkout[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -15,7 +17,11 @@ export function JournalTab() {
     async function loadJournal() {
       setLoading(true);
       try {
-        const res = await fetch("/api/journal");
+        const query =
+          activeSeasonId && activeSeasonId !== "all"
+            ? `?seasonId=${encodeURIComponent(activeSeasonId)}`
+            : "";
+        const res = await fetch(`/api/journal${query}`, { cache: "no-store" });
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {
           setWorkouts(json.data);
@@ -27,7 +33,7 @@ export function JournalTab() {
       }
     }
     loadJournal();
-  }, []);
+  }, [activeSeasonId]);
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -93,6 +99,37 @@ export function JournalTab() {
           )}
         </div>
       </div>
+
+      {/* Season Active Banner */}
+      {activeSeason && (
+        <div className="p-3.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-200 shadow-md">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+              <CalendarIcon className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-amber-300">
+                  Season: {activeSeason.name}
+                </span>
+                <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-amber-400/20 text-amber-200 border border-amber-400/30">
+                  {workouts.length} entrenamientos
+                </span>
+              </div>
+              <p className="text-[11px] text-zinc-400 mt-0.5">
+                Mostrando únicamente sesiones comprendidas entre {activeSeason.startDate} y {activeSeason.endDate || "la actualidad"}.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setActiveSeasonId("all")}
+            className="px-3 py-1.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-medium transition-colors cursor-pointer self-start sm:self-center shrink-0"
+          >
+            Ver Histórico Completo
+          </button>
+        </div>
+      )}
 
       {/* Workouts Feed */}
       {loading ? (
@@ -201,9 +238,17 @@ export function JournalTab() {
                               >
                                 #{s.setIndex}:{" "}
                                 {s.weightKg !== null && s.reps !== null
-                                  ? `${s.weightKg}k × ${s.reps}`
+                                  ? ex.metricType === "weighted_bodyweight"
+                                    ? s.weightKg > 0
+                                      ? `+${s.weightKg}k × ${s.reps}`
+                                      : s.weightKg < 0
+                                      ? `${s.weightKg}k × ${s.reps}`
+                                      : `BW × ${s.reps}`
+                                    : `${s.weightKg}k × ${s.reps}`
                                   : s.reps !== null
-                                  ? `${s.reps}r`
+                                  ? ex.metricType === "weighted_bodyweight"
+                                    ? `BW × ${s.reps}`
+                                    : `${s.reps}r`
                                   : s.durationSeconds !== null
                                   ? `${s.durationSeconds}s`
                                   : "—"}

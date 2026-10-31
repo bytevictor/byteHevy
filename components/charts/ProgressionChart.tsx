@@ -9,6 +9,7 @@ export interface ChartDataPoint {
   secondaryValue?: number;   // 1RM estimado (opcional)
   label?: string;            // ej: "70 kg × 8"
   isPR?: boolean;            // Insignia de récord
+  isAllTimePR?: boolean;     // Insignia de récord histórico absoluto
   workoutTitle?: string;
   workoutId?: string;
 }
@@ -397,7 +398,7 @@ export function ProgressionChart({
 
   const rawMin = allValues.length > 0 ? Math.min(...allValues) : 0;
   const rawMax = allValues.length > 0 ? Math.max(...allValues) : 10;
-  const minValue = Math.max(0, Math.floor(rawMin * 0.9));
+  const minValue = rawMin < 0 ? Math.floor(rawMin * 1.1) : Math.max(0, Math.floor(rawMin * 0.9));
   const maxValue = Math.ceil(rawMax * 1.1) || 10;
   const valueRange = maxValue - minValue || 1;
 
@@ -657,6 +658,29 @@ export function ProgressionChart({
             );
           })}
 
+          {/* Zero reference line for bodyweight baseline (0 kg) when spanning negative and positive */}
+          {minValue < 0 && maxValue > 0 && (
+            <g>
+              <line
+                x1={paddingLeft}
+                y1={getY(0)}
+                x2={svgWidth - paddingRight}
+                y2={getY(0)}
+                stroke="#52525b"
+                strokeWidth="1.25"
+                strokeDasharray="4,4"
+              />
+              <text
+                x={paddingLeft + 6}
+                y={getY(0) - 4}
+                textAnchor="start"
+                className="text-[9px] fill-zinc-400 font-mono font-medium"
+              >
+                BW (0 kg)
+              </text>
+            </g>
+          )}
+
           {/* Date mode vertical timeline guide lines */}
           {activeMode === "date" && dateTicks.map((tick) => (
             <line
@@ -710,7 +734,17 @@ export function ProgressionChart({
 
             return (
               <g key={pt.index}>
-                {pt.d.isPR && (
+                {pt.d.isAllTimePR ? (
+                  <circle
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={isHovered ? 8 : 6}
+                    fill="none"
+                    stroke="#fbbf24"
+                    strokeWidth="2"
+                    className="transition-all duration-200 animate-pulse"
+                  />
+                ) : pt.d.isPR ? (
                   <circle
                     cx={pt.x}
                     cy={pt.y}
@@ -720,13 +754,13 @@ export function ProgressionChart({
                     strokeWidth="1.5"
                     className="transition-all duration-200 animate-pulse"
                   />
-                )}
+                ) : null}
                 <circle
                   cx={pt.x}
                   cy={pt.y}
-                  r={isHovered ? 5.5 : pt.d.isPR ? 3.5 : 2.5}
-                  fill={pt.d.isPR ? "var(--accent, #f59e0b)" : "#18181b"}
-                  stroke={pt.d.isPR ? "var(--accent-lighter, #fef3c7)" : "var(--accent, #f59e0b)"}
+                  r={isHovered ? 5.5 : pt.d.isAllTimePR ? 4.5 : pt.d.isPR ? 3.5 : 2.5}
+                  fill={pt.d.isAllTimePR ? "#fbbf24" : pt.d.isPR ? "var(--accent, #f59e0b)" : "#18181b"}
+                  stroke={pt.d.isAllTimePR ? "#fef08a" : pt.d.isPR ? "var(--accent-lighter, #fef3c7)" : "var(--accent, #f59e0b)"}
                   strokeWidth={isHovered ? "2.5" : "1.5"}
                   className="transition-all duration-200 cursor-pointer"
                   onMouseEnter={() => setHoverIndex(pt.index)}
@@ -836,11 +870,15 @@ export function ProgressionChart({
                   <span className="text-[10px] text-zinc-400 font-mono">
                     {activePoint.d.date}
                   </span>
-                  {activePoint.d.isPR && (
-                    <span className="rounded bg-accent/20 px-1 py-0.2 text-[9px] font-mono font-semibold text-accent-lighter">
+                  {activePoint.d.isAllTimePR ? (
+                    <span className="rounded bg-amber-400/20 px-1.5 py-0.5 text-[9px] font-mono font-bold text-amber-300 border border-amber-400/40">
+                      👑 ALL-TIME PR
+                    </span>
+                  ) : activePoint.d.isPR ? (
+                    <span className="rounded bg-accent/20 px-1 py-0.2 text-[9px] font-mono font-semibold text-accent-lighter border border-accent/30">
                       ★ PR
                     </span>
-                  )}
+                  ) : null}
                 </div>
                 <span className="text-[9px] font-mono text-zinc-500">
                   #{activePoint.index + 1}

@@ -619,7 +619,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
                 <CalendarIcon className="w-5 h-5 text-amber-400" />
-                <span>{editingSeason ? "Editar Temporada" : "Nueva Temporada"}</span>
+                <span>{editingSeason ? "Editar Season" : "Nueva Season"}</span>
               </h3>
               <button
                 onClick={() => setIsSeasonModalOpen(false)}
@@ -638,7 +638,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
             <form onSubmit={handleSaveSeason} className="flex flex-col gap-4 text-xs">
               <div>
                 <label className="block text-zinc-300 font-medium mb-1">
-                  Nombre de la temporada *
+                  Nombre de la season *
                 </label>
                 <input
                   type="text"
@@ -700,7 +700,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
                   htmlFor="ongoingSeasonCheckbox"
                   className="text-zinc-300 cursor-pointer select-none"
                 >
-                  Temporada en curso (hasta la actualidad)
+                  Season en curso (hasta la actualidad)
                 </label>
               </div>
 
@@ -733,8 +733,8 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
                   {seasonSubmitting
                     ? "Guardando..."
                     : editingSeason
-                    ? "Actualizar Temporada"
-                    : "Crear Temporada"}
+                    ? "Actualizar Season"
+                    : "Crear Season"}
                 </button>
               </div>
             </form>

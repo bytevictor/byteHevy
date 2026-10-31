@@ -176,14 +176,22 @@ export function WorkoutSessionModal({
                       </thead>
                       <tbody className="divide-y divide-zinc-800/60">
                         {ex.sets.map((s) => {
-                          const isTop =
-                            s.weightKg !== null && s.reps !== null
-                              ? `${s.weightKg} kg × ${s.reps}` === ex.topSetLabel
-                              : false;
-
+                          const isWeightedBw = ex.metricType === "weighted_bodyweight";
                           let weightLabel = "—";
                           if (s.weightKg !== null && s.reps !== null) {
-                            weightLabel = `${s.weightKg} kg × ${s.reps}`;
+                            if (isWeightedBw) {
+                              if (s.weightKg > 0) {
+                                weightLabel = `+${s.weightKg} kg × ${s.reps}`;
+                              } else if (s.weightKg < 0) {
+                                weightLabel = `${s.weightKg} kg × ${s.reps}`;
+                              } else {
+                                weightLabel = `BW × ${s.reps}`;
+                              }
+                            } else if (s.weightKg < 0) {
+                              weightLabel = `${s.weightKg} kg × ${s.reps}`;
+                            } else {
+                              weightLabel = `${s.weightKg} kg × ${s.reps}`;
+                            }
                           } else if (s.weightKg === null && s.reps !== null) {
                             weightLabel = `BW × ${s.reps}`;
                           } else if (s.distanceKm !== null) {
@@ -191,6 +199,12 @@ export function WorkoutSessionModal({
                           } else if (s.durationSeconds !== null) {
                             weightLabel = `${s.durationSeconds}s`;
                           }
+
+                          const isTop = weightLabel !== "—" && (
+                            weightLabel === ex.topSetLabel ||
+                            `${s.weightKg} kg × ${s.reps}` === ex.topSetLabel ||
+                            `+${s.weightKg} kg × ${s.reps}` === ex.topSetLabel
+                          );
 
                           return (
                             <tr

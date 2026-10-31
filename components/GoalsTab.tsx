@@ -238,7 +238,7 @@ export function GoalsTab() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-bold text-amber-300">
-                  Temporada: {activeSeason.name}
+                  Season: {activeSeason.name}
                 </span>
                 <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-amber-400/20 text-amber-200 border border-amber-400/30">
                   Progreso de temporada
@@ -371,7 +371,7 @@ export function GoalsTab() {
                   {/* Card 1: Récord Actual */}
                   <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex flex-col justify-between">
                     <span className="text-[10px] uppercase font-semibold text-zinc-500 tracking-wider">
-                      {activeSeason ? "Récord Temporada" : "Récord Actual"}
+                      {activeSeason ? "Récord Season" : "Récord Actual"}
                     </span>
                     <div className="mt-1">
                       <span className="text-base font-mono font-bold text-zinc-200 tabular-nums">

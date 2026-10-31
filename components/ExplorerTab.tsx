@@ -17,7 +17,9 @@ import {
   ClockIcon,
   XIcon,
   InfoIcon,
+  CrownIcon,
 } from "./Icons";
+import { useSeason } from "@/lib/season-context";
 
 interface ExplorerTabProps {
   initialExercises?: ExerciseSummary[];
@@ -25,6 +27,7 @@ interface ExplorerTabProps {
 }
 
 export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabProps) {
+  const { activeSeasonId, activeSeason, setActiveSeasonId } = useSeason();
   const [exercises, setExercises] = useState<ExerciseSummary[]>(initialExercises);
   const [loadingList, setLoadingList] = useState(!initialExercises || initialExercises.length === 0);
   const [selectedId, setSelectedId] = useState<string | null>(initialExercises[0]?.id || null);
@@ -32,6 +35,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
   const [loadingDetail, setLoadingDetail] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [showAllSeasonExercises, setShowAllSeasonExercises] = useState(false);
   const [activeModalSession, setActiveModalSession] = useState<ExerciseSessionHistory | null>(null);
   const [fullWorkoutModal, setFullWorkoutModal] = useState<JournalWorkout | null>(null);
   const [loadingFullWorkout, setLoadingFullWorkout] = useState<boolean>(false);
@@ -68,28 +72,26 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
       .catch(() => {});
   }, [detailData?.exercise.name]);
 
-  // Sync initialExercises prop updates
-  useEffect(() => {
-    if (initialExercises && initialExercises.length > 0) {
-      setExercises(initialExercises);
-      setLoadingList(false);
-      if (!selectedId) {
-        setSelectedId(initialExercises[0].id);
-      }
-    }
-  }, [initialExercises, selectedId]);
-
-  // Fetch exercises list if empty
+  // Fetch exercises list on mount or when activeSeasonId changes
   useEffect(() => {
     async function loadList() {
       setLoadingList(true);
       try {
-        const res = await fetch("/api/exercises", { cache: "no-store" });
+        const query =
+          activeSeasonId && activeSeasonId !== "all"
+            ? `?seasonId=${encodeURIComponent(activeSeasonId)}`
+            : "";
+        const res = await fetch(`/api/exercises${query}`, { cache: "no-store" });
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {
           setExercises(json.data);
-          if (json.data.length > 0 && !selectedId) {
-            setSelectedId(json.data[0].id);
+          if (json.data.length > 0) {
+            setSelectedId((prev) => {
+              if (prev && json.data.some((e: any) => e.id === prev)) {
+                return prev;
+              }
+              return json.data[0].id;
+            });
           }
         }
       } catch (e) {
@@ -99,20 +101,20 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
       }
     }
 
-    if (exercises.length === 0) {
-      loadList();
-    } else if (!selectedId && exercises.length > 0) {
-      setSelectedId(exercises[0].id);
-    }
-  }, []);
+    loadList();
+  }, [activeSeasonId]);
 
-  // Fetch detail when selectedId changes
+  // Fetch detail when selectedId or activeSeasonId changes
   useEffect(() => {
     if (!selectedId) return;
     async function loadDetail() {
       setLoadingDetail(true);
       try {
-        const res = await fetch(`/api/exercises/${selectedId}`, { cache: "no-store" });
+        const query =
+          activeSeasonId && activeSeasonId !== "all"
+            ? `?seasonId=${encodeURIComponent(activeSeasonId)}`
+            : "";
+        const res = await fetch(`/api/exercises/${selectedId}${query}`, { cache: "no-store" });
         const json = await res.json();
         if (json.success) {
           setDetailData(json.data);
@@ -124,7 +126,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
       }
     }
     loadDetail();
-  }, [selectedId]);
+  }, [selectedId, activeSeasonId]);
 
   // Exercise categorization for filters
   const getCategory = (name: string) => {
@@ -166,23 +168,32 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
     return "otro";
   };
 
+  const inSeasonCount = useMemo(() => {
+    if (!activeSeason) return exercises.length;
+    return exercises.filter((ex) => (ex.seasonSessionCount ?? ex.sessionCount) > 0).length;
+  }, [exercises, activeSeason]);
+
   const filteredExercises = useMemo(() => {
     return [...exercises]
       .filter((ex) => {
+        // If a season is active and user hasn't toggled to show all, filter to in-season exercises
+        if (activeSeason && !showAllSeasonExercises) {
+          const sCount = ex.seasonSessionCount ?? ex.sessionCount;
+          if (sCount === 0 || ex.inSeason === false) return false;
+        }
+
         const matchesSearch = ex.name.toLowerCase().includes(searchQuery.toLowerCase().trim());
         if (!matchesSearch) return false;
         if (categoryFilter === "all") return true;
         return getCategory(ex.name) === categoryFilter;
       })
       .sort((a, b) => {
-        // Most sessions first (descending)
-        if (b.sessionCount !== a.sessionCount) {
-          return b.sessionCount - a.sessionCount;
-        }
-        // Tie-breaker: most recent session first
+        const countA = activeSeason ? (a.seasonSessionCount ?? a.sessionCount) : a.sessionCount;
+        const countB = activeSeason ? (b.seasonSessionCount ?? b.sessionCount) : b.sessionCount;
+        if (countB !== countA) return countB - countA;
         return b.latestTimestamp - a.latestTimestamp;
       });
-  }, [exercises, searchQuery, categoryFilter]);
+  }, [exercises, searchQuery, categoryFilter, activeSeason, showAllSeasonExercises]);
 
   const getUnit = (type: string) => {
     if (type === "seconds") return "seg";
@@ -269,6 +280,26 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
           ))}
         </div>
 
+        {/* Season Filter Bar in Sidebar (if a season is active) */}
+        {activeSeason && (
+          <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2 text-[11px]">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+              <span className="font-semibold text-amber-300 truncate">
+                {activeSeason.name}
+              </span>
+            </div>
+            <button
+              onClick={() => setShowAllSeasonExercises((prev) => !prev)}
+              className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 transition-colors cursor-pointer shrink-0"
+            >
+              {showAllSeasonExercises
+                ? `Mostrando todos (${exercises.length})`
+                : `Solo season (${inSeasonCount})`}
+            </button>
+          </div>
+        )}
+
         {/* List of Exercises Header */}
         <div className="flex items-center justify-between px-1 text-[11px] font-mono text-zinc-400">
           <span className="flex items-center gap-1.5">
@@ -284,6 +315,13 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
             const isSelected = selectedId === ex.id;
             const media = getExerciseMedia(ex.name);
             const muscleName = MUSCLE_LABELS[media.primaryMuscle] || media.primaryMuscle;
+            const displaySessionCount = activeSeason
+              ? (ex.seasonSessionCount ?? ex.sessionCount)
+              : ex.sessionCount;
+            const displayTopLabel = activeSeason
+              ? (ex.seasonBestLabel || ex.latestTopSetLabel)
+              : ex.latestTopSetLabel;
+
             return (
               <button
                 key={ex.id}
@@ -291,7 +329,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 className={`group flex items-center gap-3 text-left p-2.5 rounded-xl border transition-all duration-150 cursor-pointer ${
                   isSelected
                     ? "bg-zinc-850/90 border-accent/50 shadow-lg ring-1 ring-accent/20"
-                    : "bg-zinc-900/40 border-zinc-800/70 hover:bg-zinc-850/50 hover:border-zinc-750"
+                    : "bg-zinc-900/40 border-zinc-800/70 hover:bg-zinc-850/50 hover:border-zinc-755"
                 }`}
               >
                 {/* 3D Visual Thumbnail */}
@@ -336,7 +374,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                           : "bg-zinc-800/80 border-zinc-700/50 text-zinc-300"
                       }`}
                     >
-                      {ex.sessionCount} {ex.sessionCount === 1 ? "ses" : "ses"}
+                      {displaySessionCount} ses
                     </span>
                   </div>
 
@@ -354,7 +392,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                         isSelected ? "text-accent-light" : "text-zinc-300"
                       }`}
                     >
-                      {ex.latestTopSetLabel}
+                      {displayTopLabel}
                     </span>
                   </div>
                 </div>
@@ -363,7 +401,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
           })}
           {filteredExercises.length === 0 && (
             <div className="py-12 text-center text-xs text-zinc-500">
-              No se encontraron ejercicios
+              No se encontraron ejercicios en esta selección
             </div>
           )}
         </div>
@@ -375,6 +413,37 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
           <ExplorerDetailSkeleton />
         ) : detailData && activeMedia ? (
           <>
+            {/* Active Season Banner if season is active */}
+            {activeSeason && (
+              <div className="p-3.5 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-zinc-900/60 to-zinc-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-200 shadow-md">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                    <CalendarIcon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-amber-300">
+                        Temporada: {activeSeason.name}
+                      </span>
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-amber-400/20 text-amber-200 border border-amber-400/30">
+                        Aislada
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      {activeSeason.startDate} → {activeSeason.endDate || "Actualidad"} · Progresión sin interferencia de datos previos.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setActiveSeasonId("all")}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-medium transition-colors cursor-pointer self-start sm:self-center shrink-0"
+                >
+                  Ver Histórico Completo
+                </button>
+              </div>
+            )}
+
             {/* HERO STAGE: 3D Anatomical Visualizer & Profile */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
               {/* Massive 3D Animation Showcase */}
@@ -403,44 +472,94 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
 
                   <p className="text-xs text-zinc-400 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    <span>{detailData.sessions.length} entrenamientos registrados</span>
+                    <span>
+                      {detailData.sessions.length} entrenamientos {activeSeason ? "en esta temporada" : "registrados"}
+                    </span>
                   </p>
                 </div>
 
-                {/* PR & 1RM Hero Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* PR Card */}
-                  <div className="p-3.5 rounded-xl bg-gradient-to-br from-accent/15 via-zinc-900 to-zinc-900 border border-accent/30 flex flex-col justify-between shadow-sm">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] uppercase tracking-wider text-accent-light font-medium">
-                        Récord Personal (PR)
-                      </span>
-                      <TrophyIcon className="w-4 h-4 text-accent-light" />
+                {/* PR & 1RM Hero Cards (Season PR + ALL-TIME PR if season active) */}
+                {activeSeason ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Season PR Card */}
+                    <div className="p-3.5 rounded-xl bg-gradient-to-br from-amber-500/15 via-zinc-900 to-zinc-900 border border-amber-500/30 flex flex-col justify-between shadow-sm">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] uppercase tracking-wider text-amber-300 font-bold truncate max-w-[120px]">
+                          PR Season
+                        </span>
+                        <FlameIcon className="w-4 h-4 text-amber-400" />
+                      </div>
+                      <div className="text-lg font-mono tabular-nums font-bold text-amber-200">
+                        {detailData.exercise.seasonBest?.label || "Sin registros"}
+                      </div>
+                      <div className="text-[10px] font-mono text-zinc-500 mt-1 flex items-center justify-between">
+                        <span>{detailData.exercise.seasonBest?.date || "—"}</span>
+                        {detailData.exercise.estimated1RM && (
+                          <span className="text-amber-400/80 font-sans">
+                            1RM Season: {detailData.exercise.estimated1RM} kg
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-lg font-mono tabular-nums font-bold text-accent-lighter">
-                      {detailData.exercise.allTimeBest?.label || "—"}
-                    </div>
-                    <span className="text-[10px] font-mono text-zinc-500 mt-1">
-                      {detailData.exercise.allTimeBest?.date || "Sin registro"}
-                    </span>
-                  </div>
 
-                  {/* 1RM Estimado Card */}
-                  <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between shadow-sm">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-medium">
-                        1RM Estimado
-                      </span>
-                      <FlameIcon className="w-4 h-4 text-zinc-500" />
+                    {/* ALL-TIME PR Card */}
+                    <div className="p-3.5 rounded-xl bg-gradient-to-br from-yellow-500/10 via-zinc-900 to-zinc-900 border border-yellow-500/30 flex flex-col justify-between shadow-sm">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] uppercase tracking-wider text-yellow-400 font-bold flex items-center gap-1">
+                          <span>ALL-TIME PR</span>
+                        </span>
+                        <CrownIcon className="w-4 h-4 text-yellow-400" />
+                      </div>
+                      <div className="text-lg font-mono tabular-nums font-bold text-yellow-200">
+                        {detailData.exercise.allTimeBest?.label || "—"}
+                      </div>
+                      <div className="text-[10px] font-mono text-zinc-500 mt-1 flex items-center justify-between">
+                        <span>{detailData.exercise.allTimeBest?.date || "Sin registro"}</span>
+                        {detailData.exercise.allTimeEstimated1RM && (
+                          <span className="text-yellow-400/80 font-sans">
+                            1RM: {detailData.exercise.allTimeEstimated1RM} kg
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-lg font-mono tabular-nums font-bold text-zinc-200">
-                      {detailData.exercise.estimated1RM ? `${detailData.exercise.estimated1RM} ${getUnit(detailData.exercise.metricType)}` : "—"}
-                    </div>
-                    <span className="text-[10px] text-zinc-500 mt-1">
-                      Fórmula Brzycki
-                    </span>
                   </div>
-                </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* PR Card (All-Time) */}
+                    <div className="p-3.5 rounded-xl bg-gradient-to-br from-accent/15 via-zinc-900 to-zinc-900 border border-accent/30 flex flex-col justify-between shadow-sm">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] uppercase tracking-wider text-accent-light font-medium">
+                          Récord Personal (PR)
+                        </span>
+                        <TrophyIcon className="w-4 h-4 text-accent-light" />
+                      </div>
+                      <div className="text-lg font-mono tabular-nums font-bold text-accent-lighter">
+                        {detailData.exercise.allTimeBest?.label || "—"}
+                      </div>
+                      <span className="text-[10px] font-mono text-zinc-500 mt-1">
+                        {detailData.exercise.allTimeBest?.date || "Sin registro"}
+                      </span>
+                    </div>
+
+                    {/* 1RM Estimado Card */}
+                    <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between shadow-sm">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-medium">
+                          1RM Estimado
+                        </span>
+                        <FlameIcon className="w-4 h-4 text-zinc-500" />
+                      </div>
+                      <div className="text-lg font-mono tabular-nums font-bold text-zinc-200">
+                        {detailData.exercise.estimated1RM
+                          ? `${detailData.exercise.estimated1RM} ${getUnit(detailData.exercise.metricType)}`
+                          : "—"}
+                      </div>
+                      <span className="text-[10px] text-zinc-500 mt-1">
+                        Fórmula Brzycki
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Muscle Activation Guide */}
                 <div className="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80">
@@ -453,7 +572,10 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       {MUSCLE_LABELS[activeMedia.primaryMuscle]} (Primario)
                     </span>
                     {activeMedia.secondaryMuscles.map((sec, i) => (
-                      <span key={i} className="px-2 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400">
+                      <span
+                        key={i}
+                        className="px-2 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400"
+                      >
                         {MUSCLE_LABELS[sec] || sec}
                       </span>
                     ))}
@@ -466,8 +588,13 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
             <div className="p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-sm font-semibold tracking-tight text-zinc-100">
-                    Curva de Progresión
+                  <h3 className="text-sm font-semibold tracking-tight text-zinc-100 flex items-center gap-2">
+                    <span>Curva de Progresión</span>
+                    {activeSeason && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
+                        {activeSeason.name}
+                      </span>
+                    )}
                   </h3>
                   <p className="text-xs text-zinc-400">
                     Evolución del Top Set real en cada entrenamiento
@@ -475,18 +602,24 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 </div>
               </div>
 
-              <ProgressionChart
-                data={detailData.chartPoints}
-                unit={getUnit(detailData.exercise.metricType)}
-                metricName="Top Set Real"
-                secondaryMetricName="1RM Estimado"
-                height={260}
-                onPointClick={(pt) => {
-                  if (pt.workoutId) {
-                    handleOpenWorkout(pt.workoutId);
-                  }
-                }}
-              />
+              {detailData.chartPoints.length === 0 ? (
+                <div className="py-16 text-center text-xs text-zinc-500">
+                  No hay sesiones de este ejercicio en la season activa ({activeSeason?.name}).
+                </div>
+              ) : (
+                <ProgressionChart
+                  data={detailData.chartPoints}
+                  unit={getUnit(detailData.exercise.metricType)}
+                  metricName="Top Set Real"
+                  secondaryMetricName="1RM Estimado"
+                  height={260}
+                  onPointClick={(pt) => {
+                    if (pt.workoutId) {
+                      handleOpenWorkout(pt.workoutId);
+                    }
+                  }}
+                />
+              )}
             </div>
 
             {/* Historical Sessions List */}
@@ -495,72 +628,88 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 <h3 className="text-xs uppercase tracking-wider text-zinc-400 font-semibold flex items-center gap-2">
                   <CalendarIcon className="w-3.5 h-3.5 text-zinc-500" />
                   <span>Historial de Sesiones</span>
+                  {activeSeason && (
+                    <span className="text-[11px] font-mono text-amber-400 font-normal">
+                      · {activeSeason.name}
+                    </span>
+                  )}
                 </h3>
                 <span className="text-xs text-zinc-500 font-normal">
                   Haz clic en cualquier sesión para ver el entrenamiento completo
                 </span>
               </div>
 
-              <div className="flex flex-col gap-2">
-                {detailData.sessions.map((sess) => (
-                  <div
-                    key={sess.workoutId}
-                    onClick={() => handleOpenWorkout(sess.workoutId)}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-zinc-800/70 bg-zinc-900/30 hover:bg-zinc-850/50 hover:border-zinc-700/80 transition-all cursor-pointer group"
-                  >
-                    {/* Left: Date & Title */}
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-zinc-700 group-hover:bg-accent-light transition-colors" />
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-semibold text-zinc-200">
-                            {sess.startTime}
-                          </span>
-                          <span className="text-[11px] px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700/50 truncate max-w-[180px]">
-                            {sess.workoutTitle}
-                          </span>
+              {detailData.sessions.length === 0 ? (
+                <div className="p-8 rounded-xl border border-zinc-800/70 bg-zinc-900/20 text-center text-xs text-zinc-500">
+                  No hay sesiones registradas en este periodo
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {detailData.sessions.map((sess) => (
+                    <div
+                      key={sess.workoutId}
+                      onClick={() => handleOpenWorkout(sess.workoutId)}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-zinc-800/70 bg-zinc-900/30 hover:bg-zinc-850/50 hover:border-zinc-700/80 transition-all cursor-pointer group"
+                    >
+                      {/* Left: Date & Title */}
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-zinc-700 group-hover:bg-accent-light transition-colors" />
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono font-semibold text-zinc-200">
+                              {sess.startTime}
+                            </span>
+                            <span className="text-[11px] px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700/50 truncate max-w-[180px]">
+                              {sess.workoutTitle}
+                            </span>
+                          </div>
+                          {sess.exerciseNotes && (
+                            <span className="text-xs text-zinc-400 mt-1 flex items-center gap-1 font-normal">
+                              <span className="text-zinc-500 font-medium">Ajuste:</span>{" "}
+                              {sess.exerciseNotes}
+                            </span>
+                          )}
+                          {sess.workoutDescription && (
+                            <span className="text-xs italic text-zinc-400 truncate max-w-[280px] sm:max-w-md mt-0.5">
+                              "{sess.workoutDescription.split("\n")[0]}"
+                            </span>
+                          )}
                         </div>
-                        {sess.exerciseNotes && (
-                          <span className="text-xs text-zinc-400 mt-1 flex items-center gap-1 font-normal">
-                            <span className="text-zinc-500 font-medium">Ajuste:</span> {sess.exerciseNotes}
+                      </div>
+
+                      {/* Right: Top Set & PR Badge */}
+                      <div className="flex items-center gap-3.5 self-end sm:self-center">
+                        {sess.topSet.isAllTimePR ? (
+                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[10px] font-mono font-bold shadow-sm">
+                            👑 ALL-TIME
                           </span>
-                        )}
-                        {sess.workoutDescription && (
-                          <span className="text-xs italic text-zinc-400 truncate max-w-[280px] sm:max-w-md mt-0.5">
-                            "{sess.workoutDescription.split("\n")[0]}"
+                        ) : sess.topSet.isPR ? (
+                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent/20 text-accent-lighter border border-accent/40 text-[10px] font-mono font-bold shadow-sm">
+                            ★ PR
                           </span>
-                        )}
+                        ) : null}
+
+                        <div className="flex flex-col text-right font-mono tabular-nums">
+                          <span className="text-xs font-bold text-accent-light">
+                            {sess.topSet.label}
+                          </span>
+                          {sess.topSet.secondaryValue && (
+                            <span className="text-[10px] text-zinc-500">
+                              1RM: {sess.topSet.secondaryValue} kg
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-[11px] text-zinc-400 font-normal">
+                          {sess.sets.length} {sess.sets.length === 1 ? "serie" : "series"}
+                        </div>
+
+                        <ChevronRightIcon className="w-4 h-4 text-zinc-600 group-hover:text-zinc-300 transition-colors" />
                       </div>
                     </div>
-
-                    {/* Right: Top Set & PR Badge */}
-                    <div className="flex items-center gap-3.5 self-end sm:self-center">
-                      {sess.topSet.isPR && (
-                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent/20 text-accent-lighter border border-accent/40 text-[10px] font-mono font-bold shadow-sm">
-                          ★ PR
-                        </span>
-                      )}
-
-                      <div className="flex flex-col text-right font-mono tabular-nums">
-                        <span className="text-xs font-bold text-accent-light">
-                          {sess.topSet.label}
-                        </span>
-                        {sess.topSet.secondaryValue && (
-                          <span className="text-[10px] text-zinc-500">
-                            1RM: {sess.topSet.secondaryValue} kg
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="text-[11px] text-zinc-400 font-normal">
-                        {sess.sets.length} {sess.sets.length === 1 ? "serie" : "series"}
-                      </div>
-
-                      <ChevronRightIcon className="w-4 h-4 text-zinc-600 group-hover:text-zinc-300 transition-colors" />
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         ) : null}
@@ -590,7 +739,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
 
             {/* Modal Body */}
             <div className="p-5 overflow-y-auto flex flex-col gap-5">
-              {/* Personal Notes / Unhinged quote */}
+              {/* Personal Notes / quote */}
               {activeModalSession.workoutDescription && (
                 <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-accent/20 text-xs italic text-accent-lighter/90 leading-relaxed">
                   "{activeModalSession.workoutDescription}"
@@ -622,10 +771,29 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                     </thead>
                     <tbody className="divide-y divide-zinc-800/60">
                       {activeModalSession.sets.map((s) => {
-                        const isSetTop =
-                          s.weightKg !== null && s.reps !== null
-                            ? `${s.weightKg} kg × ${s.reps}` === activeModalSession.topSet.label
-                            : false;
+                        const isWeightedBw = detailData?.exercise.metricType === "weighted_bodyweight";
+                        let setLabel = "—";
+                        if (s.weightKg !== null && s.reps !== null) {
+                          if (isWeightedBw) {
+                            setLabel = s.weightKg > 0 ? `+${s.weightKg} kg × ${s.reps}` : s.weightKg < 0 ? `${s.weightKg} kg × ${s.reps}` : `BW × ${s.reps}`;
+                          } else if (s.weightKg < 0) {
+                            setLabel = `${s.weightKg} kg × ${s.reps}`;
+                          } else {
+                            setLabel = `${s.weightKg} kg × ${s.reps}`;
+                          }
+                        } else if (s.weightKg === null && s.reps !== null) {
+                          setLabel = isWeightedBw ? `BW × ${s.reps}` : `${s.reps} reps`;
+                        } else if (s.durationSeconds !== null) {
+                          setLabel = `${s.durationSeconds}s`;
+                        } else if (s.distanceKm !== null) {
+                          setLabel = `${s.distanceKm} km`;
+                        }
+
+                        const isSetTop = setLabel !== "—" && (
+                          setLabel === activeModalSession.topSet.label ||
+                          `${s.weightKg} kg × ${s.reps}` === activeModalSession.topSet.label ||
+                          `+${s.weightKg} kg × ${s.reps}` === activeModalSession.topSet.label
+                        );
                         return (
                           <tr
                             key={s.id}
@@ -648,20 +816,19 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                               )}
                             </td>
                             <td className="py-2.5 px-3 text-zinc-200">
-                              {s.weightKg !== null && s.reps !== null
-                                ? `${s.weightKg} kg × ${s.reps}`
-                                : s.reps !== null
-                                ? `${s.reps} reps`
-                                : s.durationSeconds !== null
-                                ? `${s.durationSeconds}s`
-                                : "—"}
+                              {setLabel}
                             </td>
                             <td className="py-2.5 px-3 text-right">
-                              {isSetTop && activeModalSession.topSet.isPR && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-accent-light text-zinc-950 font-bold">
-                                  PR
-                                </span>
-                              )}
+                              {isSetTop &&
+                                (activeModalSession.topSet.isAllTimePR ? (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-400 text-zinc-950 font-bold">
+                                    👑 ALL-TIME
+                                  </span>
+                                ) : activeModalSession.topSet.isPR ? (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-accent-light text-zinc-950 font-bold">
+                                    ★ PR
+                                  </span>
+                                ) : null)}
                             </td>
                           </tr>
                         );
@@ -685,7 +852,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
         </div>
       )}
 
-      {/* Full Workout Session Modal (triggered from chart point click or session list) */}
+      {/* Full Workout Session Modal */}
       <WorkoutSessionModal
         workout={fullWorkoutModal}
         isOpen={fullWorkoutModal !== null}

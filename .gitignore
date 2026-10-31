@@ -48,6 +48,10 @@ data/*.db*
 
 # Media, GIFs, images and videos (kept locally on disk, never committed to git)
 /public/media/
+
+# Scratch directory
+scratch/
+
 *.gif
 *.png
 *.jpg
