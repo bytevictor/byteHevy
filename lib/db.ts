@@ -24,6 +24,17 @@ export function getDb(): Client {
 export async function ensureSchema(db: Client) {
   if (initialized) return;
 
+  // Check if goals table needs migration (e.g., old milestone schema)
+  try {
+    const tableInfo = await db.execute("PRAGMA table_info(goals)");
+    const colNames = tableInfo.rows.map((r) => String(r.name));
+    if (colNames.includes("target_milestone")) {
+      await db.execute("DROP TABLE goals");
+    }
+  } catch (e) {
+    // ignore
+  }
+
   await db.batch([
     `CREATE TABLE IF NOT EXISTS workouts (
       id TEXT PRIMARY KEY,
@@ -69,12 +80,12 @@ export async function ensureSchema(db: Client) {
     `CREATE INDEX IF NOT EXISTS idx_set_we ON exercise_sets(workout_exercise_id);`,
     `CREATE TABLE IF NOT EXISTS goals (
       id TEXT PRIMARY KEY,
-      exercise_id TEXT NOT NULL,
+      exercise_id TEXT NOT NULL UNIQUE,
       metric_type TEXT NOT NULL,
-      current_value REAL,
-      target_milestone REAL NOT NULL,
-      target_final REAL NOT NULL,
+      target_weight REAL,
       target_reps INTEGER,
+      target_seconds INTEGER,
+      target_distance_km REAL,
       notes TEXT,
       created_at INTEGER DEFAULT (strftime('%s', 'now')),
       updated_at INTEGER DEFAULT (strftime('%s', 'now')),

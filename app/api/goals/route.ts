@@ -3,9 +3,15 @@ import { getGoals, saveGoal, deleteGoal } from "@/lib/actions";
 
 export async function GET(request: Request) {
   try {
-    const goals = await getGoals();
-    return NextResponse.json({ success: true, data: goals });
+    const { searchParams } = new URL(request.url);
+    const seasonId = searchParams.get("seasonId");
+    const goals = await getGoals(seasonId);
+    return NextResponse.json(
+      { success: true, data: goals },
+      { headers: { "Cache-Control": "no-store, max-age=0" } }
+    );
   } catch (error: any) {
+    if (error?.digest === "NEXT_PRERENDER_INTERRUPTED") throw error;
     console.error("Failed to fetch goals:", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
