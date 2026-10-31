@@ -210,13 +210,11 @@ export function JournalTab() {
                                   ? ex.metricType === "weighted_bodyweight"
                                     ? s.weightKg > 0
                                       ? `+${s.weightKg}k × ${s.reps}`
-                                      : s.weightKg < 0
-                                      ? `${s.weightKg}k × ${s.reps}`
-                                      : `BW × ${s.reps}`
+                                      : `0kg + BW × ${s.reps}`
                                     : `${s.weightKg}k × ${s.reps}`
                                   : s.reps !== null
                                   ? ex.metricType === "weighted_bodyweight"
-                                    ? `BW × ${s.reps}`
+                                    ? `0kg + BW × ${s.reps}`
                                     : `${s.reps}r`
                                   : s.durationSeconds !== null
                                   ? `${s.durationSeconds}s`

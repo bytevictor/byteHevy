@@ -347,13 +347,10 @@ export async function getExercisesList(seasonId?: string | null): Promise<Exerci
             allTimeBestLabel = `${dist} km`;
           }
         } else if (exMetric === "weighted_bodyweight") {
-          const score = wt !== 0 ? wt * 1000 + rp : rp;
-          if (score > allTimeBestVal && wt > 0) {
+          const score = wt > 0 ? 100000 + wt * 1000 + rp : (wt === 0 ? 10000 + rp : 10000 + wt * 100 + rp);
+          if (score > allTimeBestVal && rp > 0) {
             allTimeBestVal = score;
-            allTimeBestLabel = `+${wt} kg × ${rp}`;
-          } else if (allTimeBestVal === 0 && score > allTimeBestVal) {
-            allTimeBestVal = score;
-            allTimeBestLabel = wt < 0 ? `${wt} kg × ${rp}` : `BW × ${rp}`;
+            allTimeBestLabel = wt > 0 ? `+${wt} kg × ${rp}` : `0kg + BW × ${rp}`;
           }
         } else if (exMetric === "bodyweight_reps") {
           if (rp > allTimeBestVal) {
@@ -401,13 +398,10 @@ export async function getExercisesList(seasonId?: string | null): Promise<Exerci
             seasonBestLabel = `${dist} km`;
           }
         } else if (exMetric === "weighted_bodyweight") {
-          const score = wt !== 0 ? wt * 1000 + rp : rp;
-          if (score > seasonBestVal && wt > 0) {
+          const score = wt > 0 ? 100000 + wt * 1000 + rp : (wt === 0 ? 10000 + rp : 10000 + wt * 100 + rp);
+          if (score > seasonBestVal && rp > 0) {
             seasonBestVal = score;
-            seasonBestLabel = `+${wt} kg × ${rp}`;
-          } else if (seasonBestVal === 0 && score > seasonBestVal) {
-            seasonBestVal = score;
-            seasonBestLabel = wt < 0 ? `${wt} kg × ${rp}` : `BW × ${rp}`;
+            seasonBestLabel = wt > 0 ? `+${wt} kg × ${rp}` : `0kg + BW × ${rp}`;
           }
         } else if (exMetric === "bodyweight_reps") {
           if (rp > seasonBestVal) {
@@ -442,20 +436,15 @@ export async function getExercisesList(seasonId?: string | null): Promise<Exerci
         for (const s of latest.sets) {
           const w = s.weight_kg !== null && s.weight_kg !== undefined ? Number(s.weight_kg) : 0;
           const r = Number(s.reps) || 0;
-          const sc = w !== 0 ? w * 1000 + r : r;
-          if (sc > maxScore) {
+          const sc = w > 0 ? 100000 + w * 1000 + r : (w === 0 ? 10000 + r : 10000 + w * 100 + r);
+          if (sc > maxScore && r > 0) {
             maxScore = sc;
             top = s;
           }
         }
-        const tw = top.weight_kg !== null && top.weight_kg !== undefined ? Number(top.weight_kg) : 0;
-        if (tw > 0) {
-          latestTopLabel = `+${tw} kg × ${top.reps}`;
-        } else if (tw < 0) {
-          latestTopLabel = `${tw} kg × ${top.reps}`;
-        } else {
-          latestTopLabel = `BW × ${top.reps}`;
-        }
+        const tw = top?.weight_kg !== null && top?.weight_kg !== undefined ? Number(top.weight_kg) : 0;
+        const tr = Number(top?.reps) || 0;
+        latestTopLabel = tw > 0 ? `+${tw} kg × ${tr}` : `0kg + BW × ${tr}`;
       } else if (exMetric === "bodyweight_reps") {
         const maxReps = Math.max(...latest.sets.map((s) => Number(s.reps) || 0));
         latestTopLabel = `${maxReps} reps`;
@@ -595,21 +584,20 @@ export async function getExerciseDetail(
       for (const s of w.sets) {
         const wt = s.weightKg ?? 0;
         const rp = s.reps ?? 0;
-        const sc = wt !== 0 ? wt * 1000 + rp : rp;
-        if (sc > bestScore) {
+        const sc = wt > 0 ? 100000 + wt * 1000 + rp : (wt === 0 ? 10000 + rp : 10000 + wt * 100 + rp);
+        if (sc > bestScore && rp > 0) {
           bestScore = sc;
           top = s;
         }
       }
       topVal = top?.weightKg ?? 0;
       score = bestScore;
+      const topReps = Number(top?.reps) || 0;
       if (topVal > 0) {
-        label = `+${topVal} kg × ${top?.reps ?? 0}`;
-        if (top?.reps) est1RM = calculate1RM(topVal, top.reps);
-      } else if (topVal < 0) {
-        label = `${topVal} kg × ${top?.reps ?? 0}`;
+        label = `+${topVal} kg × ${topReps}`;
+        if (topReps > 0) est1RM = calculate1RM(topVal, topReps);
       } else {
-        label = `BW × ${top?.reps ?? 0}`;
+        label = `0kg + BW × ${topReps}`;
       }
     } else if (metricType === "bodyweight_reps") {
       topVal = Math.max(...w.sets.map((s) => s.reps || 0));
@@ -710,21 +698,20 @@ export async function getExerciseDetail(
       for (const s of w.sets) {
         const wt = s.weightKg ?? 0;
         const rp = s.reps ?? 0;
-        const sc = wt !== 0 ? wt * 1000 + rp : rp;
-        if (sc > bestScore) {
+        const sc = wt > 0 ? 100000 + wt * 1000 + rp : (wt === 0 ? 10000 + rp : 10000 + wt * 100 + rp);
+        if (sc > bestScore && rp > 0) {
           bestScore = sc;
           top = s;
         }
       }
       topVal = top?.weightKg ?? 0;
       score = bestScore;
+      const topReps = Number(top?.reps) || 0;
       if (topVal > 0) {
-        label = `+${topVal} kg × ${top?.reps ?? 0}`;
-        if (top?.reps) est1RM = calculate1RM(topVal, top.reps);
-      } else if (topVal < 0) {
-        label = `${topVal} kg × ${top?.reps ?? 0}`;
+        label = `+${topVal} kg × ${topReps}`;
+        if (topReps > 0) est1RM = calculate1RM(topVal, topReps);
       } else {
-        label = `BW × ${top?.reps ?? 0}`;
+        label = `0kg + BW × ${topReps}`;
       }
     } else if (metricType === "bodyweight_reps") {
       topVal = Math.max(...w.sets.map((s) => s.reps || 0));
@@ -814,13 +801,15 @@ export async function getExerciseDetail(
       for (const s of w.sets) {
         const wt = s.weightKg ?? 0;
         const rp = s.reps ?? 0;
-        const sc = wt !== 0 ? wt * 1000 + rp : rp;
-        if (sc > bestScore) {
+        const sc = metricType === "weighted_bodyweight"
+          ? (wt > 0 ? 100000 + wt * 1000 + rp : (wt === 0 ? 10000 + rp : 10000 + wt * 100 + rp))
+          : (wt * 100 + rp);
+        if (sc > bestScore && rp > 0) {
           bestScore = sc;
           top = s;
         }
       }
-      topWeightVal = top?.weightKg !== null && top?.weightKg !== undefined ? Number(top.weightKg) : undefined;
+      topWeightVal = top?.weightKg !== null && top?.weightKg !== undefined ? Number(top.weightKg) : 0;
       topRepsVal = top?.reps !== null && top?.reps !== undefined ? Number(top.reps) : undefined;
     } else if (metricType === "bodyweight_reps") {
       topRepsVal = topVal;
@@ -1000,7 +989,7 @@ export async function getGoals(seasonId?: string | null): Promise<GoalItem[]> {
         target1RM = calculate1RM(targetWeight, targetReps);
       }
     } else if (metricType === "weighted_bodyweight") {
-      targetLabel = targetWeight && targetWeight > 0 ? `+${targetWeight} kg × ${targetReps ?? 0} reps` : `BW × ${targetReps ?? 0} reps`;
+      targetLabel = targetWeight && targetWeight > 0 ? `+${targetWeight} kg × ${targetReps ?? 0} reps` : `0kg + BW × ${targetReps ?? 0} reps`;
       if (targetWeight && targetReps) {
         target1RM = calculate1RM(targetWeight, targetReps);
       }
@@ -1137,8 +1126,7 @@ export async function getGoals(seasonId?: string | null): Promise<GoalItem[]> {
         label = `${bestW} kg × ${bestR}`;
       } else if (metricType === "weighted_bodyweight") {
         if (bestW > 0) label = `+${bestW} kg × ${bestR}`;
-        else if (bestW < 0) label = `${bestW} kg × ${bestR}`;
-        else label = `BW × ${bestR}`;
+        else label = `0kg + BW × ${bestR}`;
       } else if (metricType === "bodyweight_reps") {
         label = `${bestR} reps`;
       } else if (metricType === "seconds") {
@@ -1605,10 +1593,8 @@ export async function getJournalWorkouts(seasonId?: string | null): Promise<Jour
           if (ex.metricType === "weighted_bodyweight") {
             if ((best.weightKg ?? 0) > 0) {
               topLabel = `+${best.weightKg} kg × ${best.reps}`;
-            } else if ((best.weightKg ?? 0) < 0) {
-              topLabel = `${best.weightKg} kg × ${best.reps}`;
             } else if (best.reps) {
-              topLabel = `BW × ${best.reps}`;
+              topLabel = `0kg + BW × ${best.reps}`;
             }
           } else {
             if ((best.weightKg ?? 0) > 0) {
@@ -1721,10 +1707,8 @@ export async function getWorkoutDetail(workoutId: string): Promise<JournalWorkou
         if (ex.metricType === "weighted_bodyweight") {
           if ((best.weightKg ?? 0) > 0) {
             topLabel = `+${best.weightKg} kg × ${best.reps}`;
-          } else if ((best.weightKg ?? 0) < 0) {
-            topLabel = `${best.weightKg} kg × ${best.reps}`;
           } else if (best.reps) {
-            topLabel = `BW × ${best.reps}`;
+            topLabel = `0kg + BW × ${best.reps}`;
           }
         } else {
           if ((best.weightKg ?? 0) > 0) {

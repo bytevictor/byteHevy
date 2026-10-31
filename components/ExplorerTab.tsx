@@ -821,16 +821,12 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       {activeModalSession.sets.map((s) => {
                         const isWeightedBw = detailData?.exercise.metricType === "weighted_bodyweight";
                         let setLabel = "—";
-                        if (s.weightKg !== null && s.reps !== null) {
-                          if (isWeightedBw) {
-                            setLabel = s.weightKg > 0 ? `+${s.weightKg} kg × ${s.reps}` : s.weightKg < 0 ? `${s.weightKg} kg × ${s.reps}` : `BW × ${s.reps}`;
-                          } else if (s.weightKg < 0) {
-                            setLabel = `${s.weightKg} kg × ${s.reps}`;
-                          } else {
-                            setLabel = `${s.weightKg} kg × ${s.reps}`;
-                          }
+                        if (isWeightedBw && s.reps !== null) {
+                          setLabel = s.weightKg !== null && s.weightKg > 0 ? `+${s.weightKg} kg × ${s.reps}` : `0kg + BW × ${s.reps}`;
+                        } else if (s.weightKg !== null && s.reps !== null) {
+                          setLabel = `${s.weightKg} kg × ${s.reps}`;
                         } else if (s.weightKg === null && s.reps !== null) {
-                          setLabel = isWeightedBw ? `BW × ${s.reps}` : `${s.reps} reps`;
+                          setLabel = `${s.reps} reps`;
                         } else if (s.durationSeconds !== null) {
                           setLabel = `${s.durationSeconds}s`;
                         } else if (s.distanceKm !== null) {

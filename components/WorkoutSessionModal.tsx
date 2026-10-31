@@ -178,22 +178,16 @@ export function WorkoutSessionModal({
                         {ex.sets.map((s) => {
                           const isWeightedBw = ex.metricType === "weighted_bodyweight";
                           let weightLabel = "—";
-                          if (s.weightKg !== null && s.reps !== null) {
-                            if (isWeightedBw) {
-                              if (s.weightKg > 0) {
-                                weightLabel = `+${s.weightKg} kg × ${s.reps}`;
-                              } else if (s.weightKg < 0) {
-                                weightLabel = `${s.weightKg} kg × ${s.reps}`;
-                              } else {
-                                weightLabel = `BW × ${s.reps}`;
-                              }
-                            } else if (s.weightKg < 0) {
-                              weightLabel = `${s.weightKg} kg × ${s.reps}`;
+                          if (isWeightedBw && s.reps !== null) {
+                            if (s.weightKg !== null && s.weightKg > 0) {
+                              weightLabel = `+${s.weightKg} kg × ${s.reps}`;
                             } else {
-                              weightLabel = `${s.weightKg} kg × ${s.reps}`;
+                              weightLabel = `0kg + BW × ${s.reps}`;
                             }
+                          } else if (s.weightKg !== null && s.reps !== null) {
+                            weightLabel = `${s.weightKg} kg × ${s.reps}`;
                           } else if (s.weightKg === null && s.reps !== null) {
-                            weightLabel = `BW × ${s.reps}`;
+                            weightLabel = `${s.reps} reps`;
                           } else if (s.distanceKm !== null) {
                             weightLabel = `${s.distanceKm} km`;
                           } else if (s.durationSeconds !== null) {
