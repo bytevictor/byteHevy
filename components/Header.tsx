@@ -1,9 +1,21 @@
 "use client";
 
-import React from "react";
-import { DumbbellIcon, TargetIcon, BookOpenIcon, RefreshCwIcon, ByteHevyLogo } from "./Icons";
+import React, { useState, useRef, useEffect } from "react";
+import {
+  DumbbellIcon,
+  TargetIcon,
+  BookOpenIcon,
+  SettingsIcon,
+  ByteHevyLogo,
+  TrophyIcon,
+  ChevronDownIcon,
+  CalendarIcon,
+  CheckIcon,
+  PlusIcon,
+} from "./Icons";
+import { useSeason } from "@/lib/season-context";
 
-export type TabId = "explorer" | "goals" | "journal" | "sync";
+export type TabId = "explorer" | "goals" | "journal" | "settings" | "sync";
 
 interface HeaderProps {
   activeTab: TabId;
@@ -16,16 +28,38 @@ interface HeaderProps {
 }
 
 export function Header({ activeTab, setActiveTab, stats, loadingStats = false }: HeaderProps) {
+  const { seasons, activeSeasonId, activeSeason, setActiveSeasonId } = useSeason();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    if (dropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [dropdownOpen]);
+
   const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: "explorer", label: "Explorador", icon: DumbbellIcon },
     { id: "goals", label: "Objetivos", icon: TargetIcon },
     { id: "journal", label: "Diario", icon: BookOpenIcon },
-    { id: "sync", label: "Actualizar", icon: RefreshCwIcon },
+    { id: "settings", label: "Configuración", icon: SettingsIcon },
   ];
+
+  // Normalized tab matching (treat "sync" as "settings")
+  const currentTab = activeTab === "sync" ? "settings" : activeTab;
 
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-800/60 bg-[var(--header-bg)] backdrop-blur-xl transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[72px] flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[76px] flex items-center justify-between gap-3 sm:gap-4">
         {/* Left: Brand */}
         <div className="flex items-center gap-3 shrink-0">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-zinc-800 to-zinc-900 border border-zinc-700/60 flex items-center justify-center shadow-md">
@@ -42,41 +76,179 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
           </div>
         </div>
 
-        {/* Center: Tabs Centered */}
-        <nav className="flex items-center bg-zinc-900/90 border border-zinc-800/80 p-1.5 rounded-full shadow-lg backdrop-blur-md">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const isActive = activeTab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setActiveTab(t.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium transition-all duration-200 cursor-pointer ${
-                  isActive
-                    ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/80 font-semibold"
-                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
+        {/* Center: Season Selector (Prominent, Left of Tabs) + Tabs */}
+        <div className="flex items-center gap-2.5 sm:gap-3.5">
+          {/* Season Selector Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              className={`h-11 flex items-center gap-2.5 sm:gap-3 px-3.5 sm:px-4.5 rounded-full text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer border shadow-md ${
+                activeSeason
+                  ? "bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-zinc-900/90 border-amber-500/40 text-amber-200 hover:border-amber-400 hover:from-amber-500/25 ring-1 ring-amber-500/20"
+                  : "bg-zinc-900/90 border-zinc-700/80 text-zinc-200 hover:bg-zinc-850 hover:border-zinc-600"
+              }`}
+              title="Cambiar season de entrenamiento"
+            >
+              <div
+                className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-inner ${
+                  activeSeason
+                    ? "bg-amber-500/25 text-amber-400 border border-amber-500/40"
+                    : "bg-zinc-800 text-amber-400 border border-zinc-700/60"
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? "text-accent-light" : "text-zinc-400"}`} />
-                <span>{t.label}</span>
-              </button>
-            );
-          })}
-        </nav>
+                {activeSeason ? (
+                  <CalendarIcon className="w-4 h-4 text-amber-400" />
+                ) : (
+                  <TrophyIcon className="w-4 h-4 text-amber-400" />
+                )}
+              </div>
 
-        {/* Right: Overview / Stats */}
-        <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-col text-left leading-tight">
+                <span className="text-[9px] uppercase tracking-wider font-extrabold text-zinc-400 flex items-center gap-1">
+                  {activeSeason && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />}
+                  {activeSeason ? "SEASON ACTIVA" : "SEASON"}
+                </span>
+                <span className="font-bold text-xs sm:text-sm text-zinc-100 truncate max-w-[110px] sm:max-w-[160px] md:max-w-[200px]">
+                  {activeSeason ? activeSeason.name : "Histórico Completo"}
+                </span>
+              </div>
+
+              <ChevronDownIcon
+                className={`w-3.5 h-3.5 text-zinc-400 ml-0.5 transition-transform duration-200 shrink-0 ${
+                  dropdownOpen ? "rotate-180 text-amber-400" : ""
+                }`}
+              />
+            </button>
+
+            {/* Dropdown Menu */}
+            {dropdownOpen && (
+              <div className="absolute left-0 mt-2 w-80 rounded-2xl bg-zinc-900/95 border border-zinc-800 shadow-2xl backdrop-blur-xl p-2 z-50 text-xs animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-3 py-2 text-[11px] font-semibold tracking-wider uppercase text-zinc-500 flex items-center justify-between">
+                  <span>Seleccionar Season</span>
+                  {seasons.length > 0 && (
+                    <span className="text-[10px] text-zinc-400 font-mono bg-zinc-800/80 px-2 py-0.5 rounded-full border border-zinc-700/50">
+                      {seasons.length} {seasons.length === 1 ? "season" : "seasons"}
+                    </span>
+                  )}
+                </div>
+
+                {/* Option 1: All-Time */}
+                <button
+                  onClick={() => {
+                    setActiveSeasonId("all");
+                    setDropdownOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                    !activeSeasonId || activeSeasonId === "all"
+                      ? "bg-zinc-800/90 text-zinc-100 font-medium border border-zinc-700/70 shadow-sm"
+                      : "text-zinc-300 hover:bg-zinc-800/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-300 border border-zinc-700/50">
+                      <TrophyIcon className="w-4 h-4 text-amber-400" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-zinc-100">Histórico Completo</div>
+                      <div className="text-[10px] text-zinc-400">Todas las seasons combinadas</div>
+                    </div>
+                  </div>
+                  {(!activeSeasonId || activeSeasonId === "all") && (
+                    <CheckIcon className="w-4 h-4 text-accent-light shrink-0" />
+                  )}
+                </button>
+
+                {/* Season list */}
+                {seasons.length > 0 && (
+                  <div className="mt-1.5 pt-1.5 border-t border-zinc-800/80 max-h-60 overflow-y-auto space-y-1">
+                    {seasons.map((s) => {
+                      const isCurrent = activeSeasonId === s.id;
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => {
+                            setActiveSeasonId(s.id);
+                            setDropdownOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                            isCurrent
+                              ? "bg-amber-500/10 text-amber-200 font-medium border border-amber-500/30 shadow-sm"
+                              : "text-zinc-300 hover:bg-zinc-800/50"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0 pr-2">
+                            <div className="w-7 h-7 rounded-lg bg-zinc-800/80 flex items-center justify-center text-zinc-400 shrink-0 border border-zinc-700/50">
+                              <CalendarIcon className="w-4 h-4 text-amber-400/90" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-semibold truncate text-zinc-100">{s.name}</div>
+                              <div className="text-[10px] text-zinc-400 truncate">
+                                {s.startDate} → {s.endDate ? s.endDate : "Actualidad"}
+                                {typeof s.workoutCount === "number" && (
+                                  <span className="text-zinc-500"> · {s.workoutCount} entrenos</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          {isCurrent && (
+                            <CheckIcon className="w-4 h-4 text-amber-400 shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Footer link to manage seasons */}
+                <div className="mt-1.5 pt-1.5 border-t border-zinc-800/80">
+                  <button
+                    onClick={() => {
+                      setActiveTab("settings");
+                      setDropdownOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors text-left cursor-pointer font-medium"
+                  >
+                    <SettingsIcon className="w-4 h-4 text-zinc-400" />
+                    <span>Gestionar Seasons...</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Tabs Navigator */}
+          <nav className="h-11 flex items-center bg-zinc-900/90 border border-zinc-800/80 p-1 sm:p-1.5 rounded-full shadow-lg backdrop-blur-md">
+            {tabs.map((t) => {
+              const Icon = t.icon;
+              const isActive = currentTab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setActiveTab(t.id)}
+                  className={`h-full flex items-center gap-2 sm:gap-2.5 px-3.5 sm:px-4.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
+                    isActive
+                      ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/80 font-bold"
+                      : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 ${isActive ? "text-accent-light" : "text-zinc-400"}`} />
+                  <span className="whitespace-nowrap">{t.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Right: Stats Overview */}
+        <div className="flex items-center gap-2.5 shrink-0">
           {loadingStats ? (
-            <div className="hidden md:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-900/60 border border-zinc-800/80 text-xs shadow-sm animate-pulse">
+            <div className="hidden lg:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-900/60 border border-zinc-800/80 text-xs shadow-sm animate-pulse">
               <span className="w-1.5 h-1.5 rounded-full bg-zinc-700" />
-              <div className="h-3 w-5 rounded bg-zinc-800" />
-              <div className="h-3 w-14 rounded bg-zinc-800/60" />
-              <span className="text-zinc-700">•</span>
               <div className="h-3 w-5 rounded bg-zinc-800" />
               <div className="h-3 w-14 rounded bg-zinc-800/60" />
             </div>
           ) : stats && stats.workoutsCount > 0 ? (
-            <div className="hidden md:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-900/60 border border-zinc-800/80 text-xs text-zinc-400 shadow-sm animate-in fade-in duration-200">
+            <div className="hidden lg:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-900/60 border border-zinc-800/80 text-xs text-zinc-400 shadow-sm animate-in fade-in duration-200">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="font-medium text-zinc-300">{stats.exercisesCount}</span>
               <span>ejercicios</span>

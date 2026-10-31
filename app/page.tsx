@@ -5,10 +5,11 @@ import { Header, TabId } from "@/components/Header";
 import { ExplorerTab } from "@/components/ExplorerTab";
 import { GoalsTab } from "@/components/GoalsTab";
 import { JournalTab } from "@/components/JournalTab";
-import { SyncTab } from "@/components/SyncTab";
+import { SettingsTab } from "@/components/SettingsTab";
 import { ExerciseSummary } from "@/lib/actions";
+import { SeasonProvider, useSeason } from "@/lib/season-context";
 
-export default function Home() {
+function AppContent() {
   const [activeTab, setActiveTab] = useState<TabId>("explorer");
   const [stats, setStats] = useState<{ workoutsCount: number; exercisesCount: number }>({
     workoutsCount: 0,
@@ -16,12 +17,18 @@ export default function Home() {
   });
   const [loadingStats, setLoadingStats] = useState(true);
   const [exercises, setExercises] = useState<ExerciseSummary[]>([]);
+  const { activeSeasonId } = useSeason();
 
   const loadStats = async () => {
     try {
+      setLoadingStats(true);
+      const query =
+        activeSeasonId && activeSeasonId !== "all"
+          ? `?seasonId=${encodeURIComponent(activeSeasonId)}`
+          : "";
       const [exRes, journalRes] = await Promise.all([
-        fetch("/api/exercises", { cache: "no-store" }),
-        fetch("/api/journal", { cache: "no-store" }),
+        fetch(`/api/exercises${query}`, { cache: "no-store" }),
+        fetch(`/api/journal${query}`, { cache: "no-store" }),
       ]);
       const exJson = await exRes.json();
       const journalJson = await journalRes.json();
@@ -41,7 +48,7 @@ export default function Home() {
 
   useEffect(() => {
     loadStats();
-  }, []);
+  }, [activeSeasonId]);
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-zinc-100 flex flex-col font-sans transition-colors duration-300 selection:bg-zinc-800 selection:text-accent-light">
@@ -56,7 +63,7 @@ export default function Home() {
         {activeTab === "explorer" && (
           <ExplorerTab
             initialExercises={exercises}
-            onGoToSync={() => setActiveTab("sync")}
+            onGoToSync={() => setActiveTab("settings")}
           />
         )}
 
@@ -64,8 +71,8 @@ export default function Home() {
 
         {activeTab === "journal" && <JournalTab />}
 
-        {activeTab === "sync" && (
-          <SyncTab
+        {(activeTab === "settings" || activeTab === "sync") && (
+          <SettingsTab
             onSyncComplete={() => {
               loadStats();
             }}
@@ -77,5 +84,13 @@ export default function Home() {
         <span className="font-semibold text-zinc-400">byteHevy</span> · Visualizador de entrenamientos y progresión
       </footer>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <SeasonProvider>
+      <AppContent />
+    </SeasonProvider>
   );
 }

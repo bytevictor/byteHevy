@@ -1,6 +1,18 @@
 import { getDb, ensureSchema } from "./db";
 import crypto from "node:crypto";
 
+export interface Season {
+  id: string;
+  name: string;
+  startDate: string;
+  startTimestamp: number;
+  endDate: string | null;
+  endTimestamp: number | null;
+  description?: string;
+  workoutCount?: number;
+  createdAt?: number;
+}
+
 export interface ExerciseSummary {
   id: string;
   name: string;
@@ -11,6 +23,10 @@ export interface ExerciseSummary {
   bestValue: number;
   bestLabel: string;
   latestTopSetLabel: string;
+  seasonSessionCount?: number;
+  seasonBestLabel?: string | null;
+  seasonBestValue?: number | null;
+  inSeason?: boolean;
 }
 
 export interface SetDetail {
@@ -37,6 +53,7 @@ export interface ExerciseSessionHistory {
     secondaryValue?: number;
     label: string;
     isPR: boolean;
+    isAllTimePR?: boolean;
   };
 }
 
@@ -47,6 +64,7 @@ export interface ChartPoint {
   secondaryValue?: number;
   label: string;
   isPR: boolean;
+  isAllTimePR?: boolean;
   workoutTitle: string;
   workoutId: string;
 }
@@ -61,7 +79,19 @@ export interface ExerciseDetailData {
       label: string;
       date: string;
     } | null;
+    seasonBest?: {
+      value: number;
+      label: string;
+      date: string;
+    } | null;
     estimated1RM: number | null;
+    allTimeEstimated1RM?: number | null;
+    activeSeason?: {
+      id: string;
+      name: string;
+      startDate: string;
+      endDate: string | null;
+    } | null;
   };
   chartPoints: ChartPoint[];
   sessions: ExerciseSessionHistory[];
@@ -74,9 +104,161 @@ export function calculate1RM(weight: number, reps: number): number {
   return Math.round(weight * (1 + reps / 30) * 10) / 10;
 }
 
-export async function getExercisesList(): Promise<ExerciseSummary[]> {
+export function parseDateInputToTimestamp(dateStr: string, isEnd = false): number {
+  if (!dateStr) return 0;
+  const parts = dateStr.trim().split("-").map((p) => parseInt(p, 10));
+  if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+    const year = parts[0];
+    const month = parts[1] - 1;
+    const day = parts[2];
+    const d = isEnd ? new Date(year, month, day, 23, 59, 59) : new Date(year, month, day, 0, 0, 0);
+    return Math.floor(d.getTime() / 1000);
+  }
+  const d = new Date(dateStr);
+  return Math.floor(d.getTime() / 1000);
+}
+
+export async function getSeasons(): Promise<Season[]> {
   const db = getDb();
   await ensureSchema(db);
+
+  const res = await db.execute(`
+    SELECT s.id, s.name, s.start_date, s.start_timestamp, s.end_date, s.end_timestamp, s.description, s.created_at,
+           (
+             SELECT COUNT(*) FROM workouts w
+             WHERE w.start_timestamp >= s.start_timestamp
+               AND (s.end_timestamp IS NULL OR w.start_timestamp <= s.end_timestamp)
+           ) as workout_count
+    FROM seasons s
+    ORDER BY s.start_timestamp DESC
+  `);
+
+  return res.rows.map((r) => ({
+    id: String(r.id),
+    name: String(r.name),
+    startDate: String(r.start_date),
+    startTimestamp: Number(r.start_timestamp),
+    endDate: r.end_date ? String(r.end_date) : null,
+    endTimestamp: r.end_timestamp !== null && r.end_timestamp !== undefined ? Number(r.end_timestamp) : null,
+    description: r.description ? String(r.description) : "",
+    workoutCount: Number(r.workout_count) || 0,
+    createdAt: Number(r.created_at) || 0,
+  }));
+}
+
+export async function getSeasonById(id: string): Promise<Season | null> {
+  const db = getDb();
+  await ensureSchema(db);
+
+  const res = await db.execute({
+    sql: `SELECT s.id, s.name, s.start_date, s.start_timestamp, s.end_date, s.end_timestamp, s.description, s.created_at,
+                 (
+                   SELECT COUNT(*) FROM workouts w
+                   WHERE w.start_timestamp >= s.start_timestamp
+                     AND (s.end_timestamp IS NULL OR w.start_timestamp <= s.end_timestamp)
+                 ) as workout_count
+          FROM seasons s
+          WHERE s.id = ?`,
+    args: [id],
+  });
+
+  if (res.rows.length === 0) return null;
+  const r = res.rows[0];
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    startDate: String(r.start_date),
+    startTimestamp: Number(r.start_timestamp),
+    endDate: r.end_date ? String(r.end_date) : null,
+    endTimestamp: r.end_timestamp !== null && r.end_timestamp !== undefined ? Number(r.end_timestamp) : null,
+    description: r.description ? String(r.description) : "",
+    workoutCount: Number(r.workout_count) || 0,
+    createdAt: Number(r.created_at) || 0,
+  };
+}
+
+export async function createSeason(data: {
+  name: string;
+  startDate: string;
+  endDate?: string | null;
+  description?: string;
+}): Promise<Season> {
+  const db = getDb();
+  await ensureSchema(db);
+
+  const id = crypto.randomUUID();
+  const startTimestamp = parseDateInputToTimestamp(data.startDate, false);
+  const endTimestamp = data.endDate && data.endDate.trim() !== "" ? parseDateInputToTimestamp(data.endDate, true) : null;
+
+  await db.execute({
+    sql: `INSERT INTO seasons (id, name, start_date, start_timestamp, end_date, end_timestamp, description)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      id,
+      data.name.trim(),
+      data.startDate.trim(),
+      startTimestamp,
+      data.endDate && data.endDate.trim() !== "" ? data.endDate.trim() : null,
+      endTimestamp,
+      data.description ? data.description.trim() : "",
+    ],
+  });
+
+  return (await getSeasonById(id))!;
+}
+
+export async function updateSeason(
+  id: string,
+  data: {
+    name: string;
+    startDate: string;
+    endDate?: string | null;
+    description?: string;
+  }
+): Promise<Season | null> {
+  const db = getDb();
+  await ensureSchema(db);
+
+  const startTimestamp = parseDateInputToTimestamp(data.startDate, false);
+  const endTimestamp = data.endDate && data.endDate.trim() !== "" ? parseDateInputToTimestamp(data.endDate, true) : null;
+
+  await db.execute({
+    sql: `UPDATE seasons 
+          SET name = ?, start_date = ?, start_timestamp = ?, end_date = ?, end_timestamp = ?, description = ?
+          WHERE id = ?`,
+    args: [
+      data.name.trim(),
+      data.startDate.trim(),
+      startTimestamp,
+      data.endDate && data.endDate.trim() !== "" ? data.endDate.trim() : null,
+      endTimestamp,
+      data.description ? data.description.trim() : "",
+      id,
+    ],
+  });
+
+  return await getSeasonById(id);
+}
+
+export async function deleteSeason(id: string): Promise<boolean> {
+  const db = getDb();
+  await ensureSchema(db);
+
+  await db.execute({
+    sql: "DELETE FROM seasons WHERE id = ?",
+    args: [id],
+  });
+  return true;
+}
+
+export async function getExercisesList(seasonId?: string | null): Promise<ExerciseSummary[]> {
+  const db = getDb();
+  await ensureSchema(db);
+
+  let season: Season | null = null;
+  if (seasonId && seasonId !== "all") {
+    season = await getSeasonById(seasonId);
+  }
 
   const exercisesRes = await db.execute(
     "SELECT id, name, metric_type FROM exercises ORDER BY name ASC"
@@ -124,6 +306,7 @@ export async function getExercisesList(): Promise<ExerciseSummary[]> {
       (a, b) => a.startTimestamp - b.startTimestamp
     );
 
+    // 1. Calculate All-Time best
     let allTimeBestVal = 0;
     let allTimeBestLabel = "";
 
@@ -145,10 +328,13 @@ export async function getExercisesList(): Promise<ExerciseSummary[]> {
             allTimeBestLabel = `${dist} km`;
           }
         } else if (exMetric === "weighted_bodyweight") {
-          const score = wt > 0 ? wt * 100 + rp : rp;
-          if (score > allTimeBestVal) {
+          const score = wt !== 0 ? wt * 1000 + rp : rp;
+          if (score > allTimeBestVal && wt > 0) {
             allTimeBestVal = score;
-            allTimeBestLabel = wt > 0 ? `+${wt} kg × ${rp}` : `BW × ${rp}`;
+            allTimeBestLabel = `+${wt} kg × ${rp}`;
+          } else if (allTimeBestVal === 0 && score > allTimeBestVal) {
+            allTimeBestVal = score;
+            allTimeBestLabel = wt < 0 ? `${wt} kg × ${rp}` : `BW × ${rp}`;
           }
         } else if (exMetric === "bodyweight_reps") {
           if (rp > allTimeBestVal) {
@@ -166,7 +352,63 @@ export async function getExercisesList(): Promise<ExerciseSummary[]> {
       }
     }
 
-    const latest = uniqueWorkouts[uniqueWorkouts.length - 1];
+    // 2. Calculate Season workouts & Season best (if season active)
+    const seasonWorkouts = season
+      ? uniqueWorkouts.filter(
+          (w) =>
+            w.startTimestamp >= season!.startTimestamp &&
+            (!season!.endTimestamp || w.startTimestamp <= season!.endTimestamp)
+        )
+      : uniqueWorkouts;
+
+    let seasonBestVal = 0;
+    let seasonBestLabel = "";
+
+    for (const w of seasonWorkouts) {
+      for (const s of w.sets) {
+        const wt = s.weight_kg !== null && s.weight_kg !== undefined ? Number(s.weight_kg) : 0;
+        const rp = s.reps !== null && s.reps !== undefined ? Number(s.reps) : 0;
+        const dur = s.duration_seconds !== null && s.duration_seconds !== undefined ? Number(s.duration_seconds) : 0;
+        const dist = s.distance_km !== null && s.distance_km !== undefined ? Number(s.distance_km) : 0;
+
+        if (exMetric === "seconds") {
+          if (dur > seasonBestVal) {
+            seasonBestVal = dur;
+            seasonBestLabel = `${dur}s`;
+          }
+        } else if (exMetric === "cardio") {
+          if (dist > seasonBestVal) {
+            seasonBestVal = dist;
+            seasonBestLabel = `${dist} km`;
+          }
+        } else if (exMetric === "weighted_bodyweight") {
+          const score = wt !== 0 ? wt * 1000 + rp : rp;
+          if (score > seasonBestVal && wt > 0) {
+            seasonBestVal = score;
+            seasonBestLabel = `+${wt} kg × ${rp}`;
+          } else if (seasonBestVal === 0 && score > seasonBestVal) {
+            seasonBestVal = score;
+            seasonBestLabel = wt < 0 ? `${wt} kg × ${rp}` : `BW × ${rp}`;
+          }
+        } else if (exMetric === "bodyweight_reps") {
+          if (rp > seasonBestVal) {
+            seasonBestVal = rp;
+            seasonBestLabel = `${rp} reps`;
+          }
+        } else {
+          const score = wt * 100 + rp;
+          if (score > seasonBestVal) {
+            seasonBestVal = score;
+            seasonBestLabel = `${wt} kg × ${rp}`;
+          }
+        }
+      }
+    }
+
+    const latest = seasonWorkouts.length > 0
+      ? seasonWorkouts[seasonWorkouts.length - 1]
+      : (uniqueWorkouts.length > 0 ? uniqueWorkouts[uniqueWorkouts.length - 1] : null);
+
     let latestTopLabel = "-";
     if (latest && latest.sets.length > 0) {
       if (exMetric === "seconds") {
@@ -177,18 +419,24 @@ export async function getExercisesList(): Promise<ExerciseSummary[]> {
         latestTopLabel = `${maxDist} km`;
       } else if (exMetric === "weighted_bodyweight") {
         let top = latest.sets[0];
-        let maxScore = -1;
+        let maxScore = -999999;
         for (const s of latest.sets) {
           const w = s.weight_kg !== null && s.weight_kg !== undefined ? Number(s.weight_kg) : 0;
           const r = Number(s.reps) || 0;
-          const sc = w > 0 ? w * 100 + r : r;
+          const sc = w !== 0 ? w * 1000 + r : r;
           if (sc > maxScore) {
             maxScore = sc;
             top = s;
           }
         }
         const tw = top.weight_kg !== null && top.weight_kg !== undefined ? Number(top.weight_kg) : 0;
-        latestTopLabel = tw > 0 ? `+${tw} kg × ${top.reps}` : `BW × ${top.reps}`;
+        if (tw > 0) {
+          latestTopLabel = `+${tw} kg × ${top.reps}`;
+        } else if (tw < 0) {
+          latestTopLabel = `${tw} kg × ${top.reps}`;
+        } else {
+          latestTopLabel = `BW × ${top.reps}`;
+        }
       } else if (exMetric === "bodyweight_reps") {
         const maxReps = Math.max(...latest.sets.map((s) => Number(s.reps) || 0));
         latestTopLabel = `${maxReps} reps`;
@@ -212,19 +460,31 @@ export async function getExercisesList(): Promise<ExerciseSummary[]> {
       id: exId,
       name: exName,
       metricType: exMetric,
-      sessionCount: uniqueWorkouts.length,
-      latestTimestamp: latest.startTimestamp,
-      latestDate: latest.startTime,
+      sessionCount: season ? seasonWorkouts.length : uniqueWorkouts.length,
+      latestTimestamp: latest ? latest.startTimestamp : 0,
+      latestDate: latest ? latest.startTime : "-",
       bestValue: allTimeBestVal,
       bestLabel: allTimeBestLabel,
       latestTopSetLabel: latestTopLabel,
+      seasonSessionCount: seasonWorkouts.length,
+      seasonBestLabel: season ? (seasonBestVal > 0 ? seasonBestLabel : null) : allTimeBestLabel,
+      seasonBestValue: season ? (seasonBestVal > 0 ? seasonBestVal : null) : allTimeBestVal,
+      inSeason: season ? seasonWorkouts.length > 0 : true,
     });
   }
 
-  return results.sort((a, b) => b.sessionCount - a.sessionCount || b.latestTimestamp - a.latestTimestamp);
+  return results.sort((a, b) => {
+    if (season) {
+      if (a.inSeason !== b.inSeason) return a.inSeason ? -1 : 1;
+    }
+    return b.sessionCount - a.sessionCount || b.latestTimestamp - a.latestTimestamp;
+  });
 }
 
-export async function getExerciseDetail(exerciseId: string): Promise<ExerciseDetailData | null> {
+export async function getExerciseDetail(
+  exerciseId: string,
+  seasonId?: string | null
+): Promise<ExerciseDetailData | null> {
   const db = getDb();
   await ensureSchema(db);
 
@@ -290,12 +550,10 @@ export async function getExerciseDetail(exerciseId: string): Promise<ExerciseDet
     (a, b) => a.startTimestamp - b.startTimestamp
   );
 
-  const chartPoints: ChartPoint[] = [];
-  const sessions: ExerciseSessionHistory[] = [];
-
-  let runningBestValue = -1;
+  // 1. Calculate All-Time Best Record across ALL workouts
   let allTimeBestRecord: { value: number; label: string; date: string } | null = null;
-  let maxEst1RM = 0;
+  let allTimeMaxEst1RM = 0;
+  let allTimeRunningBest = -1;
 
   for (const w of chronologicalWorkouts) {
     let topVal = 0;
@@ -310,20 +568,24 @@ export async function getExerciseDetail(exerciseId: string): Promise<ExerciseDet
       label = `${topVal} km`;
     } else if (metricType === "weighted_bodyweight") {
       let top = w.sets[0];
-      let bestScore = -1;
+      let bestScore = -999999;
       for (const s of w.sets) {
         const wt = s.weightKg ?? 0;
         const rp = s.reps ?? 0;
-        const sc = wt > 0 ? wt * 100 + rp : rp;
+        const sc = wt !== 0 ? wt * 1000 + rp : rp;
         if (sc > bestScore) {
           bestScore = sc;
           top = s;
         }
       }
       topVal = top.weightKg ?? 0;
-      label = topVal > 0 ? `+${topVal} kg × ${top.reps}` : `BW × ${top.reps}`;
-      if (topVal > 0 && top.reps) {
-        est1RM = calculate1RM(topVal, top.reps);
+      if (topVal > 0) {
+        label = `+${topVal} kg × ${top.reps}`;
+        if (top.reps) est1RM = calculate1RM(topVal, top.reps);
+      } else if (topVal < 0) {
+        label = `${topVal} kg × ${top.reps}`;
+      } else {
+        label = `BW × ${top.reps}`;
       }
     } else if (metricType === "bodyweight_reps") {
       topVal = Math.max(...w.sets.map((s) => s.reps || 0));
@@ -347,19 +609,110 @@ export async function getExerciseDetail(exerciseId: string): Promise<ExerciseDet
       }
     }
 
-    if (est1RM && est1RM > maxEst1RM) {
-      maxEst1RM = est1RM;
+    if (est1RM && est1RM > allTimeMaxEst1RM) {
+      allTimeMaxEst1RM = est1RM;
     }
 
-    const isPR = topVal > runningBestValue && topVal > 0;
-    if (isPR) {
-      runningBestValue = topVal;
+    if (topVal > allTimeRunningBest && topVal > 0) {
+      allTimeRunningBest = topVal;
       allTimeBestRecord = {
         value: topVal,
         label,
         date: w.startTime,
       };
     }
+  }
+
+  // 2. Resolve Active Season (if provided)
+  let season: Season | null = null;
+  if (seasonId && seasonId !== "all") {
+    season = await getSeasonById(seasonId);
+  }
+
+  const activeWorkouts = season
+    ? chronologicalWorkouts.filter(
+        (w) =>
+          w.startTimestamp >= season!.startTimestamp &&
+          (!season!.endTimestamp || w.startTimestamp <= season!.endTimestamp)
+      )
+    : chronologicalWorkouts;
+
+  const chartPoints: ChartPoint[] = [];
+  const sessions: ExerciseSessionHistory[] = [];
+
+  let seasonRunningBestValue = -1;
+  let seasonBestRecord: { value: number; label: string; date: string } | null = null;
+  let seasonMaxEst1RM = 0;
+
+  for (const w of activeWorkouts) {
+    let topVal = 0;
+    let est1RM: number | undefined = undefined;
+    let label = "";
+
+    if (metricType === "seconds") {
+      topVal = Math.max(...w.sets.map((s) => s.durationSeconds || 0));
+      label = `${topVal}s`;
+    } else if (metricType === "cardio") {
+      topVal = Math.max(...w.sets.map((s) => s.distanceKm || 0));
+      label = `${topVal} km`;
+    } else if (metricType === "weighted_bodyweight") {
+      let top = w.sets[0];
+      let bestScore = -999999;
+      for (const s of w.sets) {
+        const wt = s.weightKg ?? 0;
+        const rp = s.reps ?? 0;
+        const sc = wt !== 0 ? wt * 1000 + rp : rp;
+        if (sc > bestScore) {
+          bestScore = sc;
+          top = s;
+        }
+      }
+      topVal = top.weightKg ?? 0;
+      if (topVal > 0) {
+        label = `+${topVal} kg × ${top.reps}`;
+        if (top.reps) est1RM = calculate1RM(topVal, top.reps);
+      } else if (topVal < 0) {
+        label = `${topVal} kg × ${top.reps}`;
+      } else {
+        label = `BW × ${top.reps}`;
+      }
+    } else if (metricType === "bodyweight_reps") {
+      topVal = Math.max(...w.sets.map((s) => s.reps || 0));
+      label = `${topVal} reps`;
+    } else {
+      let top = w.sets[0];
+      let bestScore = -1;
+      for (const s of w.sets) {
+        const wt = s.weightKg || 0;
+        const rp = s.reps || 0;
+        const sc = wt * 100 + rp;
+        if (sc > bestScore) {
+          bestScore = sc;
+          top = s;
+        }
+      }
+      topVal = top.weightKg || 0;
+      label = `${topVal} kg × ${top.reps}`;
+      if (topVal > 0 && top.reps) {
+        est1RM = calculate1RM(topVal, top.reps);
+      }
+    }
+
+    if (est1RM && est1RM > seasonMaxEst1RM) {
+      seasonMaxEst1RM = est1RM;
+    }
+
+    const isPR = topVal > seasonRunningBestValue && topVal > 0;
+    if (isPR) {
+      seasonRunningBestValue = topVal;
+      seasonBestRecord = {
+        value: topVal,
+        label,
+        date: w.startTime,
+      };
+    }
+
+    const isAllTimePR = allTimeBestRecord ? (topVal >= allTimeBestRecord.value && topVal > 0) : false;
 
     const point: ChartPoint = {
       date: w.startTime,
@@ -368,6 +721,7 @@ export async function getExerciseDetail(exerciseId: string): Promise<ExerciseDet
       secondaryValue: est1RM,
       label,
       isPR,
+      isAllTimePR,
       workoutTitle: w.workoutTitle,
       workoutId: w.workoutId,
     };
@@ -381,6 +735,7 @@ export async function getExerciseDetail(exerciseId: string): Promise<ExerciseDet
         secondaryValue: est1RM,
         label,
         isPR,
+        isAllTimePR,
       },
     });
   }
@@ -393,7 +748,15 @@ export async function getExerciseDetail(exerciseId: string): Promise<ExerciseDet
       name: String(ex.name),
       metricType,
       allTimeBest: allTimeBestRecord,
-      estimated1RM: maxEst1RM > 0 ? maxEst1RM : null,
+      seasonBest: season ? seasonBestRecord : allTimeBestRecord,
+      estimated1RM: season ? (seasonMaxEst1RM > 0 ? seasonMaxEst1RM : null) : (allTimeMaxEst1RM > 0 ? allTimeMaxEst1RM : null),
+      allTimeEstimated1RM: allTimeMaxEst1RM > 0 ? allTimeMaxEst1RM : null,
+      activeSeason: season ? {
+        id: season.id,
+        name: season.name,
+        startDate: season.startDate,
+        endDate: season.endDate,
+      } : null,
     },
     chartPoints,
     sessions,
@@ -516,26 +879,40 @@ export interface JournalWorkout {
   exercises: {
     id: string;
     name: string;
+    metricType?: string;
     exerciseNotes: string;
     sets: SetDetail[];
     topSetLabel: string;
   }[];
 }
 
-export async function getJournalWorkouts(): Promise<JournalWorkout[]> {
+export async function getJournalWorkouts(seasonId?: string | null): Promise<JournalWorkout[]> {
   const db = getDb();
   await ensureSchema(db);
 
-  const workoutsRes = await db.execute(
-    "SELECT id, title, start_time, start_timestamp, end_time, duration_seconds, description FROM workouts ORDER BY start_timestamp DESC"
-  );
+  let season: Season | null = null;
+  if (seasonId && seasonId !== "all") {
+    season = await getSeasonById(seasonId);
+  }
+
+  const workoutsRes = season
+    ? await db.execute({
+        sql: `SELECT id, title, start_time, start_timestamp, end_time, duration_seconds, description 
+              FROM workouts 
+              WHERE start_timestamp >= ? AND (? IS NULL OR start_timestamp <= ?) 
+              ORDER BY start_timestamp DESC`,
+        args: [season.startTimestamp, season.endTimestamp, season.endTimestamp],
+      })
+    : await db.execute(
+        "SELECT id, title, start_time, start_timestamp, end_time, duration_seconds, description FROM workouts ORDER BY start_timestamp DESC"
+      );
 
   const results: JournalWorkout[] = [];
 
   for (const w of workoutsRes.rows) {
     const wId = String(w.id);
     const exercisesData = await db.execute({
-      sql: `SELECT we.id as we_id, e.id as exercise_id, e.name as exercise_name, we.exercise_notes,
+      sql: `SELECT we.id as we_id, e.id as exercise_id, e.name as exercise_name, e.metric_type, we.exercise_notes,
                    s.id as set_id, s.set_index, s.set_type, s.weight_kg, s.reps, s.distance_km, s.duration_seconds, s.rpe
             FROM workout_exercises we
             JOIN exercises e ON e.id = we.exercise_id
@@ -548,6 +925,7 @@ export async function getJournalWorkouts(): Promise<JournalWorkout[]> {
     const exMap = new Map<string, {
       id: string;
       name: string;
+      metricType: string;
       exerciseNotes: string;
       sets: SetDetail[];
     }>();
@@ -558,6 +936,7 @@ export async function getJournalWorkouts(): Promise<JournalWorkout[]> {
         exMap.set(weId, {
           id: String(r.exercise_id),
           name: String(r.exercise_name),
+          metricType: String(r.metric_type || "weight_reps"),
           exerciseNotes: r.exercise_notes ? String(r.exercise_notes) : "",
           sets: [],
         });
@@ -586,20 +965,30 @@ export async function getJournalWorkouts(): Promise<JournalWorkout[]> {
           topLabel = `${maxDist} km`;
         } else {
           let best = ex.sets[0];
-          let maxSc = -1;
+          let maxSc = -999999;
           for (const s of ex.sets) {
             const wt = s.weightKg ?? 0;
             const rp = s.reps ?? 0;
-            const sc = wt > 0 ? wt * 100 + rp : rp;
+            const sc = wt !== 0 ? wt * 1000 + rp : rp;
             if (sc > maxSc) {
               maxSc = sc;
               best = s;
             }
           }
-          if ((best.weightKg ?? 0) > 0) {
-            topLabel = `${best.weightKg} kg × ${best.reps}`;
-          } else if (best.reps) {
-            topLabel = `${best.reps} reps`;
+          if (ex.metricType === "weighted_bodyweight") {
+            if ((best.weightKg ?? 0) > 0) {
+              topLabel = `+${best.weightKg} kg × ${best.reps}`;
+            } else if ((best.weightKg ?? 0) < 0) {
+              topLabel = `${best.weightKg} kg × ${best.reps}`;
+            } else if (best.reps) {
+              topLabel = `BW × ${best.reps}`;
+            }
+          } else {
+            if ((best.weightKg ?? 0) > 0) {
+              topLabel = `${best.weightKg} kg × ${best.reps}`;
+            } else if (best.reps) {
+              topLabel = `${best.reps} reps`;
+            }
           }
         }
       }
@@ -639,7 +1028,7 @@ export async function getWorkoutDetail(workoutId: string): Promise<JournalWorkou
   const wId = String(w.id);
 
   const exercisesData = await db.execute({
-    sql: `SELECT we.id as we_id, e.id as exercise_id, e.name as exercise_name, we.exercise_notes,
+    sql: `SELECT we.id as we_id, e.id as exercise_id, e.name as exercise_name, e.metric_type, we.exercise_notes,
                  s.id as set_id, s.set_index, s.set_type, s.weight_kg, s.reps, s.distance_km, s.duration_seconds, s.rpe
           FROM workout_exercises we
           JOIN exercises e ON e.id = we.exercise_id
@@ -652,6 +1041,7 @@ export async function getWorkoutDetail(workoutId: string): Promise<JournalWorkou
   const exMap = new Map<string, {
     id: string;
     name: string;
+    metricType: string;
     exerciseNotes: string;
     sets: SetDetail[];
   }>();
@@ -662,6 +1052,7 @@ export async function getWorkoutDetail(workoutId: string): Promise<JournalWorkou
       exMap.set(weId, {
         id: String(r.exercise_id),
         name: String(r.exercise_name),
+        metricType: String(r.metric_type || "weight_reps"),
         exerciseNotes: r.exercise_notes ? String(r.exercise_notes) : "",
         sets: [],
       });
@@ -690,20 +1081,30 @@ export async function getWorkoutDetail(workoutId: string): Promise<JournalWorkou
         topLabel = `${maxDist} km`;
       } else {
         let best = ex.sets[0];
-        let maxSc = -1;
+        let maxSc = -999999;
         for (const s of ex.sets) {
           const wt = s.weightKg ?? 0;
           const rp = s.reps ?? 0;
-          const sc = wt > 0 ? wt * 100 + rp : rp;
+          const sc = wt !== 0 ? wt * 1000 + rp : rp;
           if (sc > maxSc) {
             maxSc = sc;
             best = s;
           }
         }
-        if ((best.weightKg ?? 0) > 0) {
-          topLabel = `${best.weightKg} kg × ${best.reps}`;
-        } else if (best.reps) {
-          topLabel = `${best.reps} reps`;
+        if (ex.metricType === "weighted_bodyweight") {
+          if ((best.weightKg ?? 0) > 0) {
+            topLabel = `+${best.weightKg} kg × ${best.reps}`;
+          } else if ((best.weightKg ?? 0) < 0) {
+            topLabel = `${best.weightKg} kg × ${best.reps}`;
+          } else if (best.reps) {
+            topLabel = `BW × ${best.reps}`;
+          }
+        } else {
+          if ((best.weightKg ?? 0) > 0) {
+            topLabel = `${best.weightKg} kg × ${best.reps}`;
+          } else if (best.reps) {
+            topLabel = `${best.reps} reps`;
+          }
         }
       }
     }
