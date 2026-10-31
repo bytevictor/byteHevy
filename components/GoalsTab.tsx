@@ -6,6 +6,7 @@ import { getExerciseMedia } from "@/lib/exercise-media";
 import { TargetIcon, PlusIcon, TrashIcon, CheckIcon, XIcon, TrophyIcon, EditIcon, CalendarIcon, CrownIcon } from "./Icons";
 import { GoalsSkeleton } from "./skeletons/GoalsSkeleton";
 import { useSeason } from "@/lib/season-context";
+import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
 
 export function GoalsTab() {
   const { activeSeasonId, activeSeason, setActiveSeasonId } = useSeason();
@@ -215,7 +216,7 @@ export function GoalsTab() {
             <span>Objetivos de Rendimiento</span>
           </h2>
           <p className="text-xs text-zinc-400 mt-1 font-normal">
-            Define el peso y repeticiones ideal para cada ejercicio y mide tu progreso real respecto a tu récord histórico.
+            Define el objetivo ideal para cada ejercicio y mide tu progreso real desde la marca mínima de partida hacia tu meta.
           </p>
         </div>
 
@@ -336,68 +337,125 @@ export function GoalsTab() {
                   </div>
                 </div>
 
-                {/* Comparative Box: Récord Actual vs Objetivo Ideal */}
-                <div className="grid grid-cols-2 gap-2.5 my-0.5">
-                  {/* Card 1: Récord Actual */}
-                  <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex flex-col justify-between">
-                    <span className="text-[10px] uppercase font-semibold text-zinc-500 tracking-wider">
-                      {activeSeason ? "Récord Season" : "Récord Actual"}
-                    </span>
-                    <div className="mt-1">
-                      <span className="text-base font-mono font-bold text-zinc-200 tabular-nums">
-                        {goal.currentLabel}
-                      </span>
-                    </div>
-                    {goal.allTimeReached && activeSeason ? (
-                      <span className="text-[10px] text-amber-400 font-mono mt-0.5 flex items-center gap-1 font-semibold">
-                        👑 Histórico: {goal.allTimeLabel}
-                      </span>
-                    ) : goal.current1RM ? (
-                      <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
-                        1RM est: <strong className="text-zinc-400">{goal.current1RM} kg</strong>
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-zinc-500 mt-0.5">
-                        {activeSeason ? "Mejor serie en temporada" : "Mejor serie histórica"}
-                      </span>
-                    )}
-                  </div>
+                {/* 3 Comparative Cards: Récord Season | Récord Histórico | Objetivo Ideal */}
+                {(() => {
+                  const seasonColor = activeSeason ? getSeasonColor(activeSeason) : (goal.activeSeasonColor || "#f59e0b");
+                  const seasonTitle = activeSeason ? activeSeason.name : (goal.activeSeasonName || "Season Actual");
 
-                  {/* Card 2: Objetivo Ideal */}
-                  <div
-                    className={`p-3 rounded-xl border flex flex-col justify-between ${
-                      isCompleted
-                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200"
-                        : "bg-accent/10 border-accent/30 text-zinc-100"
-                    }`}
-                  >
-                    <span
-                      className={`text-[10px] uppercase font-semibold tracking-wider ${
-                        isCompleted ? "text-emerald-400" : "text-accent-light"
-                      }`}
-                    >
-                      Objetivo Ideal
-                    </span>
-                    <div className="mt-1">
-                      <span className="text-base font-mono font-bold tabular-nums">
-                        {goal.targetLabel}
-                      </span>
-                    </div>
-                    {goal.target1RM ? (
-                      <span className="text-[10px] text-zinc-400 font-mono mt-0.5">
-                        1RM est:{" "}
-                        <strong className={isCompleted ? "text-emerald-300" : "text-accent-lighter"}>
-                          {goal.target1RM} kg
-                        </strong>
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-zinc-400 mt-0.5">Meta a alcanzar</span>
-                    )}
-                  </div>
-                </div>
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 my-0.5">
+                      {/* Card 1: Récord Season */}
+                      <div
+                        className="p-3 rounded-xl border flex flex-col justify-between transition-all"
+                        style={
+                          goal.hasSeasonData
+                            ? {
+                                backgroundColor: hexToRgba(seasonColor, 0.08),
+                                borderColor: hexToRgba(seasonColor, 0.35),
+                              }
+                            : {
+                                backgroundColor: "rgba(9, 9, 11, 0.5)",
+                                borderColor: "rgba(39, 39, 42, 0.6)",
+                              }
+                        }
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <span
+                            className="text-[10px] uppercase font-bold tracking-wider truncate flex items-center gap-1.5"
+                            style={{ color: seasonColor }}
+                          >
+                            <span
+                              className="w-1.5 h-1.5 rounded-full shrink-0"
+                              style={{ backgroundColor: seasonColor }}
+                            />
+                            <span className="truncate">Récord Season</span>
+                          </span>
+                          <span className="text-[9px] font-mono text-zinc-500 truncate max-w-[80px]" title={seasonTitle}>
+                            {seasonTitle}
+                          </span>
+                        </div>
+                        <div className="mt-1">
+                          <span className="text-base font-mono font-bold text-zinc-100 tabular-nums">
+                            {goal.seasonLabel}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-[10px] font-mono">
+                          {goal.season1RM ? (
+                            <span className="text-zinc-400">
+                              1RM est: <strong className="text-zinc-200">{goal.season1RM} kg</strong>
+                            </span>
+                          ) : (
+                            <span className="text-zinc-500">
+                              {goal.hasSeasonData ? "Mejor de temporada" : "Sin sesiones"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
 
-                {/* Progress Bar & Status */}
-                <div className="flex flex-col gap-1.5 pt-1">
+                      {/* Card 2: Récord Histórico */}
+                      <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex flex-col justify-between">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider flex items-center gap-1">
+                            <CrownIcon className="w-3 h-3 text-amber-400" />
+                            <span>Récord Histórico</span>
+                          </span>
+                        </div>
+                        <div className="mt-1">
+                          <span className="text-base font-mono font-bold text-amber-300 tabular-nums">
+                            {goal.allTimeLabel}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-[10px] font-mono">
+                          {goal.allTime1RM ? (
+                            <span className="text-zinc-400">
+                              1RM est: <strong className="text-amber-300/90">{goal.allTime1RM} kg</strong>
+                            </span>
+                          ) : (
+                            <span className="text-zinc-500">Mejor histórico</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Card 3: Objetivo Ideal */}
+                      <div
+                        className={`p-3 rounded-xl border flex flex-col justify-between ${
+                          isCompleted
+                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200"
+                            : "bg-accent/10 border-accent/30 text-zinc-100"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <span
+                            className={`text-[10px] uppercase font-bold tracking-wider flex items-center gap-1 ${
+                              isCompleted ? "text-emerald-400" : "text-accent-light"
+                            }`}
+                          >
+                            <TargetIcon className="w-3 h-3" />
+                            <span>Objetivo Ideal</span>
+                          </span>
+                        </div>
+                        <div className="mt-1">
+                          <span className="text-base font-mono font-bold tabular-nums">
+                            {goal.targetLabel}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-[10px] font-mono">
+                          {goal.target1RM ? (
+                            <span className={isCompleted ? "text-emerald-300/90" : "text-accent-lighter/90"}>
+                              1RM est: <strong>{goal.target1RM} kg</strong>
+                            </span>
+                          ) : (
+                            <span className="text-zinc-400">Meta a alcanzar</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Progress Bar & Baseline Info */}
+                <div className="flex flex-col gap-2 pt-2 border-t border-zinc-800/70">
+                  {/* Progress Track */}
                   <div className="w-full h-2.5 rounded-full bg-zinc-800/90 overflow-hidden relative">
                     <div
                       className={`h-full rounded-full transition-all duration-700 ease-out ${
@@ -409,9 +467,39 @@ export function GoalsTab() {
                     />
                   </div>
 
-                  <div className="flex items-center justify-between text-xs">
+                  {/* Baseline & Target Range Indicators */}
+                  <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400">
+                    <div className="flex items-center gap-1 truncate max-w-[45%]">
+                      <span className="text-zinc-500">Base ({goal.baselineType === "season" ? "mín. season" : "mín. hist."}):</span>
+                      <strong className="text-zinc-200 truncate">{goal.baselineLabel}</strong>
+                      {goal.baseline1RM && (
+                        <span className="text-zinc-500 shrink-0">({goal.baseline1RM} kg 1RM)</span>
+                      )}
+                    </div>
+
+                    <div className="px-2 py-0.5 rounded-md bg-zinc-950/80 border border-zinc-800 shrink-0 text-center">
+                      <span
+                        className={`font-mono tabular-nums font-bold text-xs ${
+                          isCompleted ? "text-emerald-400" : "text-accent-light"
+                        }`}
+                      >
+                        {progress.toFixed(0)}%
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 truncate max-w-[45%] justify-end text-right">
+                      <span className="text-zinc-500">Meta:</span>
+                      <strong className="text-zinc-200 truncate">{goal.targetLabel}</strong>
+                      {goal.target1RM && (
+                        <span className="text-accent-lighter/80 shrink-0">({goal.target1RM} kg 1RM)</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Status & Gap Message */}
+                  <div className="flex items-center justify-between text-xs mt-0.5">
                     <span
-                      className={`font-medium flex items-center gap-1 ${
+                      className={`font-medium flex items-center gap-1.5 ${
                         isCompleted ? "text-emerald-400" : "text-zinc-400"
                       }`}
                     >
@@ -422,20 +510,19 @@ export function GoalsTab() {
                         </>
                       ) : (
                         <span>
-                          Faltan:{" "}
+                          Estado:{" "}
                           <strong className="text-zinc-200 font-normal">
                             {goal.remainingGapLabel}
                           </strong>
                         </span>
                       )}
                     </span>
-                    <span
-                      className={`font-mono tabular-nums font-bold ${
-                        isCompleted ? "text-emerald-400" : "text-accent-light"
-                      }`}
-                    >
-                      {progress.toFixed(0)}%
-                    </span>
+
+                    {goal.allTimeReached && !isCompleted && (
+                      <span className="text-[10px] font-mono text-amber-400 font-semibold flex items-center gap-1">
+                        👑 Logrado en histórico
+                      </span>
+                    )}
                   </div>
                 </div>
 
