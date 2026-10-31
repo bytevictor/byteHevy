@@ -846,36 +846,68 @@ export interface GoalItem {
   exerciseId: string;
   exerciseName: string;
   metricType: "weight_reps" | "weighted_bodyweight" | "bodyweight_reps" | "seconds" | "cardio";
-  currentWeight?: number;
-  currentReps?: number;
-  currentSeconds?: number;
-  currentDistanceKm?: number;
-  current1RM?: number;
-  currentLabel: string;
+
+  // Season Record
+  seasonLabel: string;
+  season1RM?: number;
+  seasonWeight?: number;
+  seasonReps?: number;
+  hasSeasonData: boolean;
+
+  // All-time Record
+  allTimeLabel: string;
+  allTime1RM?: number;
+  allTimeWeight?: number;
+  allTimeReps?: number;
+  hasAllTimeData: boolean;
+  allTimeReached: boolean;
+
+  // Target Goal
+  targetLabel: string;
+  target1RM?: number;
   targetWeight?: number;
   targetReps?: number;
   targetSeconds?: number;
   targetDistanceKm?: number;
-  target1RM?: number;
-  targetLabel: string;
+
+  // Baseline Reference (Mínimo de la season si hay season, o mínimo histórico)
+  baselineLabel: string;
+  baseline1RM?: number;
+  baselineWeight?: number;
+  baselineReps?: number;
+  baselineType: "season" | "all_time";
+
+  // Progress metrics
   progressPct: number;
   isCompleted: boolean;
   remainingGapLabel?: string;
   notes?: string;
   createdAt?: number;
   updatedAt?: number;
-  allTimeReached?: boolean;
-  allTimeLabel?: string;
   activeSeasonName?: string;
+  activeSeasonColor?: string;
+
+  // Backwards compatibility fields
+  currentWeight?: number;
+  currentReps?: number;
+  currentSeconds?: number;
+  currentDistanceKm?: number;
+  current1RM?: number;
+  currentLabel: string;
 }
 
 export async function getGoals(seasonId?: string | null): Promise<GoalItem[]> {
   const db = getDb();
   await ensureSchema(db);
 
+  const isExplicitSeason = Boolean(seasonId && seasonId !== "all");
   let season: Season | null = null;
-  if (seasonId && seasonId !== "all") {
-    season = await getSeasonById(seasonId);
+  if (isExplicitSeason) {
+    season = await getSeasonById(seasonId!);
+  } else {
+    // If viewing all, still find the current/latest season for display purposes
+    const allSeasons = await getSeasons();
+    season = allSeasons.find((s) => !s.endDate || s.endDate.toLowerCase() === "actualidad") || allSeasons[0] || null;
   }
 
   const goalsRes = await db.execute(
@@ -921,7 +953,8 @@ export async function getGoals(seasonId?: string | null): Promise<GoalItem[]> {
     }
 
     const setsRes = await db.execute({
-      sql: `SELECT s.weight_kg, s.reps, s.duration_seconds, s.distance_km, w.start_time, w.start_timestamp
+      sql: `SELECT s.weight_kg, s.reps, s.duration_seconds, s.distance_km, s.set_type,
+                   w.id as workout_id, w.start_time, w.start_timestamp
             FROM exercise_sets s
             JOIN workout_exercises we ON we.id = s.workout_exercise_id
             JOIN workouts w ON w.id = we.workout_id
@@ -930,163 +963,328 @@ export async function getGoals(seasonId?: string | null): Promise<GoalItem[]> {
       args: [exId],
     });
 
-    // Separate all-time sets from active season sets
-    const allSets = setsRes.rows;
-    const activeSets = season
-      ? allSets.filter((row) => {
-          const ts = Number(row.start_timestamp);
-          return ts >= season!.startTimestamp && (!season!.endTimestamp || ts <= season!.endTimestamp);
-        })
-      : allSets;
+    // Group sets by workout to evaluate session-level Top Sets
+    const workoutMap = new Map<string, {
+      workoutId: string;
+      startTime: string;
+      startTimestamp: number;
+      sets: {
+        weightKg: number | null;
+        reps: number | null;
+        durationSeconds: number | null;
+        distanceKm: number | null;
+        setType: string;
+      }[];
+    }>();
 
-    // Helper to evaluate max stats from a set of rows
-    const evaluateSets = (rows: typeof allSets) => {
+    for (const r of setsRes.rows) {
+      const wId = String(r.workout_id);
+      if (!workoutMap.has(wId)) {
+        workoutMap.set(wId, {
+          workoutId: wId,
+          startTime: String(r.start_time),
+          startTimestamp: Number(r.start_timestamp),
+          sets: [],
+        });
+      }
+      workoutMap.get(wId)!.sets.push({
+        weightKg: r.weight_kg !== null && r.weight_kg !== undefined ? Number(r.weight_kg) : null,
+        reps: r.reps !== null && r.reps !== undefined ? Number(r.reps) : null,
+        durationSeconds: r.duration_seconds !== null && r.duration_seconds !== undefined ? Number(r.duration_seconds) : null,
+        distanceKm: r.distance_km !== null && r.distance_km !== undefined ? Number(r.distance_km) : null,
+        setType: String(r.set_type || "normal"),
+      });
+    }
+
+    const allWorkouts = Array.from(workoutMap.values());
+    const seasonWorkouts = season
+      ? allWorkouts.filter(
+          (w) =>
+            w.startTimestamp >= season!.startTimestamp &&
+            (!season!.endTimestamp || w.startTimestamp <= season!.endTimestamp)
+        )
+      : [];
+
+    // Helper to evaluate the Top Set of a given workout
+    const getTopSetOfWorkout = (w: typeof allWorkouts[0]) => {
+      const nonWarmup = w.sets.filter((s) => s.setType !== "warmup");
+      const setsToUse = nonWarmup.length > 0 ? nonWarmup : w.sets;
+
       let bestW = 0;
       let bestR = 0;
       let bestSec = 0;
       let bestDist = 0;
-      let max1RM = 0;
-      let bestScore = -1;
-      let label = "Sin registros";
+      let best1RM = 0;
+      let bestScore = -Infinity;
+      let label = "";
 
-      if (rows.length === 0) {
-        return { bestW, bestR, bestSec, bestDist, max1RM, label, hasData: false };
+      for (const s of setsToUse) {
+        const wt = s.weightKg ?? 0;
+        const rp = s.reps ?? 0;
+        const sec = s.durationSeconds ?? 0;
+        const dist = s.distanceKm ?? 0;
+
+        let score = -Infinity;
+        let s1rm = 0;
+
+        if (metricType === "weight_reps") {
+          s1rm = wt > 0 && rp > 0 ? calculate1RM(wt, rp) : 0;
+          score = s1rm > 0 ? s1rm : (wt * 1000 + rp);
+        } else if (metricType === "weighted_bodyweight") {
+          s1rm = wt > 0 && rp > 0 ? calculate1RM(wt, rp) : 0;
+          score = wt !== 0 ? wt * 1000 + rp : rp;
+        } else if (metricType === "bodyweight_reps") {
+          score = rp;
+        } else if (metricType === "seconds") {
+          score = sec;
+        } else if (metricType === "cardio") {
+          score = dist;
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestW = wt;
+          bestR = rp;
+          bestSec = sec;
+          bestDist = dist;
+          best1RM = s1rm;
+        }
       }
 
-      if (metricType === "seconds") {
-        for (const row of rows) {
-          const s = Number(row.duration_seconds) || 0;
-          if (s > bestSec) bestSec = s;
-        }
+      if (bestScore === -Infinity) return null;
+
+      if (metricType === "weight_reps") {
+        label = `${bestW} kg × ${bestR}`;
+      } else if (metricType === "weighted_bodyweight") {
+        if (bestW > 0) label = `+${bestW} kg × ${bestR}`;
+        else if (bestW < 0) label = `${bestW} kg × ${bestR}`;
+        else label = `BW × ${bestR}`;
+      } else if (metricType === "bodyweight_reps") {
+        label = `${bestR} reps`;
+      } else if (metricType === "seconds") {
         label = `${bestSec}s`;
       } else if (metricType === "cardio") {
-        for (const row of rows) {
-          const d = Number(row.distance_km) || 0;
-          if (d > bestDist) bestDist = d;
-        }
         label = `${bestDist} km`;
-      } else if (metricType === "bodyweight_reps") {
-        for (const row of rows) {
-          const r = Number(row.reps) || 0;
-          if (r > bestR) bestR = r;
-        }
-        label = `${bestR} reps`;
-      } else if (metricType === "weighted_bodyweight") {
-        for (const row of rows) {
-          const wt = Number(row.weight_kg) || 0;
-          const rp = Number(row.reps) || 0;
-          const score = wt !== 0 ? wt * 1000 + rp : rp;
-          if (score > bestScore) {
-            bestScore = score;
-            bestW = wt;
-            bestR = rp;
-          }
-          if (wt > 0 && rp > 0) {
-            const e1 = calculate1RM(wt, rp);
-            if (e1 > max1RM) max1RM = e1;
-          }
-        }
-        if (bestW > 0) {
-          label = `+${bestW} kg × ${bestR}`;
-        } else if (bestW < 0) {
-          label = `${bestW} kg × ${bestR}`;
-        } else {
-          label = `BW × ${bestR}`;
-        }
-      } else {
-        // weight_reps
-        for (const row of rows) {
-          const wt = Number(row.weight_kg) || 0;
-          const rp = Number(row.reps) || 0;
-          const score = wt * 1000 + rp;
-          if (score > bestScore) {
-            bestScore = score;
-            bestW = wt;
-            bestR = rp;
-          }
-          if (wt > 0 && rp > 0) {
-            const e1 = calculate1RM(wt, rp);
-            if (e1 > max1RM) max1RM = e1;
-          }
-        }
-        label = `${bestW} kg × ${bestR}`;
       }
 
-      return { bestW, bestR, bestSec, bestDist, max1RM, label, hasData: true };
+      return {
+        workoutId: w.workoutId,
+        startTimestamp: w.startTimestamp,
+        startTime: w.startTime,
+        weight: bestW,
+        reps: bestR,
+        seconds: bestSec,
+        distanceKm: bestDist,
+        est1RM: best1RM,
+        score: bestScore,
+        label,
+      };
     };
 
-    const allTimeStats = evaluateSets(allSets);
-    const activeStats = evaluateSets(activeSets);
+    // Helper to summarize workouts (calculating Best and Min Top Set)
+    const summarizeWorkouts = (workouts: typeof allWorkouts) => {
+      const topSets = workouts
+        .map(getTopSetOfWorkout)
+        .filter((ts): ts is NonNullable<typeof ts> => ts !== null);
 
-    // Calculate completion for all-time
-    const checkCompletion = (stats: ReturnType<typeof evaluateSets>) => {
+      if (topSets.length === 0) {
+        return {
+          hasData: false,
+          best: null,
+          min: null,
+          label: "Sin registros",
+          est1RM: undefined,
+          weight: 0,
+          reps: 0,
+          seconds: 0,
+          distanceKm: 0,
+          minLabel: "Sin registros",
+          min1RM: undefined,
+          minWeight: 0,
+          minReps: 0,
+          minSeconds: 0,
+          minDistanceKm: 0,
+        };
+      }
+
+      let best = topSets[0];
+      let min = topSets[0];
+
+      for (const ts of topSets) {
+        if (ts.score > best.score) best = ts;
+        if (ts.score < min.score) min = ts;
+      }
+
+      return {
+        hasData: true,
+        best,
+        min,
+        label: best.label,
+        est1RM: best.est1RM > 0 ? best.est1RM : (best.weight > 0 && best.reps > 0 ? calculate1RM(best.weight, best.reps) : undefined),
+        weight: best.weight,
+        reps: best.reps,
+        seconds: best.seconds,
+        distanceKm: best.distanceKm,
+        minLabel: min.label,
+        min1RM: min.est1RM > 0 ? min.est1RM : (min.weight > 0 && min.reps > 0 ? calculate1RM(min.weight, min.reps) : undefined),
+        minWeight: min.weight,
+        minReps: min.reps,
+        minSeconds: min.seconds,
+        minDistanceKm: min.distanceKm,
+      };
+    };
+
+    const allTimeStats = summarizeWorkouts(allWorkouts);
+    const seasonStats = summarizeWorkouts(seasonWorkouts);
+
+    // Active baseline & current for progress calculation
+    const useSeasonContext = isExplicitSeason && seasonStats.hasData;
+    const activeCurrent = useSeasonContext ? seasonStats : allTimeStats;
+    const activeBaseline = useSeasonContext
+      ? {
+          label: seasonStats.minLabel,
+          est1RM: seasonStats.min1RM,
+          weight: seasonStats.minWeight,
+          reps: seasonStats.minReps,
+          seconds: seasonStats.minSeconds,
+          distanceKm: seasonStats.minDistanceKm,
+          type: "season" as const,
+        }
+      : {
+          label: allTimeStats.minLabel,
+          est1RM: allTimeStats.min1RM,
+          weight: allTimeStats.minWeight,
+          reps: allTimeStats.minReps,
+          seconds: allTimeStats.minSeconds,
+          distanceKm: allTimeStats.minDistanceKm,
+          type: "all_time" as const,
+        };
+
+    // Check completion against target
+    const checkCompletion = (stats: typeof allTimeStats) => {
       if (!stats.hasData) return false;
       if (metricType === "weight_reps" || metricType === "weighted_bodyweight") {
-        const tWeight = targetWeight ?? 0;
-        const tReps = targetReps ?? 0;
-        const t1RM = target1RM ?? 0;
-        const c1RM = stats.max1RM || (stats.bestW > 0 && stats.bestR > 0 ? calculate1RM(stats.bestW, stats.bestR) : 0);
-        return (stats.bestW >= tWeight && stats.bestR >= tReps) || (t1RM > 0 && c1RM >= t1RM);
+        const tW = targetWeight ?? 0;
+        const tR = targetReps ?? 0;
+        const t1 = target1RM ?? 0;
+        const c1 = stats.est1RM ?? (stats.weight > 0 && stats.reps > 0 ? calculate1RM(stats.weight, stats.reps) : 0);
+        return (stats.weight >= tW && stats.reps >= tR) || (t1 > 0 && c1 >= t1);
       } else if (metricType === "bodyweight_reps") {
-        return stats.bestR >= (targetReps ?? 0) && (targetReps ?? 0) > 0;
+        return stats.reps >= (targetReps ?? 0) && (targetReps ?? 0) > 0;
       } else if (metricType === "seconds") {
-        return stats.bestSec >= (targetSeconds ?? 0) && (targetSeconds ?? 0) > 0;
+        return stats.seconds >= (targetSeconds ?? 0) && (targetSeconds ?? 0) > 0;
       } else if (metricType === "cardio") {
-        return stats.bestDist >= (targetDistanceKm ?? 0) && (targetDistanceKm ?? 0) > 0;
+        return stats.distanceKm >= (targetDistanceKm ?? 0) && (targetDistanceKm ?? 0) > 0;
       }
       return false;
     };
 
     const allTimeReached = checkCompletion(allTimeStats);
-    const isCompleted = checkCompletion(activeStats);
+    const isCompleted = isExplicitSeason
+      ? (seasonStats.hasData && checkCompletion(seasonStats))
+      : allTimeReached;
 
     let progressPct = 0;
     let remainingGapLabel = "";
 
-    if (!activeStats.hasData) {
+    if (isExplicitSeason && !seasonStats.hasData) {
       progressPct = 0;
-      remainingGapLabel = season ? `Sin registros en temporada ${season.name}` : "Pendiente de primer registro";
+      remainingGapLabel = `Sin sesiones registradas en ${season?.name || "esta temporada"}`;
+    } else if (!activeCurrent.hasData) {
+      progressPct = 0;
+      remainingGapLabel = "Pendiente de primer entrenamiento";
     } else if (isCompleted) {
       progressPct = 100;
-      remainingGapLabel = "¡Objetivo Conseguido! ★";
+      remainingGapLabel = "¡Objetivo ideal conseguido! ★";
     } else {
-      if (metricType === "weight_reps" || metricType === "weighted_bodyweight") {
-        const tWeight = targetWeight ?? 0;
-        const tReps = targetReps ?? 0;
-        const t1RM = target1RM ?? 0;
-        const c1RM = activeStats.max1RM || (activeStats.bestW > 0 && activeStats.bestR > 0 ? calculate1RM(activeStats.bestW, activeStats.bestR) : 0);
+      if (metricType === "weight_reps") {
+        const t1RM = target1RM ?? (targetWeight && targetReps ? calculate1RM(targetWeight, targetReps) : 0);
+        const c1RM = activeCurrent.est1RM ?? (activeCurrent.weight > 0 && activeCurrent.reps > 0 ? calculate1RM(activeCurrent.weight, activeCurrent.reps) : 0);
+        const b1RM = activeBaseline.est1RM ?? (activeBaseline.weight > 0 && activeBaseline.reps > 0 ? calculate1RM(activeBaseline.weight, activeBaseline.reps) : 0);
 
-        if (t1RM > 0 && c1RM > 0) {
-          progressPct = Math.min(99, Math.max(1, Math.round((c1RM / t1RM) * 100)));
-        } else if (tWeight > 0 && activeStats.bestW > 0) {
-          progressPct = Math.min(99, Math.max(1, Math.round((activeStats.bestW / tWeight) * 100)));
+        if (t1RM > 0) {
+          if (c1RM >= t1RM) {
+            progressPct = 100;
+          } else if (t1RM > b1RM && c1RM >= b1RM) {
+            const pct = ((c1RM - b1RM) / (t1RM - b1RM)) * 100;
+            progressPct = Math.min(99, Math.max(0, Math.round(pct)));
+          } else if (c1RM > 0) {
+            progressPct = Math.min(99, Math.max(0, Math.round((c1RM / t1RM) * 100)));
+          } else {
+            progressPct = 0;
+          }
+
+          const diff1RM = Number(Math.max(0, t1RM - c1RM).toFixed(1));
+          const diffW = Math.max(0, (targetWeight ?? 0) - activeCurrent.weight);
+          const diffR = Math.max(0, (targetReps ?? 0) - activeCurrent.reps);
+          remainingGapLabel = `Faltan +${diff1RM} kg 1RM (${diffW > 0 ? `+${diffW} kg` : ""}${diffW > 0 && diffR > 0 ? " · " : ""}${diffR > 0 ? `+${diffR} reps` : ""})`;
+        } else {
+          progressPct = 0;
+          remainingGapLabel = "Pendiente de objetivo";
+        }
+      } else if (metricType === "weighted_bodyweight") {
+        const tW = targetWeight ?? 0;
+        const cW = activeCurrent.weight;
+        const bW = activeBaseline.weight;
+        const t1RM = target1RM ?? (tW > 0 && targetReps ? calculate1RM(tW, targetReps) : 0);
+        const c1RM = activeCurrent.est1RM ?? (cW > 0 && activeCurrent.reps > 0 ? calculate1RM(cW, activeCurrent.reps) : cW);
+        const b1RM = activeBaseline.est1RM ?? (bW > 0 && activeBaseline.reps > 0 ? calculate1RM(bW, activeBaseline.reps) : bW);
+
+        if (t1RM > b1RM && c1RM >= b1RM) {
+          const pct = ((c1RM - b1RM) / (t1RM - b1RM)) * 100;
+          progressPct = Math.min(99, Math.max(0, Math.round(pct)));
+        } else if (tW > bW && cW >= bW) {
+          const pct = ((cW - bW) / (tW - bW)) * 100;
+          progressPct = Math.min(99, Math.max(0, Math.round(pct)));
         } else {
           progressPct = 0;
         }
 
-        const diffWeight = Math.max(0, tWeight - activeStats.bestW);
-        const diffReps = Math.max(0, tReps - activeStats.bestR);
-        if (diffWeight > 0 && diffReps > 0) {
-          remainingGapLabel = `+${diffWeight.toFixed(diffWeight % 1 === 0 ? 0 : 1)} kg · +${diffReps} reps`;
-        } else if (diffWeight > 0) {
-          remainingGapLabel = `+${diffWeight.toFixed(diffWeight % 1 === 0 ? 0 : 1)} kg`;
-        } else if (diffReps > 0) {
-          remainingGapLabel = `+${diffReps} reps`;
-        } else {
-          remainingGapLabel = "Casi completado";
-        }
+        const diffW = Math.max(0, tW - cW);
+        const diffR = Math.max(0, (targetReps ?? 0) - activeCurrent.reps);
+        remainingGapLabel = `Faltan ${diffW > 0 ? `+${diffW} kg lastre` : ""}${diffW > 0 && diffR > 0 ? " · " : ""}${diffR > 0 ? `+${diffR} reps` : ""}`;
       } else if (metricType === "bodyweight_reps") {
-        const tReps = targetReps ?? 0;
-        progressPct = tReps > 0 ? Math.min(99, Math.max(0, Math.round((activeStats.bestR / tReps) * 100))) : 0;
-        remainingGapLabel = `+${Math.max(0, tReps - activeStats.bestR)} reps`;
+        const tR = targetReps ?? 0;
+        const cR = activeCurrent.reps;
+        const bR = activeBaseline.reps;
+
+        if (tR > bR && cR >= bR) {
+          const pct = ((cR - bR) / (tR - bR)) * 100;
+          progressPct = Math.min(99, Math.max(0, Math.round(pct)));
+        } else if (tR > 0) {
+          progressPct = Math.min(99, Math.max(0, Math.round((cR / tR) * 100)));
+        } else {
+          progressPct = 0;
+        }
+        remainingGapLabel = `+${Math.max(0, tR - cR)} reps para la meta`;
       } else if (metricType === "seconds") {
-        const tSec = targetSeconds ?? 0;
-        progressPct = tSec > 0 ? Math.min(99, Math.max(0, Math.round((activeStats.bestSec / tSec) * 100))) : 0;
-        remainingGapLabel = `+${Math.max(0, tSec - activeStats.bestSec)}s`;
+        const tS = targetSeconds ?? 0;
+        const cS = activeCurrent.seconds;
+        const bS = activeBaseline.seconds;
+
+        if (tS > bS && cS >= bS) {
+          const pct = ((cS - bS) / (tS - bS)) * 100;
+          progressPct = Math.min(99, Math.max(0, Math.round(pct)));
+        } else if (tS > 0) {
+          progressPct = Math.min(99, Math.max(0, Math.round((cS / tS) * 100)));
+        } else {
+          progressPct = 0;
+        }
+        remainingGapLabel = `+${Math.max(0, tS - cS)}s para la meta`;
       } else if (metricType === "cardio") {
-        const tDist = targetDistanceKm ?? 0;
-        progressPct = tDist > 0 ? Math.min(99, Math.max(0, Math.round((activeStats.bestDist / tDist) * 100))) : 0;
-        remainingGapLabel = `+${Math.max(0, tDist - activeStats.bestDist).toFixed(1)} km`;
+        const tD = targetDistanceKm ?? 0;
+        const cD = activeCurrent.distanceKm;
+        const bD = activeBaseline.distanceKm;
+
+        if (tD > bD && cD >= bD) {
+          const pct = ((cD - bD) / (tD - bD)) * 100;
+          progressPct = Math.min(99, Math.max(0, Math.round(pct)));
+        } else if (tD > 0) {
+          progressPct = Math.min(99, Math.max(0, Math.round((cD / tD) * 100)));
+        } else {
+          progressPct = 0;
+        }
+        remainingGapLabel = `+${(Math.max(0, tD - cD)).toFixed(1)} km para la meta`;
       }
     }
 
@@ -1095,27 +1293,54 @@ export async function getGoals(seasonId?: string | null): Promise<GoalItem[]> {
       exerciseId: exId,
       exerciseName: exName,
       metricType,
-      currentWeight: activeStats.bestW > 0 ? activeStats.bestW : undefined,
-      currentReps: activeStats.bestR > 0 ? activeStats.bestR : undefined,
-      currentSeconds: activeStats.bestSec > 0 ? activeStats.bestSec : undefined,
-      currentDistanceKm: activeStats.bestDist > 0 ? activeStats.bestDist : undefined,
-      current1RM: activeStats.max1RM > 0 ? activeStats.max1RM : undefined,
-      currentLabel: activeStats.label,
+
+      // Season Record
+      seasonLabel: seasonStats.label,
+      season1RM: seasonStats.est1RM,
+      seasonWeight: seasonStats.weight > 0 ? seasonStats.weight : undefined,
+      seasonReps: seasonStats.reps > 0 ? seasonStats.reps : undefined,
+      hasSeasonData: seasonStats.hasData,
+
+      // All-Time Record
+      allTimeLabel: allTimeStats.label,
+      allTime1RM: allTimeStats.est1RM,
+      allTimeWeight: allTimeStats.weight > 0 ? allTimeStats.weight : undefined,
+      allTimeReps: allTimeStats.reps > 0 ? allTimeStats.reps : undefined,
+      hasAllTimeData: allTimeStats.hasData,
+      allTimeReached,
+
+      // Target Goal
+      targetLabel,
+      target1RM,
       targetWeight,
       targetReps,
       targetSeconds,
       targetDistanceKm,
-      target1RM,
-      targetLabel,
+
+      // Baseline Reference (Mínimo de la season si hay season, o mínimo histórico)
+      baselineLabel: activeBaseline.label,
+      baseline1RM: activeBaseline.est1RM,
+      baselineWeight: activeBaseline.weight > 0 ? activeBaseline.weight : undefined,
+      baselineReps: activeBaseline.reps > 0 ? activeBaseline.reps : undefined,
+      baselineType: activeBaseline.type,
+
+      // Progress
       progressPct,
       isCompleted,
       remainingGapLabel,
       notes: g.notes ? String(g.notes) : undefined,
       createdAt: Number(g.created_at),
       updatedAt: Number(g.updated_at),
-      allTimeReached,
-      allTimeLabel: allTimeStats.label,
       activeSeasonName: season ? season.name : undefined,
+      activeSeasonColor: season ? (season.color || undefined) : undefined,
+
+      // Backwards compatibility
+      currentLabel: activeCurrent.label,
+      current1RM: activeCurrent.est1RM,
+      currentWeight: activeCurrent.weight > 0 ? activeCurrent.weight : undefined,
+      currentReps: activeCurrent.reps > 0 ? activeCurrent.reps : undefined,
+      currentSeconds: activeCurrent.seconds > 0 ? activeCurrent.seconds : undefined,
+      currentDistanceKm: activeCurrent.distanceKm > 0 ? activeCurrent.distanceKm : undefined,
     });
   }
 
