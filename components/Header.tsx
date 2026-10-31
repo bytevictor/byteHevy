@@ -134,9 +134,9 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
 
                   <div className="flex flex-col text-left leading-tight">
                     <span className="text-[9px] uppercase tracking-wider font-extrabold text-zinc-400 flex items-center gap-1">
-                      {activeColor && (
+                      {activeColor && isOngoing && (
                         <span
-                          className={`w-1.5 h-1.5 rounded-full ${isOngoing ? "animate-pulse" : ""}`}
+                          className="w-1.5 h-1.5 rounded-full animate-pulse"
                           style={{ backgroundColor: activeColor }}
                         />
                       )}
@@ -201,6 +201,12 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
                     {seasons.map((s) => {
                       const isCurrent = activeSeasonId === s.id;
                       const sColor = getSeasonColor(s);
+                      const isSeasonOngoing = Boolean(
+                        !s.endDate ||
+                          !s.endTimestamp ||
+                          s.endDate.trim() === "" ||
+                          s.endDate.trim().toLowerCase() === "actualidad"
+                      );
                       return (
                         <button
                           key={s.id}
@@ -231,10 +237,13 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
                               }}
                             >
                               <CalendarIcon className="w-4 h-4" style={{ color: sColor }} />
-                              <span
-                                className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-zinc-900"
-                                style={{ backgroundColor: sColor }}
-                              />
+                              {isSeasonOngoing && (
+                                <span
+                                  className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-zinc-900 animate-pulse"
+                                  style={{ backgroundColor: sColor }}
+                                  title="Season en curso (hasta la actualidad)"
+                                />
+                              )}
                             </div>
                             <div className="min-w-0">
                               <div
