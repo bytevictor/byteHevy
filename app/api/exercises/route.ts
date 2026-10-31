@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getExercisesList } from "@/lib/actions";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const list = await getExercisesList();
     return NextResponse.json({ success: true, data: list });
@@ -10,4 +10,3 @@ export async function GET() {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
-

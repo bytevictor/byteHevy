@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { JournalWorkout } from "@/lib/actions";
 import { BookOpenIcon, SearchIcon, ClockIcon, ChevronDownIcon, ChevronRightIcon, XIcon } from "./Icons";
+import { JournalSkeleton } from "./skeletons/JournalSkeleton";
 
 export function JournalTab() {
   const [workouts, setWorkouts] = useState<JournalWorkout[]>([]);
@@ -64,7 +65,7 @@ export function JournalTab() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2.5">
-            <BookOpenIcon className="w-5 h-5 text-amber-400" />
+            <BookOpenIcon className="w-5 h-5 text-accent-light" />
             <span>Diario de Entrenamientos & Bitácora</span>
           </h2>
           <p className="text-xs text-zinc-400 mt-1 font-normal">
@@ -80,7 +81,7 @@ export function JournalTab() {
             placeholder="Buscar por frase o ejercicio..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl pl-10 pr-9 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20"
+            className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl pl-10 pr-9 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20"
           />
           {searchQuery && (
             <button
@@ -95,9 +96,7 @@ export function JournalTab() {
 
       {/* Workouts Feed */}
       {loading ? (
-        <div className="h-48 flex items-center justify-center text-xs text-zinc-500">
-          Cargando diario de entrenamientos...
-        </div>
+        <JournalSkeleton />
       ) : filteredWorkouts.length === 0 ? (
         <div className="py-16 text-center border border-dashed border-zinc-800 rounded-2xl p-8 bg-zinc-950/40">
           <p className="text-xs text-zinc-500">
@@ -117,7 +116,7 @@ export function JournalTab() {
                 {/* Workout Header Info */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-zinc-800/60">
                   <div className="flex items-center gap-3">
-                    <span className="text-xs font-mono tabular-nums text-amber-400 font-semibold bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg">
+                    <span className="text-xs font-mono tabular-nums text-accent-light font-semibold bg-accent/10 border border-accent/20 px-2.5 py-1 rounded-lg">
                       {wo.startTime}
                     </span>
                     <h3 className="text-base font-bold text-zinc-100 tracking-tight">
@@ -135,7 +134,7 @@ export function JournalTab() {
 
                 {/* Unhinged Quote / Workout Notes Box */}
                 {wo.description && (
-                  <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 via-zinc-950/80 to-zinc-950/80 border border-amber-500/20 text-xs text-amber-200/90 italic leading-relaxed">
+                  <div className="p-4 rounded-xl bg-gradient-to-r from-accent/10 via-zinc-950/80 to-zinc-950/80 border border-accent/20 text-xs text-accent-lighter/90 italic leading-relaxed">
                     "{wo.description}"
                   </div>
                 )}
@@ -149,7 +148,7 @@ export function JournalTab() {
                     >
                       <span className="font-semibold text-zinc-200">{ex.name}</span>
                       <span className="text-zinc-600">•</span>
-                      <span className="font-mono tabular-nums text-amber-400 font-medium">
+                      <span className="font-mono tabular-nums text-accent-light font-medium">
                         {ex.topSetLabel}
                       </span>
                     </div>
@@ -164,7 +163,7 @@ export function JournalTab() {
                   >
                     {isExpanded ? (
                       <>
-                        <ChevronDownIcon className="w-4 h-4 text-amber-400" />
+                        <ChevronDownIcon className="w-4 h-4 text-accent-light" />
                         <span>Ocultar desglose de series</span>
                       </>
                     ) : (

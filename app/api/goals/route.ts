@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getGoals, saveGoal, deleteGoal } from "@/lib/actions";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const goals = await getGoals();
     return NextResponse.json({ success: true, data: goals });
@@ -27,7 +27,7 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     if (!id) {
-      return NextResponse.json({ success: false, error: "ID de objetivo requerido" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Missing goal id" }, { status: 400 });
     }
     await deleteGoal(id);
     return NextResponse.json({ success: true });
@@ -36,4 +36,3 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
-

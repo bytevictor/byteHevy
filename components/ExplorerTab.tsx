@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { ExerciseSummary, ExerciseDetailData, ExerciseSessionHistory } from "@/lib/actions";
+import { ExerciseSummary, ExerciseDetailData, ExerciseSessionHistory, JournalWorkout } from "@/lib/actions";
 import { ProgressionChart } from "./charts/ProgressionChart";
 import { ExerciseAnimationView } from "./ExerciseAnimationView";
+import { WorkoutSessionModal } from "./WorkoutSessionModal";
 import { getExerciseMedia, MUSCLE_LABELS } from "@/lib/exercise-media";
 import { ExerciseMedia } from "@/types/exercise-media";
+import { ExplorerSkeleton, ExplorerDetailSkeleton } from "./skeletons/ExplorerSkeleton";
 import {
   SearchIcon,
   TrophyIcon,
@@ -24,14 +26,32 @@ interface ExplorerTabProps {
 
 export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabProps) {
   const [exercises, setExercises] = useState<ExerciseSummary[]>(initialExercises);
-  const [loadingList, setLoadingList] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [loadingList, setLoadingList] = useState(!initialExercises || initialExercises.length === 0);
+  const [selectedId, setSelectedId] = useState<string | null>(initialExercises[0]?.id || null);
   const [detailData, setDetailData] = useState<ExerciseDetailData | null>(null);
-  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [loadingDetail, setLoadingDetail] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [activeModalSession, setActiveModalSession] = useState<ExerciseSessionHistory | null>(null);
+  const [fullWorkoutModal, setFullWorkoutModal] = useState<JournalWorkout | null>(null);
+  const [loadingFullWorkout, setLoadingFullWorkout] = useState<boolean>(false);
   const [currentMedia, setCurrentMedia] = useState<ExerciseMedia | null>(null);
+
+  const handleOpenWorkout = async (workoutId: string) => {
+    if (!workoutId) return;
+    setLoadingFullWorkout(true);
+    try {
+      const res = await fetch(`/api/workouts/${workoutId}`, { cache: "no-store" });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setFullWorkoutModal(json.data);
+      }
+    } catch (err) {
+      console.error("Error loading full workout session:", err);
+    } finally {
+      setLoadingFullWorkout(false);
+    }
+  };
 
   // Sync ExerciseDB media asynchronously with SQLite caching
   useEffect(() => {
@@ -48,12 +68,23 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
       .catch(() => {});
   }, [detailData?.exercise.name]);
 
+  // Sync initialExercises prop updates
+  useEffect(() => {
+    if (initialExercises && initialExercises.length > 0) {
+      setExercises(initialExercises);
+      setLoadingList(false);
+      if (!selectedId) {
+        setSelectedId(initialExercises[0].id);
+      }
+    }
+  }, [initialExercises, selectedId]);
+
   // Fetch exercises list if empty
   useEffect(() => {
     async function loadList() {
       setLoadingList(true);
       try {
-        const res = await fetch("/api/exercises");
+        const res = await fetch("/api/exercises", { cache: "no-store" });
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {
           setExercises(json.data);
@@ -81,7 +112,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
     async function loadDetail() {
       setLoadingDetail(true);
       try {
-        const res = await fetch(`/api/exercises/${selectedId}`);
+        const res = await fetch(`/api/exercises/${selectedId}`, { cache: "no-store" });
         const json = await res.json();
         if (json.success) {
           setDetailData(json.data);
@@ -136,12 +167,21 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
   };
 
   const filteredExercises = useMemo(() => {
-    return exercises.filter((ex) => {
-      const matchesSearch = ex.name.toLowerCase().includes(searchQuery.toLowerCase().trim());
-      if (!matchesSearch) return false;
-      if (categoryFilter === "all") return true;
-      return getCategory(ex.name) === categoryFilter;
-    });
+    return [...exercises]
+      .filter((ex) => {
+        const matchesSearch = ex.name.toLowerCase().includes(searchQuery.toLowerCase().trim());
+        if (!matchesSearch) return false;
+        if (categoryFilter === "all") return true;
+        return getCategory(ex.name) === categoryFilter;
+      })
+      .sort((a, b) => {
+        // Most sessions first (descending)
+        if (b.sessionCount !== a.sessionCount) {
+          return b.sessionCount - a.sessionCount;
+        }
+        // Tie-breaker: most recent session first
+        return b.latestTimestamp - a.latestTimestamp;
+      });
   }, [exercises, searchQuery, categoryFilter]);
 
   const getUnit = (type: string) => {
@@ -152,9 +192,13 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
     return "kg";
   };
 
-  if (exercises.length === 0 && !loadingList) {
+  if (loadingList) {
+    return <ExplorerSkeleton />;
+  }
+
+  if (exercises.length === 0) {
     return (
-      <div className="py-20 text-center flex flex-col items-center justify-center">
+      <div className="py-20 text-center flex flex-col items-center justify-center animate-in fade-in">
         <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 mb-4 shadow-inner">
           <InfoIcon className="w-6 h-6" />
         </div>
@@ -167,7 +211,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
         {onGoToSync && (
           <button
             onClick={onGoToSync}
-            className="px-5 py-2.5 rounded-xl bg-amber-500 text-zinc-950 text-sm font-semibold hover:bg-amber-400 transition-colors cursor-pointer shadow-lg shadow-amber-500/10"
+            className="px-5 py-2.5 rounded-xl bg-accent text-zinc-950 text-sm font-semibold hover:bg-accent-light transition-colors cursor-pointer shadow-lg shadow-accent/10"
           >
             Importar archivo CSV
           </button>
@@ -190,7 +234,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
             placeholder="Buscar ejercicio..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-zinc-900/60 border border-zinc-800/80 rounded-xl pl-10 pr-9 py-2.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20 transition-all"
+            className="w-full bg-zinc-900/60 border border-zinc-800/80 rounded-xl pl-10 pr-9 py-2.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all"
           />
           {searchQuery && (
             <button
@@ -225,9 +269,18 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
           ))}
         </div>
 
+        {/* List of Exercises Header */}
+        <div className="flex items-center justify-between px-1 text-[11px] font-mono text-zinc-400">
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent-light" />
+            <span>Por cantidad de sesiones</span>
+          </span>
+          <span className="text-zinc-500">{filteredExercises.length} ejercicios</span>
+        </div>
+
         {/* List of Exercises */}
-        <div className="flex flex-col gap-2 max-h-[calc(100vh-250px)] overflow-y-auto pr-1">
-          {filteredExercises.map((ex) => {
+        <div className="flex flex-col gap-2 max-h-[calc(100vh-270px)] overflow-y-auto pr-1">
+          {filteredExercises.map((ex, idx) => {
             const isSelected = selectedId === ex.id;
             const media = getExerciseMedia(ex.name);
             const muscleName = MUSCLE_LABELS[media.primaryMuscle] || media.primaryMuscle;
@@ -237,24 +290,31 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 onClick={() => setSelectedId(ex.id)}
                 className={`group flex items-center gap-3 text-left p-2.5 rounded-xl border transition-all duration-150 cursor-pointer ${
                   isSelected
-                    ? "bg-zinc-850/90 border-amber-500/50 shadow-lg ring-1 ring-amber-500/20"
+                    ? "bg-zinc-850/90 border-accent/50 shadow-lg ring-1 ring-accent/20"
                     : "bg-zinc-900/40 border-zinc-800/70 hover:bg-zinc-850/50 hover:border-zinc-750"
                 }`}
               >
                 {/* 3D Visual Thumbnail */}
-                <div
-                  className={`w-12 h-12 rounded-lg bg-white shrink-0 overflow-hidden flex items-center justify-center p-0.5 border transition-all ${
-                    isSelected
-                      ? "border-amber-400 ring-2 ring-amber-500/20"
-                      : "border-zinc-300 group-hover:border-zinc-200"
-                  }`}
-                >
-                  <img
-                    src={media.gifUrl}
-                    alt={ex.name}
-                    className="w-full h-full object-contain"
-                    loading="lazy"
-                  />
+                <div className="relative shrink-0">
+                  <div
+                    className={`w-12 h-12 rounded-lg bg-white overflow-hidden flex items-center justify-center p-0.5 border transition-all ${
+                      isSelected
+                        ? "border-accent-light ring-2 ring-accent/20"
+                        : "border-zinc-300 group-hover:border-zinc-200"
+                    }`}
+                  >
+                    <img
+                      src={media.gifUrl}
+                      alt={ex.name}
+                      className="w-full h-full object-contain"
+                      loading="lazy"
+                    />
+                  </div>
+                  {idx < 3 && !searchQuery && categoryFilter === "all" && (
+                    <span className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full bg-accent text-zinc-950 text-[9px] font-bold flex items-center justify-center shadow-md">
+                      {idx + 1}
+                    </span>
+                  )}
                 </div>
 
                 {/* Exercise Info */}
@@ -269,8 +329,14 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                     >
                       {ex.name}
                     </span>
-                    <span className="text-[10px] font-mono tabular-nums px-1.5 py-0.5 rounded bg-zinc-800/80 border border-zinc-700/50 text-zinc-400 shrink-0">
-                      {ex.sessionCount} ses
+                    <span
+                      className={`text-[10px] font-mono tabular-nums px-2 py-0.5 rounded-md border font-medium shrink-0 ${
+                        isSelected
+                          ? "bg-accent/20 border-accent/40 text-accent-lighter font-bold shadow-sm"
+                          : "bg-zinc-800/80 border-zinc-700/50 text-zinc-300"
+                      }`}
+                    >
+                      {ex.sessionCount} {ex.sessionCount === 1 ? "ses" : "ses"}
                     </span>
                   </div>
 
@@ -278,14 +344,14 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                     <span className="text-[11px] text-zinc-400 truncate max-w-[110px] flex items-center gap-1.5">
                       <span
                         className={`w-1.5 h-1.5 rounded-full ${
-                          isSelected ? "bg-amber-400" : "bg-zinc-600"
+                          isSelected ? "bg-accent-light" : "bg-zinc-600"
                         }`}
                       />
                       {muscleName}
                     </span>
                     <span
                       className={`text-xs font-mono tabular-nums font-semibold shrink-0 ${
-                        isSelected ? "text-amber-400" : "text-zinc-300"
+                        isSelected ? "text-accent-light" : "text-zinc-300"
                       }`}
                     >
                       {ex.latestTopSetLabel}
@@ -306,9 +372,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
       {/* Main Right Pane: Progression & Detail */}
       <div className="lg:col-span-8 xl:col-span-8 flex flex-col gap-6">
         {loadingDetail ? (
-          <div className="h-64 flex items-center justify-center text-xs text-zinc-500 border border-zinc-850 bg-zinc-900/30 rounded-2xl">
-            Cargando historial de progresión...
-          </div>
+          <ExplorerDetailSkeleton />
         ) : detailData && activeMedia ? (
           <>
             {/* HERO STAGE: 3D Anatomical Visualizer & Profile */}
@@ -325,7 +389,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
               <div className="lg:col-span-5 flex flex-col justify-between gap-4 p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md">
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-400 font-semibold">
+                    <span className="text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md bg-accent/10 border border-accent/30 text-accent-light font-semibold">
                       {MUSCLE_LABELS[activeMedia.primaryMuscle] || activeMedia.primaryMuscle}
                     </span>
                     <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700/80 text-zinc-400 font-medium">
@@ -346,14 +410,14 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 {/* PR & 1RM Hero Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* PR Card */}
-                  <div className="p-3.5 rounded-xl bg-gradient-to-br from-amber-500/15 via-zinc-900 to-zinc-900 border border-amber-500/30 flex flex-col justify-between shadow-sm">
+                  <div className="p-3.5 rounded-xl bg-gradient-to-br from-accent/15 via-zinc-900 to-zinc-900 border border-accent/30 flex flex-col justify-between shadow-sm">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] uppercase tracking-wider text-amber-400 font-medium">
+                      <span className="text-[10px] uppercase tracking-wider text-accent-light font-medium">
                         Récord Personal (PR)
                       </span>
-                      <TrophyIcon className="w-4 h-4 text-amber-400" />
+                      <TrophyIcon className="w-4 h-4 text-accent-light" />
                     </div>
-                    <div className="text-lg font-mono tabular-nums font-bold text-amber-300">
+                    <div className="text-lg font-mono tabular-nums font-bold text-accent-lighter">
                       {detailData.exercise.allTimeBest?.label || "—"}
                     </div>
                     <span className="text-[10px] font-mono text-zinc-500 mt-1">
@@ -403,21 +467,11 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-sm font-semibold tracking-tight text-zinc-100">
-                    Curva de Progresión Temporal
+                    Curva de Progresión
                   </h3>
                   <p className="text-xs text-zinc-400">
                     Evolución del Top Set real frente al 1RM teórico estimado
                   </p>
-                </div>
-                <div className="flex items-center gap-4 text-xs font-mono">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-0.5 bg-amber-400" />
-                    <span className="text-zinc-300 text-[11px]">Top Set Real</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-0.5 bg-zinc-500 border-b border-dashed border-zinc-400" />
-                    <span className="text-zinc-400 text-[11px]">1RM Estimado</span>
-                  </div>
                 </div>
               </div>
 
@@ -427,6 +481,11 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 metricName="Top Set Real"
                 secondaryMetricName="1RM Estimado"
                 height={260}
+                onPointClick={(pt) => {
+                  if (pt.workoutId) {
+                    handleOpenWorkout(pt.workoutId);
+                  }
+                }}
               />
             </div>
 
@@ -438,7 +497,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                   <span>Historial de Sesiones</span>
                 </h3>
                 <span className="text-xs text-zinc-500 font-normal">
-                  Haz clic en cualquier sesión para ver notas y series completas
+                  Haz clic en cualquier sesión para ver el entrenamiento completo
                 </span>
               </div>
 
@@ -446,12 +505,12 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 {detailData.sessions.map((sess) => (
                   <div
                     key={sess.workoutId}
-                    onClick={() => setActiveModalSession(sess)}
+                    onClick={() => handleOpenWorkout(sess.workoutId)}
                     className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-zinc-800/70 bg-zinc-900/30 hover:bg-zinc-850/50 hover:border-zinc-700/80 transition-all cursor-pointer group"
                   >
                     {/* Left: Date & Title */}
                     <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-zinc-700 group-hover:bg-amber-400 transition-colors" />
+                      <div className="w-2 h-2 rounded-full bg-zinc-700 group-hover:bg-accent-light transition-colors" />
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-mono font-semibold text-zinc-200">
@@ -477,13 +536,13 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                     {/* Right: Top Set & PR Badge */}
                     <div className="flex items-center gap-3.5 self-end sm:self-center">
                       {sess.topSet.isPR && (
-                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-mono font-bold shadow-sm">
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent/20 text-accent-lighter border border-accent/40 text-[10px] font-mono font-bold shadow-sm">
                           ★ PR
                         </span>
                       )}
 
                       <div className="flex flex-col text-right font-mono tabular-nums">
-                        <span className="text-xs font-bold text-amber-400">
+                        <span className="text-xs font-bold text-accent-light">
                           {sess.topSet.label}
                         </span>
                         {sess.topSet.secondaryValue && (
@@ -514,7 +573,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
             {/* Modal Header */}
             <div className="p-5 border-b border-zinc-800 flex items-start justify-between bg-zinc-950/60">
               <div className="flex flex-col">
-                <span className="text-xs text-amber-400 font-medium mb-1">
+                <span className="text-xs text-accent-light font-medium mb-1">
                   {activeModalSession.startTime}
                 </span>
                 <h3 className="text-lg font-bold text-zinc-100">
@@ -533,7 +592,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
             <div className="p-5 overflow-y-auto flex flex-col gap-5">
               {/* Personal Notes / Unhinged quote */}
               {activeModalSession.workoutDescription && (
-                <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-amber-500/20 text-xs italic text-amber-200/90 leading-relaxed">
+                <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-accent/20 text-xs italic text-accent-lighter/90 leading-relaxed">
                   "{activeModalSession.workoutDescription}"
                 </div>
               )}
@@ -571,7 +630,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                           <tr
                             key={s.id}
                             className={`hover:bg-zinc-800/30 transition-colors ${
-                              isSetTop ? "bg-amber-500/10 font-bold" : ""
+                              isSetTop ? "bg-accent/10 font-bold" : ""
                             }`}
                           >
                             <td className="py-2.5 px-3 text-zinc-400 font-normal">
@@ -579,7 +638,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                             </td>
                             <td className="py-2.5 px-3">
                               {isSetTop ? (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-accent/20 text-accent-lighter border border-accent/30">
                                   TOP SET
                                 </span>
                               ) : s.setType === "warmup" ? (
@@ -599,7 +658,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                             </td>
                             <td className="py-2.5 px-3 text-right">
                               {isSetTop && activeModalSession.topSet.isPR && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-400 text-zinc-950 font-bold">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-accent-light text-zinc-950 font-bold">
                                   PR
                                 </span>
                               )}
@@ -625,6 +684,14 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
           </div>
         </div>
       )}
+
+      {/* Full Workout Session Modal (triggered from chart point click or session list) */}
+      <WorkoutSessionModal
+        workout={fullWorkoutModal}
+        isOpen={fullWorkoutModal !== null}
+        onClose={() => setFullWorkoutModal(null)}
+        highlightExerciseName={detailData?.exercise.name}
+      />
     </div>
   );
 }

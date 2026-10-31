@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { GoalItem, ExerciseSummary } from "@/lib/actions";
 import { TargetIcon, PlusIcon, TrashIcon, CheckIcon, XIcon, InfoIcon, TrophyIcon } from "./Icons";
+import { GoalsSkeleton } from "./skeletons/GoalsSkeleton";
 
 export function GoalsTab() {
   const [goals, setGoals] = useState<GoalItem[]>([]);
@@ -102,7 +103,7 @@ export function GoalsTab() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2.5">
-            <TargetIcon className="w-5 h-5 text-amber-400" />
+            <TargetIcon className="w-5 h-5 text-accent-light" />
             <span>Objetivos & Hitos de Rendimiento</span>
           </h2>
           <p className="text-xs text-zinc-400 mt-1 font-normal">
@@ -112,7 +113,7 @@ export function GoalsTab() {
 
         <button
           onClick={() => setModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-semibold transition-all cursor-pointer self-start sm:self-center shadow-lg shadow-amber-500/10"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent hover:bg-accent-light text-zinc-950 text-xs font-semibold transition-all cursor-pointer self-start sm:self-center shadow-lg shadow-accent/10"
         >
           <PlusIcon className="w-4 h-4" />
           <span>Nuevo Objetivo</span>
@@ -121,9 +122,7 @@ export function GoalsTab() {
 
       {/* Goals Grid */}
       {loading ? (
-        <div className="h-48 flex items-center justify-center text-xs text-zinc-500">
-          Cargando objetivos...
-        </div>
+        <GoalsSkeleton />
       ) : goals.length === 0 ? (
         <div className="py-16 text-center border border-dashed border-zinc-800 rounded-2xl bg-zinc-950/40 p-8">
           <TargetIcon className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
@@ -157,7 +156,7 @@ export function GoalsTab() {
                 {/* Top: Exercise Title & Delete Button */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex flex-col">
-                    <span className="text-[10px] uppercase tracking-wider text-amber-400 font-semibold mb-1">
+                    <span className="text-[10px] uppercase tracking-wider text-accent-light font-semibold mb-1">
                       {goal.metricType.replace("_", " ")}
                     </span>
                     <h3 className="text-base font-bold text-zinc-100 tracking-tight">
@@ -189,12 +188,12 @@ export function GoalsTab() {
                     <div
                       className={`p-2.5 rounded-xl border flex flex-col ${
                         isMilestoneReached
-                          ? "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                          ? "bg-accent/10 border-accent/30 text-accent-lighter"
                           : "bg-zinc-950/60 border-zinc-800/80 text-zinc-300"
                       }`}
                     >
                       <span className="text-[10px] text-zinc-500 mb-1 flex items-center justify-center gap-1 font-medium">
-                        {isMilestoneReached && <CheckIcon className="w-3 h-3 text-amber-400" />}
+                        {isMilestoneReached && <CheckIcon className="w-3 h-3 text-accent-light" />}
                         <span>Hito</span>
                       </span>
                       <span className="text-sm font-mono tabular-nums font-bold">
@@ -224,7 +223,7 @@ export function GoalsTab() {
                   <div className="flex flex-col gap-1.5 pt-1">
                     <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden relative">
                       <div
-                        className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-500"
+                        className="h-full bg-gradient-to-r from-accent to-accent-light rounded-full transition-all duration-500"
                         style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
                       />
                     </div>
@@ -237,7 +236,7 @@ export function GoalsTab() {
                           ? "✓ Hito intermedio completado"
                           : "En progreso hacia el hito"}
                       </span>
-                      <span className="font-mono tabular-nums font-bold text-amber-400">
+                      <span className="font-mono tabular-nums font-bold text-accent-light">
                         {progress.toFixed(0)}%
                       </span>
                     </div>
@@ -262,7 +261,7 @@ export function GoalsTab() {
           <div className="relative w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             <div className="p-5 border-b border-zinc-800 flex items-start justify-between bg-zinc-950/60">
               <div className="flex flex-col">
-                <span className="text-xs text-amber-400 font-semibold mb-1">Nueva Meta</span>
+                <span className="text-xs text-accent-light font-semibold mb-1">Nueva Meta</span>
                 <h3 className="text-lg font-bold text-zinc-100">Configurar Progresión en 3 Puntos</h3>
               </div>
               <button
@@ -281,7 +280,7 @@ export function GoalsTab() {
                 <select
                   value={selectedExId}
                   onChange={(e) => setSelectedExId(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 focus:outline-none focus:border-amber-500/50"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 focus:outline-none focus:border-accent/50"
                   required
                 >
                   {exercises.map((ex) => (
@@ -303,7 +302,7 @@ export function GoalsTab() {
                     placeholder="Ej. 18"
                     value={targetMilestone}
                     onChange={(e) => setTargetMilestone(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs font-mono tabular-nums text-zinc-100 focus:outline-none focus:border-amber-500/50"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs font-mono tabular-nums text-zinc-100 focus:outline-none focus:border-accent/50"
                     required
                   />
                   <span className="text-[10px] text-zinc-500 mt-1 block">
@@ -321,7 +320,7 @@ export function GoalsTab() {
                     placeholder="Ej. 25"
                     value={targetFinal}
                     onChange={(e) => setTargetFinal(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs font-mono tabular-nums text-zinc-100 focus:outline-none focus:border-amber-500/50"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs font-mono tabular-nums text-zinc-100 focus:outline-none focus:border-accent/50"
                     required
                   />
                   <span className="text-[10px] text-zinc-500 mt-1 block">
@@ -339,7 +338,7 @@ export function GoalsTab() {
                   placeholder="Ej: Mantener técnica estricta sin balanceo..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-zinc-100 focus:outline-none focus:border-amber-500/50"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-zinc-100 focus:outline-none focus:border-accent/50"
                 />
               </div>
 
@@ -354,7 +353,7 @@ export function GoalsTab() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-5 py-2 rounded-xl bg-amber-500 text-zinc-950 text-xs font-semibold hover:bg-amber-400 transition-colors cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl bg-accent text-zinc-950 text-xs font-semibold hover:bg-accent-light transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {submitting ? "Guardando..." : "Guardar Objetivo"}
                 </button>
