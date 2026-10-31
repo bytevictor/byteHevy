@@ -1,0 +1,87 @@
+import { createClient, Client } from "@libsql/client";
+import path from "node:path";
+import fs from "node:fs";
+
+let dbInstance: Client | null = null;
+let initialized = false;
+
+export function getDb(): Client {
+  if (dbInstance) return dbInstance;
+
+  const dataDir = path.join(process.cwd(), "data");
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+
+  const dbPath = path.join(dataDir, "bytehevy.db");
+  dbInstance = createClient({
+    url: `file:${dbPath}`,
+  });
+
+  return dbInstance;
+}
+
+export async function ensureSchema(db: Client) {
+  if (initialized) return;
+
+  await db.batch([
+    `CREATE TABLE IF NOT EXISTS workouts (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      start_time TEXT NOT NULL,
+      start_timestamp INTEGER NOT NULL,
+      end_time TEXT,
+      duration_seconds INTEGER,
+      description TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
+    );`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_workout_unique 
+      ON workouts(start_time, title);`,
+    `CREATE TABLE IF NOT EXISTS exercises (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      metric_type TEXT NOT NULL,
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
+    );`,
+    `CREATE TABLE IF NOT EXISTS workout_exercises (
+      id TEXT PRIMARY KEY,
+      workout_id TEXT NOT NULL,
+      exercise_id TEXT NOT NULL,
+      exercise_notes TEXT,
+      order_index INTEGER DEFAULT 0,
+      FOREIGN KEY (workout_id) REFERENCES workouts(id) ON DELETE CASCADE,
+      FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE CASCADE
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_we_workout ON workout_exercises(workout_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_we_exercise ON workout_exercises(exercise_id);`,
+    `CREATE TABLE IF NOT EXISTS exercise_sets (
+      id TEXT PRIMARY KEY,
+      workout_exercise_id TEXT NOT NULL,
+      set_index INTEGER NOT NULL,
+      set_type TEXT DEFAULT 'normal',
+      weight_kg REAL,
+      reps INTEGER,
+      distance_km REAL,
+      duration_seconds INTEGER,
+      rpe REAL,
+      FOREIGN KEY (workout_exercise_id) REFERENCES workout_exercises(id) ON DELETE CASCADE
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_set_we ON exercise_sets(workout_exercise_id);`,
+    `CREATE TABLE IF NOT EXISTS goals (
+      id TEXT PRIMARY KEY,
+      exercise_id TEXT NOT NULL,
+      metric_type TEXT NOT NULL,
+      current_value REAL,
+      target_milestone REAL NOT NULL,
+      target_final REAL NOT NULL,
+      target_reps INTEGER,
+      notes TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now')),
+      updated_at INTEGER DEFAULT (strftime('%s', 'now')),
+      FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE CASCADE
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_goals_exercise ON goals(exercise_id);`,
+  ]);
+
+  initialized = true;
+}
