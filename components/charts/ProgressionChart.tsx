@@ -280,6 +280,7 @@ export function ProgressionChart({
   onCurveTypeChange,
   onPointClick,
   exerciseName,
+  metricType,
   seasonName,
   seasonColor,
   allTimeBestLabel,
@@ -384,14 +385,27 @@ export function ProgressionChart({
       .sort((a, b) => a._timestampMs - b._timestampMs);
   }, [data]);
 
-  // Metric selector options tailored to exercise unit (simplified to Top Set & 1RM Medio)
+  const isWeightMetric = useMemo(() => {
+    return (
+      unit === "kg" ||
+      unit.includes("kg") ||
+      metricType === "weight_reps" ||
+      metricType === "weighted_bodyweight"
+    );
+  }, [unit, metricType]);
+
+  const isRepsMetric = useMemo(() => {
+    return unit === "reps" || metricType === "bodyweight_reps";
+  }, [unit, metricType]);
+
+  // Metric selector options tailored to exercise unit (Peso Máximo vs 1RM Medio)
   const availableMetrics = useMemo(() => {
-    if (unit === "kg") {
+    if (isWeightMetric) {
       return [
         {
           id: "top_set" as const,
-          label: "Carga Top",
-          title: "Peso de la serie más pesada de la sesión (Top Set en kg)",
+          label: "Peso Máximo",
+          title: "Peso máximo levantado en la sesión (Top Set en kg)",
         },
         {
           id: "avg_1rm" as const,
@@ -400,7 +414,7 @@ export function ProgressionChart({
         },
       ];
     }
-    if (unit === "reps") {
+    if (isRepsMetric) {
       return [
         {
           id: "top_set" as const,
@@ -417,30 +431,30 @@ export function ProgressionChart({
     return [
       { id: "top_set" as const, label: "Máximo", title: "Valor máximo alcanzado en la sesión" },
     ];
-  }, [unit]);
+  }, [isWeightMetric, isRepsMetric]);
 
   const activeMetric: ChartMetricView = useMemo(() => {
-    const isWeight = unit === "kg";
-    const isReps = unit === "reps";
-    if (internalMetric === "avg_1rm" && !isWeight && !isReps) return "top_set";
+    if (internalMetric === "avg_1rm" && !isWeightMetric && !isRepsMetric) return "top_set";
     return internalMetric;
-  }, [internalMetric, unit]);
+  }, [internalMetric, isWeightMetric, isRepsMetric]);
 
   const currentUnit = useMemo(() => {
-    if (activeMetric === "avg_1rm") return unit === "reps" ? "reps" : "kg";
+    if (activeMetric === "avg_1rm") {
+      return isRepsMetric ? "reps" : (unit.includes("kg") ? unit : "kg");
+    }
     return unit;
-  }, [activeMetric, unit]);
+  }, [activeMetric, isRepsMetric, unit]);
 
   const currentMetricName = useMemo(() => {
     if (activeMetric === "avg_1rm") {
-      return unit === "reps" ? "Media de Reps / Serie" : "1RM Medio Estimado";
+      return isRepsMetric ? "Media de Reps / Serie" : "1RM Medio Estimado";
     }
-    return metricName;
-  }, [activeMetric, metricName, unit]);
+    return isWeightMetric ? "Peso Máximo" : metricName;
+  }, [activeMetric, isWeightMetric, isRepsMetric, metricName]);
 
   const getPointValue = useCallback((d: ChartDataPoint): number => {
     if (activeMetric === "avg_1rm") {
-      if (unit === "reps") {
+      if (isRepsMetric) {
         if (typeof d.avgReps === "number" && !isNaN(d.avgReps)) return d.avgReps;
         return d.primaryValue;
       }
@@ -449,7 +463,7 @@ export function ProgressionChart({
       return d.primaryValue;
     }
     return d.primaryValue;
-  }, [activeMetric, unit]);
+  }, [activeMetric, isRepsMetric]);
 
   // Pre-calculate progressive PRs and all-time records for the active metric
   const pointMetricsMeta = useMemo(() => {
@@ -977,7 +991,7 @@ export function ProgressionChart({
                     <span className="text-accent-light font-medium">{activePt.d.avg1RM} kg</span>
                   </div>
                 )}
-                {activeMetric === "top_set" && unit === "reps" && activePt.d.avgReps !== undefined && (
+                {activeMetric === "top_set" && isRepsMetric && activePt.d.avgReps !== undefined && (
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-500">Media reps:</span>
                     <span className="text-zinc-300">{activePt.d.avgReps} reps/serie</span>

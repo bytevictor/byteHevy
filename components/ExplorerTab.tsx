@@ -631,7 +631,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                   <ProgressionChart
                     data={detailData.chartPoints}
                     unit={getUnit(detailData.exercise.metricType)}
-                    metricName="Carga Top"
+                    metricName="Peso Máximo"
                     secondaryMetricName="1RM Estimado"
                     exerciseName={detailData.exercise.name}
                     metricType={detailData.exercise.metricType}
