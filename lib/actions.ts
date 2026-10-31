@@ -1028,17 +1028,37 @@ export async function getGoals(seasonId?: string | null): Promise<GoalItem[]> {
         let s1rm = 0;
 
         if (metricType === "weight_reps") {
-          s1rm = wt > 0 && rp > 0 ? calculate1RM(wt, rp) : 0;
-          score = s1rm > 0 ? s1rm : (wt * 1000 + rp);
+          if (wt > 0 && rp > 0) {
+            s1rm = calculate1RM(wt, rp);
+            score = s1rm > 0 ? s1rm : (wt * 100 + rp);
+          } else {
+            continue;
+          }
         } else if (metricType === "weighted_bodyweight") {
-          s1rm = wt > 0 && rp > 0 ? calculate1RM(wt, rp) : 0;
-          score = wt !== 0 ? wt * 1000 + rp : rp;
+          if (rp > 0) {
+            s1rm = wt > 0 ? calculate1RM(wt, rp) : 0;
+            score = wt > 0 ? (10000 + s1rm) : (wt === 0 ? rp : (-10000 + wt * 100 + rp));
+          } else {
+            continue;
+          }
         } else if (metricType === "bodyweight_reps") {
-          score = rp;
+          if (rp > 0) {
+            score = rp;
+          } else {
+            continue;
+          }
         } else if (metricType === "seconds") {
-          score = sec;
+          if (sec > 0) {
+            score = sec;
+          } else {
+            continue;
+          }
         } else if (metricType === "cardio") {
-          score = dist;
+          if (dist > 0) {
+            score = dist;
+          } else {
+            continue;
+          }
         }
 
         if (score > bestScore) {
