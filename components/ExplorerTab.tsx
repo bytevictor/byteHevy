@@ -20,6 +20,7 @@ import {
   CrownIcon,
 } from "./Icons";
 import { useSeason } from "@/lib/season-context";
+import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
 
 interface ExplorerTabProps {
   initialExercises?: ExerciseSummary[];
@@ -28,6 +29,7 @@ interface ExplorerTabProps {
 
 export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabProps) {
   const { activeSeasonId, activeSeason, setActiveSeasonId } = useSeason();
+  const seasonColor = activeSeason ? getSeasonColor(activeSeason) : null;
   const [exercises, setExercises] = useState<ExerciseSummary[]>(initialExercises);
   const [loadingList, setLoadingList] = useState(!initialExercises || initialExercises.length === 0);
   const [selectedId, setSelectedId] = useState<string | null>(initialExercises[0]?.id || null);
@@ -281,11 +283,23 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
         </div>
 
         {/* Season Filter Bar in Sidebar (if a season is active) */}
-        {activeSeason && (
-          <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2 text-[11px]">
+        {activeSeason && seasonColor && (
+          <div
+            className="p-2 rounded-xl border flex items-center justify-between gap-2 text-[11px]"
+            style={{
+              backgroundColor: hexToRgba(seasonColor, 0.1),
+              borderColor: hexToRgba(seasonColor, 0.3),
+            }}
+          >
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-              <span className="font-semibold text-amber-300 truncate">
+              <span
+                className="w-1.5 h-1.5 rounded-full shrink-0"
+                style={{ backgroundColor: seasonColor }}
+              />
+              <span
+                className="font-semibold truncate"
+                style={{ color: seasonColor }}
+              >
                 {activeSeason.name}
               </span>
             </div>
@@ -438,9 +452,20 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                     <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-850 border border-zinc-700/60 text-zinc-400 font-normal">
                       {activeMedia.equipment}
                     </span>
-                    {activeSeason && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-medium">
-                        Season: {activeSeason.name}
+                    {activeSeason && seasonColor && (
+                      <span
+                        className="text-[10px] font-mono px-2 py-0.5 rounded-full border font-medium flex items-center gap-1.5"
+                        style={{
+                          backgroundColor: hexToRgba(seasonColor, 0.16),
+                          borderColor: hexToRgba(seasonColor, 0.35),
+                          color: seasonColor,
+                        }}
+                      >
+                        <span
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: seasonColor }}
+                        />
+                        <span>Season: {activeSeason.name}</span>
                       </span>
                     )}
                   </div>
@@ -479,23 +504,35 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
 
               {/* Right: PR & 1RM Hero Cards */}
               <div className="w-full sm:w-60 lg:w-68 shrink-0 flex flex-col justify-center gap-2">
-                {activeSeason ? (
+                {activeSeason && seasonColor ? (
                   <>
                     {/* Season PR Card */}
-                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500/15 via-zinc-900 to-zinc-900 border border-amber-500/30 flex flex-col justify-between shadow-xs">
+                    <div
+                      className="p-2.5 rounded-xl border flex flex-col justify-between shadow-xs"
+                      style={{
+                        background: `linear-gradient(to bottom right, ${hexToRgba(seasonColor, 0.18)}, rgba(24, 24, 27, 0.95), rgba(24, 24, 27, 0.95))`,
+                        borderColor: hexToRgba(seasonColor, 0.4),
+                      }}
+                    >
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-wider text-amber-300 font-bold truncate">
+                        <span
+                          className="text-[10px] uppercase tracking-wider font-bold truncate"
+                          style={{ color: seasonColor }}
+                        >
                           PR Season
                         </span>
-                        <FlameIcon className="w-3.5 h-3.5 text-amber-400" />
+                        <FlameIcon className="w-3.5 h-3.5" style={{ color: seasonColor }} />
                       </div>
-                      <div className="text-base font-mono tabular-nums font-bold text-amber-200 mt-0.5">
+                      <div
+                        className="text-base font-mono tabular-nums font-bold mt-0.5"
+                        style={{ color: seasonColor }}
+                      >
                         {detailData.exercise.seasonBest?.label || "Sin registros"}
                       </div>
                       <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between mt-0.5">
                         <span>{detailData.exercise.seasonBest?.date || "—"}</span>
                         {detailData.exercise.estimated1RM && (
-                          <span className="text-amber-400/90 font-sans">
+                          <span className="font-sans font-medium" style={{ color: seasonColor }}>
                             1RM: {detailData.exercise.estimated1RM} kg
                           </span>
                         )}
@@ -569,9 +606,20 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 <div>
                   <h3 className="text-xs sm:text-sm font-semibold tracking-tight text-zinc-100 flex items-center gap-2">
                     <span>Curva de Progresión</span>
-                    {activeSeason && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
-                        {activeSeason.name}
+                    {activeSeason && seasonColor && (
+                      <span
+                        className="text-[10px] font-mono px-2 py-0.5 rounded border font-medium flex items-center gap-1"
+                        style={{
+                          backgroundColor: hexToRgba(seasonColor, 0.16),
+                          borderColor: hexToRgba(seasonColor, 0.35),
+                          color: seasonColor,
+                        }}
+                      >
+                        <span
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: seasonColor }}
+                        />
+                        <span>{activeSeason.name}</span>
                       </span>
                     )}
                   </h3>
@@ -594,6 +642,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                   exerciseName={detailData.exercise.name}
                   metricType={detailData.exercise.metricType}
                   seasonName={activeSeason?.name}
+                  seasonColor={seasonColor || undefined}
                   allTimeBestLabel={detailData.exercise.allTimeBest?.label}
                   seasonBestLabel={detailData.exercise.seasonBest?.label}
                   height={210}
@@ -612,8 +661,11 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 <h3 className="text-xs uppercase tracking-wider text-zinc-400 font-semibold flex items-center gap-2">
                   <CalendarIcon className="w-3.5 h-3.5 text-zinc-500" />
                   <span>Historial de Sesiones</span>
-                  {activeSeason && (
-                    <span className="text-[11px] font-mono text-amber-400 font-normal">
+                  {activeSeason && seasonColor && (
+                    <span
+                      className="text-[11px] font-mono font-medium"
+                      style={{ color: seasonColor }}
+                    >
                       · {activeSeason.name}
                     </span>
                   )}

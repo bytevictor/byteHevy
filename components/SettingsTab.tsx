@@ -19,6 +19,12 @@ import { ThemeCustomizer } from "./ThemeCustomizer";
 import { ExerciseMediaManager } from "./ExerciseMediaManager";
 import { useSeason } from "@/lib/season-context";
 import { Season } from "@/lib/actions";
+import {
+  SEASON_COLOR_PALETTE,
+  getSeasonColor,
+  hexToRgba,
+  DEFAULT_SEASON_COLOR,
+} from "@/lib/season-colors";
 
 interface SettingsTabProps {
   onSyncComplete?: () => void;
@@ -45,12 +51,14 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
     isOngoing: boolean;
     endDate: string;
     description: string;
+    color: string;
   }>({
     name: "",
     startDate: "",
     isOngoing: true,
     endDate: "",
     description: "",
+    color: "#3b82f6",
   });
   const [seasonSubmitting, setSeasonSubmitting] = useState(false);
   const [seasonError, setSeasonError] = useState<string | null>(null);
@@ -134,6 +142,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
       isOngoing: true,
       endDate: "",
       description: "",
+      color: "#3b82f6",
     });
     setSeasonError(null);
     setIsSeasonModalOpen(true);
@@ -147,6 +156,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
       isOngoing: !season.endDate,
       endDate: season.endDate || "",
       description: season.description || "",
+      color: getSeasonColor(season),
     });
     setSeasonError(null);
     setIsSeasonModalOpen(true);
@@ -168,6 +178,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
         startDate: seasonForm.startDate,
         endDate: seasonForm.isOngoing ? null : seasonForm.endDate || null,
         description: seasonForm.description.trim(),
+        color: seasonForm.color || null,
       };
 
       let res: Response;
@@ -503,13 +514,23 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
             {seasons.map((season) => {
               const isActive = activeSeasonId === season.id;
               const duration = getSeasonDuration(season.startDate, season.endDate);
+              const seasonColor = getSeasonColor(season);
 
               return (
                 <div
                   key={season.id}
+                  style={
+                    isActive
+                      ? {
+                          borderColor: hexToRgba(seasonColor, 0.45),
+                          backgroundColor: hexToRgba(seasonColor, 0.05),
+                          boxShadow: `0 0 20px ${hexToRgba(seasonColor, 0.12)}`,
+                        }
+                      : undefined
+                  }
                   className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
                     isActive
-                      ? "bg-amber-500/5 border-amber-500/40 ring-1 ring-amber-500/20 shadow-md"
+                      ? "ring-1"
                       : "bg-zinc-900/40 border-zinc-800 hover:border-zinc-700"
                   }`}
                 >
@@ -518,9 +539,21 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
+                          <span
+                            className="w-3 h-3 rounded-full shrink-0 shadow-xs border border-white/10"
+                            style={{ backgroundColor: seasonColor }}
+                            title={`Color: ${seasonColor}`}
+                          />
                           <h4 className="text-sm font-bold text-zinc-100 truncate">{season.name}</h4>
                           {isActive && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                            <span
+                              className="px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0"
+                              style={{
+                                backgroundColor: hexToRgba(seasonColor, 0.18),
+                                color: seasonColor,
+                                borderColor: hexToRgba(seasonColor, 0.35),
+                              }}
+                            >
                               Activa
                             </span>
                           )}
@@ -528,7 +561,9 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
                         <div className="text-xs text-zinc-400 mt-1 flex items-center gap-1.5 flex-wrap font-mono">
                           <span>{formatDateDisplay(season.startDate)}</span>
                           <span className="text-zinc-600">→</span>
-                          <span className={!season.endDate ? "text-amber-400 font-semibold" : ""}>
+                          <span
+                            style={!season.endDate ? { color: seasonColor, fontWeight: 600 } : undefined}
+                          >
                             {season.endDate ? formatDateDisplay(season.endDate) : "Actualidad"}
                           </span>
                           {duration && <span className="text-zinc-500 font-sans">({duration})</span>}
@@ -553,14 +588,20 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
                   <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between gap-2">
                     <div>
                       {isActive ? (
-                        <span className="text-[11px] text-amber-400 font-medium flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                        <span
+                          className="text-[11px] font-medium flex items-center gap-1.5"
+                          style={{ color: seasonColor }}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full animate-pulse"
+                            style={{ backgroundColor: seasonColor }}
+                          />
                           Filtrando la app
                         </span>
                       ) : (
                         <button
                           onClick={() => setActiveSeasonId(season.id)}
-                          className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-amber-500 hover:text-zinc-950 text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
+                          className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
                         >
                           Activar
                         </button>
@@ -618,7 +659,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
           <div className="w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-800 p-6 shadow-2xl flex flex-col gap-4 text-zinc-100">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
-                <CalendarIcon className="w-5 h-5 text-amber-400" />
+                <CalendarIcon className="w-5 h-5" style={{ color: seasonForm.color }} />
                 <span>{editingSeason ? "Editar Season" : "Nueva Season"}</span>
               </h3>
               <button
@@ -704,6 +745,83 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
                 </label>
               </div>
 
+              {/* Selector de Color de Season */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-zinc-300 font-medium">
+                    Color de la season
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className="w-3.5 h-3.5 rounded-full border border-zinc-700 shadow-xs"
+                      style={{ backgroundColor: seasonForm.color }}
+                    />
+                    <span className="font-mono text-[11px] text-zinc-400 uppercase">
+                      {seasonForm.color}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-zinc-950 border border-zinc-800">
+                  {SEASON_COLOR_PALETTE.map((pal) => {
+                    const isSelected = seasonForm.color.toLowerCase() === pal.hex.toLowerCase();
+                    return (
+                      <button
+                        key={pal.id}
+                        type="button"
+                        onClick={() => setSeasonForm({ ...seasonForm, color: pal.hex })}
+                        title={pal.label}
+                        className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer relative ${
+                          isSelected
+                            ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950 scale-110 shadow-lg"
+                            : "hover:scale-105 opacity-80 hover:opacity-100"
+                        }`}
+                        style={{ backgroundColor: pal.hex }}
+                      >
+                        {isSelected && (
+                          <svg className="w-3.5 h-3.5 text-white drop-shadow-md" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                    );
+                  })}
+
+                  {/* Custom Color Input */}
+                  <label
+                    title="Seleccionar color personalizado"
+                    className="w-7 h-7 rounded-lg border border-zinc-700 hover:border-zinc-500 bg-zinc-900 flex items-center justify-center cursor-pointer relative overflow-hidden transition-all hover:scale-105"
+                  >
+                    <input
+                      type="color"
+                      value={seasonForm.color}
+                      onChange={(e) => setSeasonForm({ ...seasonForm, color: e.target.value })}
+                      className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                    />
+                    <span className="text-[10px] font-bold text-zinc-400">#</span>
+                  </label>
+                </div>
+
+                {/* Live Badge Preview */}
+                <div className="mt-2 p-2 rounded-xl bg-zinc-950/70 border border-zinc-850 flex items-center justify-between text-[11px]">
+                  <span className="text-zinc-500">Vista previa en la app:</span>
+                  <span
+                    className="px-2.5 py-0.5 rounded-full font-mono text-[10px] font-semibold flex items-center gap-1.5 border shadow-xs"
+                    style={{
+                      backgroundColor: hexToRgba(seasonForm.color, 0.16),
+                      borderColor: hexToRgba(seasonForm.color, 0.4),
+                      color: seasonForm.color,
+                    }}
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full animate-pulse"
+                      style={{ backgroundColor: seasonForm.color }}
+                    />
+                    <span>{seasonForm.name.trim() || "Nombre de Season"}</span>
+                  </span>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-zinc-300 font-medium mb-1">
                   Descripción u objetivos (opcional)
@@ -728,7 +846,8 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
                 <button
                   type="submit"
                   disabled={seasonSubmitting}
-                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold transition-colors cursor-pointer disabled:opacity-50"
+                  style={{ backgroundColor: seasonForm.color }}
+                  className="px-4 py-2 rounded-xl text-zinc-950 font-bold transition-all hover:brightness-110 cursor-pointer disabled:opacity-50 shadow-md"
                 >
                   {seasonSubmitting
                     ? "Guardando..."

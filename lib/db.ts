@@ -100,10 +100,22 @@ export async function ensureSchema(db: Client) {
       end_date TEXT,
       end_timestamp INTEGER,
       description TEXT,
+      color TEXT,
       created_at INTEGER DEFAULT (strftime('%s', 'now'))
     );`,
     `CREATE INDEX IF NOT EXISTS idx_seasons_start ON seasons(start_timestamp);`,
   ]);
+
+  // Migration for seasons: ensure color column exists
+  try {
+    const seasonInfo = await db.execute("PRAGMA table_info(seasons)");
+    const seasonCols = seasonInfo.rows.map((r) => String(r.name));
+    if (!seasonCols.includes("color")) {
+      await db.execute("ALTER TABLE seasons ADD COLUMN color TEXT;");
+    }
+  } catch (e) {
+    // ignore
+  }
 
   initialized = true;
 }

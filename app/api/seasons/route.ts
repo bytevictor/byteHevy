@@ -53,6 +53,7 @@ export async function POST(request: Request) {
       startDate: body.startDate,
       endDate: body.endDate || null,
       description: body.description || "",
+      color: body.color || null,
     });
 
     return NextResponse.json({ success: true, data: newSeason });
@@ -80,6 +81,7 @@ export async function PUT(request: Request) {
       startDate: body.startDate,
       endDate: body.endDate || null,
       description: body.description || "",
+      color: body.color || null,
     });
 
     if (!updated) {

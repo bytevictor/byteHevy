@@ -8,6 +8,7 @@ import {
   TrophyIcon,
   CrownIcon,
 } from "../Icons";
+import { hexToRgba } from "@/lib/season-colors";
 
 export interface ChartDataPoint {
   date: string;
@@ -48,6 +49,7 @@ export interface ProgressionChartProps {
   exerciseName?: string;
   metricType?: string;
   seasonName?: string;
+  seasonColor?: string;
   allTimeBestLabel?: string;
   seasonBestLabel?: string;
 }
@@ -278,6 +280,7 @@ export function ProgressionChart({
   onPointClick,
   exerciseName,
   seasonName,
+  seasonColor,
   allTimeBestLabel,
   seasonBestLabel,
 }: ProgressionChartProps) {
@@ -1181,7 +1184,22 @@ export function ProgressionChart({
                       <span>{exerciseName || metricName}</span>
                     </h3>
                     {seasonName && (
-                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                      <span
+                        className="px-2 py-0.2 rounded-full text-[10px] font-mono border"
+                        style={
+                          seasonColor
+                            ? {
+                                backgroundColor: hexToRgba(seasonColor, 0.18),
+                                color: seasonColor,
+                                borderColor: hexToRgba(seasonColor, 0.4),
+                              }
+                            : {
+                                backgroundColor: "rgba(251, 191, 36, 0.2)",
+                                color: "#fcd34d",
+                                borderColor: "rgba(251, 191, 36, 0.3)",
+                              }
+                        }
+                      >
                         {seasonName}
                       </span>
                     )}

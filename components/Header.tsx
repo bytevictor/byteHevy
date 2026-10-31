@@ -14,6 +14,7 @@ import {
   PlusIcon,
 } from "./Icons";
 import { useSeason } from "@/lib/season-context";
+import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
 
 export type TabId = "explorer" | "goals" | "journal" | "settings" | "sync";
 
@@ -80,45 +81,74 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
         <div className="flex items-center gap-2.5 sm:gap-3.5">
           {/* Season Selector Dropdown */}
           <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className={`h-11 flex items-center gap-2.5 sm:gap-3 px-3.5 sm:px-4.5 rounded-full text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer border shadow-md ${
-                activeSeason
-                  ? "bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-zinc-900/90 border-amber-500/40 text-amber-200 hover:border-amber-400 hover:from-amber-500/25 ring-1 ring-amber-500/20"
-                  : "bg-zinc-900/90 border-zinc-700/80 text-zinc-200 hover:bg-zinc-850 hover:border-zinc-600"
-              }`}
-              title="Cambiar season de entrenamiento"
-            >
-              <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-inner ${
-                  activeSeason
-                    ? "bg-amber-500/25 text-amber-400 border border-amber-500/40"
-                    : "bg-zinc-800 text-amber-400 border border-zinc-700/60"
-                }`}
-              >
-                {activeSeason ? (
-                  <CalendarIcon className="w-4 h-4 text-amber-400" />
-                ) : (
-                  <TrophyIcon className="w-4 h-4 text-amber-400" />
-                )}
-              </div>
+            {(() => {
+              const activeColor = activeSeason ? getSeasonColor(activeSeason) : null;
+              return (
+                <button
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                  style={
+                    activeColor
+                      ? {
+                          background: `linear-gradient(to right, ${hexToRgba(activeColor, 0.22)}, ${hexToRgba(activeColor, 0.08)}, rgba(24, 24, 27, 0.95))`,
+                          borderColor: hexToRgba(activeColor, 0.45),
+                          boxShadow: `0 0 16px ${hexToRgba(activeColor, 0.15)}`,
+                        }
+                      : undefined
+                  }
+                  className={`h-11 flex items-center gap-2.5 sm:gap-3 px-3.5 sm:px-4.5 rounded-full text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer border shadow-md ${
+                    activeSeason
+                      ? "ring-1 text-zinc-100 hover:brightness-110"
+                      : "bg-zinc-900/90 border-zinc-700/80 text-zinc-200 hover:bg-zinc-850 hover:border-zinc-600"
+                  }`}
+                  title="Cambiar season de entrenamiento"
+                >
+                  <div
+                    className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-inner border"
+                    style={
+                      activeColor
+                        ? {
+                            backgroundColor: hexToRgba(activeColor, 0.22),
+                            borderColor: hexToRgba(activeColor, 0.45),
+                            color: activeColor,
+                          }
+                        : {
+                            backgroundColor: "rgba(39, 39, 42, 0.8)",
+                            borderColor: "rgba(63, 63, 70, 0.6)",
+                            color: "#f59e0b",
+                          }
+                    }
+                  >
+                    {activeSeason && activeColor ? (
+                      <CalendarIcon className="w-4 h-4" style={{ color: activeColor }} />
+                    ) : (
+                      <TrophyIcon className="w-4 h-4 text-amber-400" />
+                    )}
+                  </div>
 
-              <div className="flex flex-col text-left leading-tight">
-                <span className="text-[9px] uppercase tracking-wider font-extrabold text-zinc-400 flex items-center gap-1">
-                  {activeSeason && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />}
-                  {activeSeason ? "SEASON ACTIVA" : "SEASON"}
-                </span>
-                <span className="font-bold text-xs sm:text-sm text-zinc-100 truncate max-w-[110px] sm:max-w-[160px] md:max-w-[200px]">
-                  {activeSeason ? activeSeason.name : "Histórico Completo"}
-                </span>
-              </div>
+                  <div className="flex flex-col text-left leading-tight">
+                    <span className="text-[9px] uppercase tracking-wider font-extrabold text-zinc-400 flex items-center gap-1">
+                      {activeColor && (
+                        <span
+                          className="w-1.5 h-1.5 rounded-full animate-pulse"
+                          style={{ backgroundColor: activeColor }}
+                        />
+                      )}
+                      {activeSeason ? "SEASON ACTIVA" : "SEASON"}
+                    </span>
+                    <span className="font-bold text-xs sm:text-sm text-zinc-100 truncate max-w-[110px] sm:max-w-[160px] md:max-w-[200px]">
+                      {activeSeason ? activeSeason.name : "Histórico Completo"}
+                    </span>
+                  </div>
 
-              <ChevronDownIcon
-                className={`w-3.5 h-3.5 text-zinc-400 ml-0.5 transition-transform duration-200 shrink-0 ${
-                  dropdownOpen ? "rotate-180 text-amber-400" : ""
-                }`}
-              />
-            </button>
+                  <ChevronDownIcon
+                    className={`w-3.5 h-3.5 text-zinc-400 ml-0.5 transition-transform duration-200 shrink-0 ${
+                      dropdownOpen ? "rotate-180" : ""
+                    }`}
+                    style={activeColor && dropdownOpen ? { color: activeColor } : undefined}
+                  />
+                </button>
+              );
+            })()}
 
             {/* Dropdown Menu */}
             {dropdownOpen && (
@@ -163,6 +193,7 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
                   <div className="mt-1.5 pt-1.5 border-t border-zinc-800/80 max-h-60 overflow-y-auto space-y-1">
                     {seasons.map((s) => {
                       const isCurrent = activeSeasonId === s.id;
+                      const sColor = getSeasonColor(s);
                       return (
                         <button
                           key={s.id}
@@ -170,18 +201,41 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
                             setActiveSeasonId(s.id);
                             setDropdownOpen(false);
                           }}
-                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                          style={
                             isCurrent
-                              ? "bg-amber-500/10 text-amber-200 font-medium border border-amber-500/30 shadow-sm"
-                              : "text-zinc-300 hover:bg-zinc-800/50"
+                              ? {
+                                  backgroundColor: hexToRgba(sColor, 0.12),
+                                  borderColor: hexToRgba(sColor, 0.35),
+                                }
+                              : undefined
+                          }
+                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer border ${
+                            isCurrent
+                              ? "font-medium shadow-xs"
+                              : "border-transparent text-zinc-300 hover:bg-zinc-800/50"
                           }`}
                         >
                           <div className="flex items-center gap-3 min-w-0 pr-2">
-                            <div className="w-7 h-7 rounded-lg bg-zinc-800/80 flex items-center justify-center text-zinc-400 shrink-0 border border-zinc-700/50">
-                              <CalendarIcon className="w-4 h-4 text-amber-400/90" />
+                            <div
+                              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border relative"
+                              style={{
+                                backgroundColor: isCurrent ? hexToRgba(sColor, 0.2) : "rgba(39, 39, 42, 0.7)",
+                                borderColor: isCurrent ? hexToRgba(sColor, 0.45) : "rgba(63, 63, 70, 0.5)",
+                              }}
+                            >
+                              <CalendarIcon className="w-4 h-4" style={{ color: sColor }} />
+                              <span
+                                className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-zinc-900"
+                                style={{ backgroundColor: sColor }}
+                              />
                             </div>
                             <div className="min-w-0">
-                              <div className="font-semibold truncate text-zinc-100">{s.name}</div>
+                              <div
+                                className="font-semibold truncate text-zinc-100"
+                                style={isCurrent ? { color: sColor } : undefined}
+                              >
+                                {s.name}
+                              </div>
                               <div className="text-[10px] text-zinc-400 truncate">
                                 {s.startDate} → {s.endDate ? s.endDate : "Actualidad"}
                                 {typeof s.workoutCount === "number" && (
@@ -191,7 +245,7 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
                             </div>
                           </div>
                           {isCurrent && (
-                            <CheckIcon className="w-4 h-4 text-amber-400 shrink-0" />
+                            <CheckIcon className="w-4 h-4 shrink-0" style={{ color: sColor }} />
                           )}
                         </button>
                       );

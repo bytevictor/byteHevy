@@ -9,6 +9,7 @@ export interface Season {
   endDate: string | null;
   endTimestamp: number | null;
   description?: string;
+  color?: string | null;
   workoutCount?: number;
   createdAt?: number;
 }
@@ -129,7 +130,7 @@ export async function getSeasons(): Promise<Season[]> {
   await ensureSchema(db);
 
   const res = await db.execute(`
-    SELECT s.id, s.name, s.start_date, s.start_timestamp, s.end_date, s.end_timestamp, s.description, s.created_at,
+    SELECT s.id, s.name, s.start_date, s.start_timestamp, s.end_date, s.end_timestamp, s.description, s.color, s.created_at,
            (
              SELECT COUNT(*) FROM workouts w
              WHERE w.start_timestamp >= s.start_timestamp
@@ -147,6 +148,7 @@ export async function getSeasons(): Promise<Season[]> {
     endDate: r.end_date ? String(r.end_date) : null,
     endTimestamp: r.end_timestamp !== null && r.end_timestamp !== undefined ? Number(r.end_timestamp) : null,
     description: r.description ? String(r.description) : "",
+    color: r.color ? String(r.color) : null,
     workoutCount: Number(r.workout_count) || 0,
     createdAt: Number(r.created_at) || 0,
   }));
@@ -157,7 +159,7 @@ export async function getSeasonById(id: string): Promise<Season | null> {
   await ensureSchema(db);
 
   const res = await db.execute({
-    sql: `SELECT s.id, s.name, s.start_date, s.start_timestamp, s.end_date, s.end_timestamp, s.description, s.created_at,
+    sql: `SELECT s.id, s.name, s.start_date, s.start_timestamp, s.end_date, s.end_timestamp, s.description, s.color, s.created_at,
                  (
                    SELECT COUNT(*) FROM workouts w
                    WHERE w.start_timestamp >= s.start_timestamp
@@ -178,6 +180,7 @@ export async function getSeasonById(id: string): Promise<Season | null> {
     endDate: r.end_date ? String(r.end_date) : null,
     endTimestamp: r.end_timestamp !== null && r.end_timestamp !== undefined ? Number(r.end_timestamp) : null,
     description: r.description ? String(r.description) : "",
+    color: r.color ? String(r.color) : null,
     workoutCount: Number(r.workout_count) || 0,
     createdAt: Number(r.created_at) || 0,
   };
@@ -188,6 +191,7 @@ export async function createSeason(data: {
   startDate: string;
   endDate?: string | null;
   description?: string;
+  color?: string | null;
 }): Promise<Season> {
   const db = getDb();
   await ensureSchema(db);
@@ -197,8 +201,8 @@ export async function createSeason(data: {
   const endTimestamp = data.endDate && data.endDate.trim() !== "" ? parseDateInputToTimestamp(data.endDate, true) : null;
 
   await db.execute({
-    sql: `INSERT INTO seasons (id, name, start_date, start_timestamp, end_date, end_timestamp, description)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO seasons (id, name, start_date, start_timestamp, end_date, end_timestamp, description, color)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       data.name.trim(),
@@ -207,6 +211,7 @@ export async function createSeason(data: {
       data.endDate && data.endDate.trim() !== "" ? data.endDate.trim() : null,
       endTimestamp,
       data.description ? data.description.trim() : "",
+      data.color && data.color.trim() !== "" ? data.color.trim() : null,
     ],
   });
 
@@ -220,6 +225,7 @@ export async function updateSeason(
     startDate: string;
     endDate?: string | null;
     description?: string;
+    color?: string | null;
   }
 ): Promise<Season | null> {
   const db = getDb();
@@ -230,7 +236,7 @@ export async function updateSeason(
 
   await db.execute({
     sql: `UPDATE seasons 
-          SET name = ?, start_date = ?, start_timestamp = ?, end_date = ?, end_timestamp = ?, description = ?
+          SET name = ?, start_date = ?, start_timestamp = ?, end_date = ?, end_timestamp = ?, description = ?, color = ?
           WHERE id = ?`,
     args: [
       data.name.trim(),
@@ -239,6 +245,7 @@ export async function updateSeason(
       data.endDate && data.endDate.trim() !== "" ? data.endDate.trim() : null,
       endTimestamp,
       data.description ? data.description.trim() : "",
+      data.color && data.color.trim() !== "" ? data.color.trim() : null,
       id,
     ],
   });
