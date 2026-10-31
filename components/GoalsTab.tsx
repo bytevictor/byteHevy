@@ -405,12 +405,22 @@ export function GoalsTab() {
                           </span>
                           <div className="flex items-center">
                             {goal.allTimeReached ? (
-                              <span className="inline-flex items-center gap-1 text-[9px] font-mono font-semibold px-1.5 py-0.2 rounded bg-emerald-500/15 border border-emerald-500/35 text-emerald-400">
-                                <CheckIcon className="w-2.5 h-2.5 shrink-0" />
-                                <span>Conseguido</span>
-                              </span>
+                              isCompleted ? (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/35 text-emerald-400">
+                                  <CheckIcon className="w-2.5 h-2.5 shrink-0" />
+                                  <span>Conseguido</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/45 text-amber-300 animate-pulse">
+                                  <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400"></span>
+                                  </span>
+                                  <span>Recuperar</span>
+                                </span>
+                              )
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-[9px] font-mono text-zinc-500 px-1.5 py-0.2 rounded bg-zinc-900 border border-zinc-800">
+                              <span className="inline-flex items-center gap-1 text-[9px] font-mono text-zinc-500 px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">
                                 <span>No conseguido</span>
                               </span>
                             )}
