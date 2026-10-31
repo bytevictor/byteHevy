@@ -85,8 +85,8 @@ export function ExerciseAnimationView({
         {isLoading && !hasError && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-50 animate-pulse">
             <div className="flex flex-col items-center gap-2">
-              <div className="w-9 h-9 rounded-full border-2 border-zinc-300 border-t-amber-500 animate-spin" />
-              <span className="text-[11px] font-mono text-zinc-500 font-medium">Cargando GymVisual 3D...</span>
+              <div className="w-9 h-9 rounded-full border-2 border-zinc-300 border-t-accent animate-spin" />
+              <span className="text-[11px] font-mono text-zinc-500 font-medium">Cargando animación...</span>
             </div>
           </div>
         )}
@@ -132,7 +132,7 @@ export function ExerciseAnimationView({
         ) : (
           /* Stylized Anatomical Graphic Placeholder */
           <div className="flex flex-col items-center justify-center p-6 text-center z-0 bg-zinc-950 w-full h-full">
-            <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-amber-400 mb-2 shadow-inner">
+            <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-accent-light mb-2 shadow-inner">
               <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
@@ -155,7 +155,7 @@ export function ExerciseAnimationView({
                 </>
               ) : (
                 <>
-                  <svg className="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="w-4 h-4 text-accent-light" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
                   <span>Pausado</span>
@@ -166,20 +166,12 @@ export function ExerciseAnimationView({
         )}
 
         {/* Top Badges Overlay */}
-        <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between pointer-events-none">
+        <div className="absolute top-3 left-3 z-10 pointer-events-none">
           {/* Target muscle chip with active red dot */}
           <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-950/80 border border-zinc-700/80 backdrop-blur-md text-[10px] font-mono text-zinc-200 shadow-md">
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
             <span className="font-semibold uppercase tracking-wider">{primaryLabel}</span>
           </span>
-
-          {/* Loop / Active indicator badge */}
-          {(media.videoUrl || media.gifUrl) && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-950/80 border border-zinc-700/80 backdrop-blur-md text-[10px] font-mono text-zinc-300 shadow-md">
-              <span className={`w-1.5 h-1.5 rounded-full ${isPlaying ? "bg-emerald-400 animate-pulse" : "bg-zinc-500"}`} />
-              <span className="font-medium tracking-wide">GYMVISUAL 3D</span>
-            </div>
-          )}
         </div>
 
         {/* Subtle interactive hint */}
@@ -194,7 +186,7 @@ export function ExerciseAnimationView({
       <div className="px-3.5 py-2.5 bg-zinc-950 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-2 z-10 text-[11px] font-mono">
         <div className="flex items-center gap-1.5 flex-wrap">
           {/* Active target muscle */}
-          <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 font-medium">
+          <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-accent/10 border border-accent/30 text-accent-lighter font-medium">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
             {primaryLabel}
           </span>

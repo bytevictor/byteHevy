@@ -2,7 +2,9 @@
 
 import React, { useState, useRef } from "react";
 import { ImportResult } from "@/lib/csv-parser";
-import { UploadCloudIcon, CheckIcon, RefreshCwIcon, TrashIcon, InfoIcon } from "./Icons";
+import { UploadCloudIcon, CheckIcon, RefreshCwIcon, TrashIcon, SettingsIcon, FilmIcon } from "./Icons";
+import { ThemeCustomizer } from "./ThemeCustomizer";
+import { ExerciseMediaManager } from "./ExerciseMediaManager";
 
 interface SyncTabProps {
   onSyncComplete?: () => void;
@@ -14,6 +16,8 @@ export function SyncTab({ onSyncComplete }: SyncTabProps) {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [showAppearance, setShowAppearance] = useState(false);
+  const [showMediaManager, setShowMediaManager] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = async (file: File) => {
@@ -85,16 +89,52 @@ export function SyncTab({ onSyncComplete }: SyncTabProps) {
 
   return (
     <div className="py-6 max-w-4xl mx-auto flex flex-col gap-6">
-      {/* Header */}
-      <div className="p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md">
-        <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2.5">
-          <UploadCloudIcon className="w-5 h-5 text-amber-400" />
-          <span>Actualización & Sincronización de Datos</span>
-        </h2>
-        <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-          Sube tu exportación de Hevy en formato <code className="text-amber-400 font-mono">.csv</code>. La aplicación procesa los entrenamientos nuevos y los fusiona en tu base de datos SQLite local sin duplicados.
-        </p>
+      {/* Header with Gear Button */}
+      <div className="p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2.5">
+            <UploadCloudIcon className="w-5 h-5 text-accent-light" />
+            <span>Actualización & Sincronización de Datos</span>
+          </h2>
+          <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+            Sube tu exportación de Hevy en formato <code className="text-accent-light font-mono">.csv</code>, gestiona las carátulas/vídeos 3D de tus ejercicios o personaliza los temas y colores.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-center shrink-0">
+          <button
+            onClick={() => setShowMediaManager((prev) => !prev)}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-sm ${
+              showMediaManager
+                ? "bg-accent/15 border-accent/40 text-accent-light ring-1 ring-accent/20"
+                : "bg-zinc-900 border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+            }`}
+            title="Editar y buscar carátulas/vídeos 3D de ejercicios (estilo Jellyfin)"
+          >
+            <FilmIcon className={`w-4 h-4 transition-transform duration-300 ${showMediaManager ? "scale-110 text-accent-light" : "text-zinc-400"}`} />
+            <span>{showMediaManager ? "Ocultar Carátulas 3D" : "Carátulas & Vídeos 3D"}</span>
+          </button>
+
+          <button
+            onClick={() => setShowAppearance((prev) => !prev)}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-sm ${
+              showAppearance
+                ? "bg-accent/15 border-accent/40 text-accent-light ring-1 ring-accent/20"
+                : "bg-zinc-900 border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+            }`}
+            title="Configurar temas y color secundario"
+          >
+            <SettingsIcon className={`w-4 h-4 transition-transform duration-300 ${showAppearance ? "rotate-90 text-accent-light" : "text-zinc-400"}`} />
+            <span>{showAppearance ? "Ocultar Apariencia" : "Personalizar Apariencia"}</span>
+          </button>
+        </div>
       </div>
+
+      {/* Exercise Cover Art & 3D Media Manager (Jellyfin Style) */}
+      {showMediaManager && <ExerciseMediaManager />}
+
+      {/* Theme & Appearance Customizer */}
+      {showAppearance && <ThemeCustomizer />}
 
       {/* Drag & Drop Area */}
       <div
@@ -105,7 +145,7 @@ export function SyncTab({ onSyncComplete }: SyncTabProps) {
         onClick={() => fileInputRef.current?.click()}
         className={`p-10 rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
           dragActive
-            ? "border-amber-400 bg-amber-500/10 scale-[1.01]"
+            ? "border-accent-light bg-accent/10 scale-[1.01]"
             : "border-zinc-800 bg-zinc-900/20 hover:border-zinc-700 hover:bg-zinc-900/40"
         }`}
       >
@@ -121,7 +161,7 @@ export function SyncTab({ onSyncComplete }: SyncTabProps) {
           }}
         />
 
-        <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-amber-400 mb-3 shadow-inner">
+        <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-accent-light mb-3 shadow-inner">
           <UploadCloudIcon className="w-7 h-7" />
         </div>
 
@@ -133,7 +173,7 @@ export function SyncTab({ onSyncComplete }: SyncTabProps) {
         </p>
 
         {uploading && (
-          <div className="mt-4 flex items-center gap-2 text-xs font-mono text-amber-400">
+          <div className="mt-4 flex items-center gap-2 text-xs font-mono text-accent-light">
             <RefreshCwIcon className="w-4 h-4 animate-spin" />
             <span>Parseando sesiones y deduplicando...</span>
           </div>

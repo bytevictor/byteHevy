@@ -1,14 +1,27 @@
 import React from "react";
 
-export function ByteHevyLogo({ className = "w-5 h-5" }: { className?: string }) {
+export function ByteHevyLogo({ className = "w-5 h-5", accentColor }: { className?: string; accentColor?: string }) {
   return (
     <svg className={className} viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="2" y="9" width="3.5" height="10" rx="1.5" fill="#71717a" />
-      <rect x="7" y="6" width="3.5" height="16" rx="1.5" fill="#f59e0b" />
+      <rect x="7" y="6" width="3.5" height="16" rx="1.5" fill={accentColor || "var(--accent, #f59e0b)"} />
       <rect x="10.5" y="12.5" width="7" height="3" rx="1" fill="#e4e4e7" />
-      <rect x="17.5" y="6" width="3.5" height="16" rx="1.5" fill="#f59e0b" />
+      <rect x="17.5" y="6" width="3.5" height="16" rx="1.5" fill={accentColor || "var(--accent, #f59e0b)"} />
       <rect x="22.5" y="9" width="3.5" height="10" rx="1.5" fill="#71717a" />
       <circle cx="14" cy="14" r="1.5" fill="#ffffff" />
+    </svg>
+  );
+}
+
+export function SettingsIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+      />
+      <circle cx="12" cy="12" r="3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -163,4 +176,24 @@ export function InfoIcon({ className = "w-4 h-4" }: { className?: string }) {
     </svg>
   );
 }
+
+export function FilmIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <rect x="2" y="2" width="20" height="20" rx="4" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5" />
+    </svg>
+  );
+}
+
+export function PhotoIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <rect x="3" y="3" width="18" height="18" rx="3" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="8.5" cy="8.5" r="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 15l-5-5L5 21" />
+    </svg>
+  );
+}
+
 
