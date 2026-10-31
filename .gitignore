@@ -57,3 +57,6 @@ data/*.db*
 *.webm
 
 
+!app/apple-icon.png
+!public/apple-icon.png
+!public/icon-*.png

@@ -5,6 +5,13 @@ import { ThemeProvider } from "@/lib/theme-context";
 export const metadata: Metadata = {
   title: "byteHevy | Visualizador de Entrenamientos",
   description: "Visualizador técnico y minimalista de entrenamientos Hevy",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: "/apple-icon.png",
+  },
 };
 
 export default function RootLayout({

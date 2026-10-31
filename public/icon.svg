@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none">
+  <defs>
+    <!-- Background Gradient: Deep Slate Midnight -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0c1322" />
+      <stop offset="100%" stop-color="#040711" />
+    </linearGradient>
+
+    <!-- Cobalt Plates: Vibrant Royal Cobalt Gradient -->
+    <linearGradient id="cobaltGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="35%" stop-color="#1d4ed8" />
+      <stop offset="100%" stop-color="#0047ab" />
+    </linearGradient>
+
+    <!-- Collar Gradient: Brushed Steel -->
+    <linearGradient id="collarGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#94a3b8" />
+      <stop offset="100%" stop-color="#64748b" />
+    </linearGradient>
+
+    <!-- Barbell Chrome Gradient -->
+    <linearGradient id="barGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#e2e8f0" />
+    </linearGradient>
+
+    <!-- Subtle Plate Specular Shine -->
+    <linearGradient id="shineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+
+  <!-- Container Squircle with Cobalt Glow Border -->
+  <rect width="32" height="32" rx="7.5" fill="url(#bgGrad)" />
+  <rect x="0.5" y="0.5" width="31" height="31" rx="7" stroke="#1d4ed8" stroke-opacity="0.45" stroke-width="1" />
+
+  <!-- Barbell Bar -->
+  <rect x="10" y="14.5" width="12" height="3" rx="1.5" fill="url(#barGrad)" />
+
+  <!-- Outer Collars (Brushed Steel) -->
+  <rect x="3.5" y="11" width="3" height="10" rx="1.5" fill="url(#collarGrad)" />
+  <rect x="25.5" y="11" width="3" height="10" rx="1.5" fill="url(#collarGrad)" />
+
+  <!-- Main Cobalt Plates (Heavy Plates) -->
+  <rect x="8" y="7" width="4" height="18" rx="2" fill="url(#cobaltGrad)" />
+  <rect x="8" y="7" width="1.5" height="18" rx="0.75" fill="url(#shineGrad)" />
+
+  <rect x="20" y="7" width="4" height="18" rx="2" fill="url(#cobaltGrad)" />
+  <rect x="20" y="7" width="1.5" height="18" rx="0.75" fill="url(#shineGrad)" />
+
+  <!-- Center Knurling Mark / White Dot -->
+  <circle cx="16" cy="16" r="1.5" fill="#ffffff" />
+</svg>
