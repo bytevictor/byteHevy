@@ -68,8 +68,8 @@ export function ExerciseAnimationView({
   return (
     <div
       ref={containerRef}
-        compact ? "h-36" : "h-64 sm:h-72"
-} ${ className } `}
+      className={`relative overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 flex flex-col justify-between ${compact ? "h-36" : "h-64 sm:h-72"
+      } ${ className } `}
     >
       {/* Media Box: Clean white canvas so GymVisual 3D renders blend seamlessly */}
       <div
