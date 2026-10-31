@@ -24,7 +24,7 @@ export function ExplorerSidebarSkeleton() {
       </div>
 
       {/* Exercises List Cards Skeleton: dynamic flex fill */}
-      <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-hidden pb-4">
+      <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-hidden pb-4 custom-scrollbar">
         {[
           { rank: "#1", width: "w-36", sub: "w-20", pr: "w-16" },
           { rank: "#2", width: "w-44", sub: "w-24", pr: "w-20" },
@@ -148,8 +148,8 @@ export function ExplorerDetailSkeleton() {
       </div>
 
       {/* Progression Chart Skeleton */}
-      <div className="p-4 sm:p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm flex flex-col gap-2.5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div className="flex-1 flex flex-col justify-between p-4 sm:p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm min-h-[300px]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
           <div>
             <div className="h-4 w-36 rounded bg-zinc-800 animate-pulse" />
             <div className="h-3 w-56 rounded bg-zinc-800/60 mt-1 animate-pulse" />
@@ -161,7 +161,7 @@ export function ExplorerDetailSkeleton() {
         </div>
 
         {/* Chart Canvas Simulating Progression Graph */}
-        <div className="h-[240px] w-full rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-3.5 flex items-end justify-between gap-2.5 relative overflow-hidden">
+        <div className="flex-1 min-h-[220px] w-full rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-3.5 flex items-end justify-between gap-2.5 relative overflow-hidden">
           {/* Subtle grid lines background */}
           <div className="absolute inset-0 flex flex-col justify-between p-4 pointer-events-none opacity-20">
             <div className="border-b border-dashed border-zinc-700 w-full" />

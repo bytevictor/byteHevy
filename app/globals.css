@@ -172,7 +172,12 @@ body {
   transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-/* Custom subtle scrollbar */
+/* Universal sleek scrollbars matching byteHevy dark theme & accents */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(82, 82, 91, 0.45) transparent;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -183,12 +188,43 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: rgba(82, 82, 91, 0.45);
   border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: var(--accent, #f59e0b);
+}
+
+/* Explicit class for custom styled dark scrollbars */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(82, 82, 91, 0.5) rgba(24, 24, 27, 0.25);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(24, 24, 27, 0.25);
+  border-radius: 9999px;
+  margin: 4px 0;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(113, 113, 122, 0.45);
+  border-radius: 9999px;
+  border: 1px solid rgba(24, 24, 27, 0.3);
+  transition: background-color 0.15s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--accent, #f59e0b);
 }
 
 @keyframes fadeIn {

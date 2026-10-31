@@ -325,8 +325,8 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
           </div>
         </div>
 
-        {/* List of Exercises: fills 100% of remaining sidebar space down to viewport bottom */}
-        <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto pr-1 pb-4 scrollbar-thin">
+        {/* List of Exercises: fills 100% of remaining sidebar space down to viewport bottom with custom themed scrollbar */}
+        <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto pr-1.5 pb-4 custom-scrollbar">
           {filteredExercises.map((ex, idx) => {
             const isSelected = selectedId === ex.id;
             const media = getExerciseMedia(ex.name);
@@ -597,9 +597,9 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 </div>
               </div>
 
-              {/* Progression Chart Card */}
-              <div className="p-4 sm:p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm shadow-xl">
-                <div className="flex items-center justify-between mb-2.5">
+              {/* Progression Chart Card: Stretches vertically to fill remaining above-the-fold space */}
+              <div className="flex-1 flex flex-col justify-between p-4 sm:p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm shadow-xl min-h-[320px]">
+                <div className="flex items-center justify-between mb-2.5 shrink-0">
                   <div>
                     <h3 className="text-sm font-semibold tracking-tight text-zinc-100 flex items-center gap-2">
                       <span>Curva de Progresión</span>
@@ -627,28 +627,29 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 </div>
 
                 {detailData.chartPoints.length === 0 ? (
-                  <div className="py-12 text-center text-xs text-zinc-500">
+                  <div className="py-12 text-center text-xs text-zinc-500 my-auto">
                     No hay sesiones de este ejercicio en la {activeSeason?.endDate ? `season "${activeSeason?.name}"` : `season activa (${activeSeason?.name})`}.
                   </div>
                 ) : (
-                  <ProgressionChart
-                    data={detailData.chartPoints}
-                    unit={getUnit(detailData.exercise.metricType)}
-                    metricName="Peso Máximo"
-                    secondaryMetricName="1RM Estimado"
-                    exerciseName={detailData.exercise.name}
-                    metricType={detailData.exercise.metricType}
-                    seasonName={activeSeason?.name}
-                    seasonColor={seasonColor || undefined}
-                    allTimeBestLabel={detailData.exercise.allTimeBest?.label}
-                    seasonBestLabel={detailData.exercise.seasonBest?.label}
-                    height={240}
-                    onPointClick={(pt) => {
-                      if (pt.workoutId) {
-                        handleOpenWorkout(pt.workoutId);
-                      }
-                    }}
-                  />
+                  <div className="flex-1 flex flex-col min-h-0">
+                    <ProgressionChart
+                      data={detailData.chartPoints}
+                      unit={getUnit(detailData.exercise.metricType)}
+                      metricName="Peso Máximo"
+                      secondaryMetricName="1RM Estimado"
+                      exerciseName={detailData.exercise.name}
+                      metricType={detailData.exercise.metricType}
+                      seasonName={activeSeason?.name}
+                      seasonColor={seasonColor || undefined}
+                      allTimeBestLabel={detailData.exercise.allTimeBest?.label}
+                      seasonBestLabel={detailData.exercise.seasonBest?.label}
+                      onPointClick={(pt) => {
+                        if (pt.workoutId) {
+                          handleOpenWorkout(pt.workoutId);
+                        }
+                      }}
+                    />
+                  </div>
                 )}
               </div>
             </div>

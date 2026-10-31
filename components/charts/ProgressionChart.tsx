@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useId, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useId, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   MaximizeIcon,
@@ -41,6 +41,7 @@ export interface ProgressionChartProps {
   secondaryMetricName?: string;
   showSecondaryLine?: boolean;
   height?: number;
+  className?: string;
   mode?: ChartMode;
   defaultMode?: ChartMode;
   onModeChange?: (mode: ChartMode) => void;
@@ -272,7 +273,8 @@ export function ProgressionChart({
   metricName = "Carga Top",
   secondaryMetricName = "1RM Est.",
   showSecondaryLine = false,
-  height = 240,
+  height,
+  className = "",
   mode: controlledMode,
   defaultMode = "session",
   onModeChange,
@@ -295,6 +297,24 @@ export function ProgressionChart({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [windowHeight, setWindowHeight] = useState(700);
   const [mounted, setMounted] = useState(false);
+
+  const inlineContainerRef = useRef<HTMLDivElement>(null);
+  const [inlineSvgHeight, setInlineSvgHeight] = useState<number>(height || 260);
+
+  useEffect(() => {
+    if (!inlineContainerRef.current) return;
+    const el = inlineContainerRef.current;
+    const updateSize = () => {
+      const h = el.clientHeight;
+      if (h > 140) {
+        setInlineSvgHeight(Math.max(220, Math.round(h - 14)));
+      }
+    };
+    updateSize();
+    const ro = new ResizeObserver(updateSize);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [height]);
 
   const inlineGradientId = useId();
   const modalGradientId = useId();
@@ -688,11 +708,16 @@ export function ProgressionChart({
     };
 
     return (
-      <div className="relative w-full rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-1.5 sm:p-2 backdrop-blur-sm">
+      <div
+        ref={isModalView ? undefined : inlineContainerRef}
+        className={`relative w-full rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-1.5 sm:p-2 backdrop-blur-sm ${
+          isModalView ? "" : "flex-1 min-h-[220px] flex items-center justify-center overflow-hidden"
+        }`}
+      >
         <svg
           viewBox={`0 0 ${svgW} ${svgH}`}
           className="w-full overflow-visible"
-          style={{ height: svgH }}
+          style={{ height: isModalView ? svgH : "100%", maxHeight: isModalView ? undefined : svgH }}
           onMouseMove={handleSvgMouseMove}
           onMouseLeave={() => onHoverChange(null)}
           onClick={() => {
@@ -1033,9 +1058,9 @@ export function ProgressionChart({
   const fullscreenSvgHeight = Math.max(380, Math.min(640, windowHeight - 320));
 
   return (
-    <div className="relative w-full select-none">
+    <div className={`relative w-full select-none flex-1 flex flex-col justify-between ${className}`}>
       {/* Top Controls Bar */}
-      <div className="flex flex-col gap-2.5 pb-3 text-[11px] font-mono">
+      <div className="flex flex-col gap-2.5 pb-3 text-[11px] font-mono shrink-0">
         {/* Row 1: Selectors & Controls */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           {/* Left: Metric View Switcher */}
@@ -1180,8 +1205,8 @@ export function ProgressionChart({
         </div>
       </div>
 
-      {/* Inline Chart SVG */}
-      {renderChartSvg(800, height, hoverIndex, setHoverIndex, inlineGradientId, false)}
+      {/* Inline Chart SVG: Stretches dynamically to fill card height */}
+      {renderChartSvg(800, height ?? inlineSvgHeight, hoverIndex, setHoverIndex, inlineGradientId, false)}
 
       {/* Fullscreen Modal Dialog (Portaled to document.body to break free of any ancestor transforms or backdrop filters) */}
       {mounted && isFullscreen && typeof document !== "undefined" && createPortal(
