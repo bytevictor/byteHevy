@@ -5,7 +5,6 @@ import { ExerciseSummary, ExerciseDetailData, ExerciseSessionHistory, JournalWor
 import { ProgressionChart } from "./charts/ProgressionChart";
 import { ExerciseAnimationView } from "./ExerciseAnimationView";
 import { WorkoutSessionModal } from "./WorkoutSessionModal";
-import { ArtworkPickerModal } from "./ArtworkPickerModal";
 import { getExerciseMedia, MUSCLE_LABELS } from "@/lib/exercise-media";
 import { ExerciseMedia } from "@/types/exercise-media";
 import { ExplorerSkeleton, ExplorerDetailSkeleton } from "./skeletons/ExplorerSkeleton";
@@ -19,7 +18,6 @@ import {
   XIcon,
   InfoIcon,
   CrownIcon,
-  FilmIcon,
 } from "./Icons";
 import { useSeason } from "@/lib/season-context";
 import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
@@ -45,7 +43,6 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
   const [loadingFullWorkout, setLoadingFullWorkout] = useState<boolean>(false);
   const [currentMedia, setCurrentMedia] = useState<ExerciseMedia | null>(null);
   const [mediaCache, setMediaCache] = useState<Record<string, ExerciseMedia>>({});
-  const [artworkPickerOpen, setArtworkPickerOpen] = useState(false);
 
   const handleOpenWorkout = async (workoutId: string) => {
     if (!workoutId) return;
@@ -83,7 +80,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
     });
   }, [exercises]);
 
-  // Global listener for artwork changes from ExerciseMediaManager or ArtworkPickerModal
+  // Global listener for artwork changes from ExerciseMediaManager
   useEffect(() => {
     const handleMediaUpdated = (e: Event) => {
       const customEvent = e as CustomEvent<{ exerciseName: string; media: ExerciseMedia }>;
@@ -543,15 +540,6 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                           <span>Season: {activeSeason.name}</span>
                         </span>
                       )}
-
-                      <button
-                        onClick={() => setArtworkPickerOpen(true)}
-                        className="ml-auto text-[10px] font-mono px-2.5 py-0.5 rounded-lg bg-zinc-850 hover:bg-zinc-800 border border-zinc-700/80 hover:border-accent/50 text-zinc-300 hover:text-accent-light transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
-                        title="Cambiar carátula / GIF 3D de este ejercicio"
-                      >
-                        <FilmIcon className="w-3 h-3 text-accent-light" />
-                        <span>Cambiar GIF 3D</span>
-                      </button>
                     </div>
 
                     <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-100 truncate" title={detailData.exercise.name}>
@@ -993,25 +981,6 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
         onClose={() => setFullWorkoutModal(null)}
         highlightExerciseName={detailData?.exercise.name}
       />
-
-      {/* Artwork Picker Modal for changing 3D GIF */}
-      {detailData && (
-        <ArtworkPickerModal
-          isOpen={artworkPickerOpen}
-          onClose={() => setArtworkPickerOpen(false)}
-          exerciseName={detailData.exercise.name}
-          initialMuscle={activeMedia?.primaryMuscle}
-          currentGifUrl={activeMedia?.gifUrl}
-          onMediaAssigned={(newMedia) => {
-            setCurrentMedia(newMedia);
-            const key = detailData.exercise.name.toLowerCase().trim();
-            setMediaCache((prev) => ({
-              ...prev,
-              [key]: newMedia,
-            }));
-          }}
-        />
-      )}
     </div>
   );
 }
