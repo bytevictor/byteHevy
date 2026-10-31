@@ -67,6 +67,12 @@ export interface ChartPoint {
   isAllTimePR?: boolean;
   workoutTitle: string;
   workoutId: string;
+  avgReps?: number;
+  totalVolume?: number;
+  topWeight?: number;
+  topReps?: number;
+  setsCount?: number;
+  est1RM?: number;
 }
 
 export interface ExerciseDetailData {
@@ -714,6 +720,43 @@ export async function getExerciseDetail(
 
     const isAllTimePR = allTimeBestRecord ? (topVal >= allTimeBestRecord.value && topVal > 0) : false;
 
+    // Calculate Average Reps, Volume, and Top Set details for this session
+    const setsWithReps = w.sets.filter((s) => s.reps !== null && s.reps !== undefined && Number(s.reps) > 0);
+    const totalReps = setsWithReps.reduce((sum, s) => sum + Number(s.reps), 0);
+    const avgReps = setsWithReps.length > 0 ? Number((totalReps / setsWithReps.length).toFixed(1)) : undefined;
+
+    let totalVol = 0;
+    for (const s of w.sets) {
+      const wt = Number(s.weightKg) || 0;
+      const rp = Number(s.reps) || 0;
+      if (wt > 0 && rp > 0) {
+        totalVol += wt * rp;
+      } else if (rp > 0) {
+        totalVol += rp;
+      }
+    }
+    const totalVolume = totalVol > 0 ? Math.round(totalVol) : undefined;
+
+    let topWeightVal: number | undefined = undefined;
+    let topRepsVal: number | undefined = undefined;
+    if (metricType === "weighted_bodyweight" || metricType === "weight_reps") {
+      let top = w.sets[0];
+      let bestScore = -999999;
+      for (const s of w.sets) {
+        const wt = s.weightKg ?? 0;
+        const rp = s.reps ?? 0;
+        const sc = wt !== 0 ? wt * 1000 + rp : rp;
+        if (sc > bestScore) {
+          bestScore = sc;
+          top = s;
+        }
+      }
+      topWeightVal = top?.weightKg !== null && top?.weightKg !== undefined ? Number(top.weightKg) : undefined;
+      topRepsVal = top?.reps !== null && top?.reps !== undefined ? Number(top.reps) : undefined;
+    } else if (metricType === "bodyweight_reps") {
+      topRepsVal = topVal;
+    }
+
     const point: ChartPoint = {
       date: w.startTime,
       timestamp: w.startTimestamp,
@@ -724,6 +767,12 @@ export async function getExerciseDetail(
       isAllTimePR,
       workoutTitle: w.workoutTitle,
       workoutId: w.workoutId,
+      avgReps,
+      totalVolume,
+      topWeight: topWeightVal,
+      topReps: topRepsVal,
+      setsCount: w.sets.length,
+      est1RM,
     };
 
     chartPoints.push(point);

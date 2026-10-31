@@ -42,7 +42,7 @@ export function WorkoutSessionModal({
   const totalSets = workout.exercises.reduce((acc, ex) => acc + ex.sets.length, 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in">
       {/* Click outside backdrop */}
       <div className="absolute inset-0" onClick={onClose} />
 

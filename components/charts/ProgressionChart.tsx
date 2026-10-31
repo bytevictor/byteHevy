@@ -1,21 +1,35 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useId } from "react";
+import React, { useState, useEffect, useMemo, useId, useCallback } from "react";
+import {
+  MaximizeIcon,
+  XIcon,
+  CalendarIcon,
+  TrophyIcon,
+  CrownIcon,
+} from "../Icons";
 
 export interface ChartDataPoint {
   date: string;
   timestamp: number;
-  primaryValue: number;     // Top set (kg, reps o segundos)
-  secondaryValue?: number;   // 1RM estimado (opcional)
-  label?: string;            // ej: "70 kg × 8"
-  isPR?: boolean;            // Insignia de récord
-  isAllTimePR?: boolean;     // Insignia de récord histórico absoluto
+  primaryValue: number;      // Top set (kg, reps o segundos)
+  secondaryValue?: number;    // 1RM estimado (opcional)
+  label?: string;             // ej: "70 kg × 8"
+  isPR?: boolean;             // Insignia de récord
+  isAllTimePR?: boolean;      // Insignia de récord histórico absoluto
   workoutTitle?: string;
   workoutId?: string;
+  avgReps?: number;           // Media de repeticiones de la sesión
+  totalVolume?: number;       // Volumen total (tonelaje o reps acumuladas)
+  topWeight?: number;         // Peso de la serie máxima
+  topReps?: number;           // Reps de la serie máxima
+  setsCount?: number;         // Número de series
+  est1RM?: number;            // 1RM estimado
 }
 
 export type ChartMode = "session" | "date";
 export type CurveType = "linear" | "smooth" | "flow";
+export type ChartMetricView = "top_set" | "avg_reps" | "est_1rm" | "volume";
 
 export interface ProgressionChartProps {
   data: ChartDataPoint[];
@@ -31,6 +45,11 @@ export interface ProgressionChartProps {
   defaultCurveType?: CurveType;
   onCurveTypeChange?: (curveType: CurveType) => void;
   onPointClick?: (point: ChartDataPoint) => void;
+  exerciseName?: string;
+  metricType?: string;
+  seasonName?: string;
+  allTimeBestLabel?: string;
+  seasonBestLabel?: string;
 }
 
 const SPANISH_MONTHS: Record<string, number> = {
@@ -123,7 +142,6 @@ function buildPath(
   }
 
   if (curveType === "flow") {
-    // Ultra-smooth Catmull-Rom flow with rounded sweeps
     const n = points.length;
     let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
     const tension = 0.4;
@@ -140,91 +158,55 @@ function buildPath(
         continue;
       }
 
-      const dx1 = p2.x - p0.x;
-      const dy1 = p2.y - p0.y;
-      const dx2 = p3.x - p1.x;
-      const dy2 = p3.y - p1.y;
+      const cp1x = p1.x + spanX * tension;
+      const cp1y = Math.max(minY, Math.min(maxY, p1.y + (p2.y - p0.y) * tension * 0.5));
 
-      let cp1x = p1.x + (dx1 * tension) / 3;
-      let cp1y = p1.y + (dy1 * tension) / 3;
-      let cp2x = p2.x - (dx2 * tension) / 3;
-      let cp2y = p2.y - (dy2 * tension) / 3;
-
-      // Ensure horizontal monotonicity
-      cp1x = Math.max(p1.x, Math.min(p2.x, cp1x));
-      cp2x = Math.max(p1.x, Math.min(p2.x, cp2x));
-
-      // Stay within chart Y boundaries
-      cp1y = Math.max(minY, Math.min(maxY, cp1y));
-      cp2y = Math.max(minY, Math.min(maxY, cp2y));
+      const cp2x = p2.x - spanX * tension;
+      const cp2y = Math.max(minY, Math.min(maxY, p2.y - (p3.y - p1.y) * tension * 0.5));
 
       d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
     }
     return d;
   }
 
-  // Smooth mode: Monotone Cubic Spline (Fritsch-Carlson)
+  // "smooth" - Monotone cubic spline (Fritsch-Carlson)
   const n = points.length;
-  const dx: number[] = [];
-  const dy: number[] = [];
-  const slopes: number[] = [];
+  const dxs: number[] = [];
+  const dys: number[] = [];
+  const ms: number[] = [];
 
   for (let i = 0; i < n - 1; i++) {
-    const deltaX = points[i + 1].x - points[i].x;
-    const deltaY = points[i + 1].y - points[i].y;
-    dx.push(deltaX);
-    dy.push(deltaY);
-    slopes.push(deltaX === 0 ? 0 : deltaY / deltaX);
+    const dx = points[i + 1].x - points[i].x;
+    const dy = points[i + 1].y - points[i].y;
+    dxs.push(dx);
+    dys.push(dy);
+    ms.push(dx === 0 ? 0 : dy / dx);
   }
 
-  const m = new Array(n).fill(0);
-  m[0] = slopes[0];
-  m[n - 1] = slopes[n - 2];
-
+  const tangents: number[] = [ms[0]];
   for (let i = 1; i < n - 1; i++) {
-    const s0 = slopes[i - 1];
-    const s1 = slopes[i];
-    if (s0 * s1 <= 0) {
-      m[i] = 0;
+    const m0 = ms[i - 1];
+    const m1 = ms[i];
+    if (m0 * m1 <= 0) {
+      tangents.push(0);
     } else {
-      m[i] = (2 * s0 * s1) / (s0 + s1);
+      const dx0 = dxs[i - 1];
+      const dx1 = dxs[i];
+      const common = dx0 + dx1;
+      tangents.push((3 * common) / ((common + dx1) / m0 + (common + dx0) / m1));
     }
   }
-
-  // Fritsch-Carlson limiter to guarantee monotonicity and zero overshoot
-  for (let i = 0; i < n - 1; i++) {
-    const s = slopes[i];
-    if (Math.abs(s) < 1e-7) {
-      m[i] = 0;
-      m[i + 1] = 0;
-    } else {
-      const a = m[i] / s;
-      const b = m[i + 1] / s;
-      const h = Math.hypot(a, b);
-      if (h > 3) {
-        const t = 3 / h;
-        m[i] = t * a * s;
-        m[i + 1] = t * b * s;
-      }
-    }
-  }
+  tangents.push(ms[ms.length - 1]);
 
   let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
   for (let i = 0; i < n - 1; i++) {
     const p0 = points[i];
     const p1 = points[i + 1];
-    const deltaX = dx[i];
-
-    if (deltaX <= 0) {
-      d += ` L ${p1.x.toFixed(1)} ${p1.y.toFixed(1)}`;
-      continue;
-    }
-
-    const cp1x = p0.x + deltaX / 3;
-    const cp1y = p0.y + (m[i] * deltaX) / 3;
-    const cp2x = p1.x - deltaX / 3;
-    const cp2y = p1.y - (m[i + 1] * deltaX) / 3;
-
+    const dx = dxs[i];
+    const cp1x = p0.x + dx / 3;
+    const cp1y = Math.max(minY, Math.min(maxY, p0.y + (tangents[i] * dx) / 3));
+    const cp2x = p1.x - dx / 3;
+    const cp2y = Math.max(minY, Math.min(maxY, p1.y - (tangents[i + 1] * dx) / 3));
     d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p1.x.toFixed(1)} ${p1.y.toFixed(1)}`;
   }
 
@@ -234,10 +216,12 @@ function buildPath(
 function SessionModeIcon({ className = "w-3 h-3" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2.5 12h2.5M6.75 8h2.5M11 4h2.5" />
-      <circle cx="3.75" cy="12" r="1.25" fill="currentColor" stroke="none" />
-      <circle cx="8" cy="8" r="1.25" fill="currentColor" stroke="none" />
-      <circle cx="12.25" cy="4" r="1.25" fill="currentColor" stroke="none" />
+      <line x1="2.5" y1="4" x2="2.5" y2="12" />
+      <line x1="7.5" y1="4" x2="7.5" y2="12" />
+      <line x1="12.5" y1="4" x2="12.5" y2="12" />
+      <circle cx="2.5" cy="4" r="1.25" fill="currentColor" stroke="none" />
+      <circle cx="7.5" cy="4" r="1.25" fill="currentColor" stroke="none" />
+      <circle cx="12.5" cy="4" r="1.25" fill="currentColor" stroke="none" />
     </svg>
   );
 }
@@ -281,7 +265,7 @@ function FlowLineIcon({ className = "w-3 h-3" }: { className?: string }) {
 export function ProgressionChart({
   data,
   unit,
-  metricName = "Top Set",
+  metricName = "Carga Top",
   secondaryMetricName = "1RM Est.",
   showSecondaryLine = false,
   height = 220,
@@ -292,13 +276,23 @@ export function ProgressionChart({
   defaultCurveType = "smooth",
   onCurveTypeChange,
   onPointClick,
+  exerciseName,
+  seasonName,
+  allTimeBestLabel,
+  seasonBestLabel,
 }: ProgressionChartProps) {
   const [internalMode, setInternalMode] = useState<ChartMode>(defaultMode);
   const [internalCurve, setInternalCurve] = useState<CurveType>(defaultCurveType);
+  const [internalMetric, setInternalMetric] = useState<ChartMetricView>("top_set");
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const gradientId = useId();
+  const [modalHoverIndex, setModalHoverIndex] = useState<number | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [windowHeight, setWindowHeight] = useState(700);
 
-  // Load saved preferences safely on client
+  const inlineGradientId = useId();
+  const modalGradientId = useId();
+
+  // Load preferences safely on client
   useEffect(() => {
     if (controlledMode === undefined) {
       try {
@@ -317,7 +311,33 @@ export function ProgressionChart({
         }
       } catch {}
     }
+
+    try {
+      const savedMetric = localStorage.getItem("bytehevy_chart_metric") as ChartMetricView;
+      if (savedMetric && ["top_set", "avg_reps", "est_1rm", "volume"].includes(savedMetric)) {
+        setInternalMetric(savedMetric);
+      }
+    } catch {}
+
+    if (typeof window !== "undefined") {
+      setWindowHeight(window.innerHeight);
+      const handleResize = () => setWindowHeight(window.innerHeight);
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
   }, [controlledMode, controlledCurve]);
+
+  // Handle Escape key to close fullscreen
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isFullscreen]);
 
   const activeMode = controlledMode ?? internalMode;
   const activeCurve = controlledCurve ?? internalCurve;
@@ -342,6 +362,13 @@ export function ProgressionChart({
     onCurveTypeChange?.(newCurve);
   };
 
+  const handleMetricChange = (newMetric: ChartMetricView) => {
+    setInternalMetric(newMetric);
+    try {
+      localStorage.setItem("bytehevy_chart_metric", newMetric);
+    } catch {}
+  };
+
   // Ensure items are ordered by chronological timestamp
   const parsedData = useMemo(() => {
     if (!data) return [];
@@ -353,6 +380,136 @@ export function ProgressionChart({
       .sort((a, b) => a._timestampMs - b._timestampMs);
   }, [data]);
 
+  // Metric selector options tailored to exercise unit
+  const availableMetrics = useMemo(() => {
+    if (unit === "kg") {
+      return [
+        { id: "top_set" as const, label: "Carga Top", title: "Carga de la serie más pesada (Top Set en kg)" },
+        { id: "avg_reps" as const, label: "Reps Medias", title: "Media de repeticiones de las series en la sesión" },
+        { id: "est_1rm" as const, label: "1RM (Fuerza)", title: "1RM estimado que combina peso y repeticiones (Epley)" },
+        { id: "volume" as const, label: "Volumen", title: "Carga total acumulada (Tonelaje kg)" },
+      ];
+    }
+    if (unit === "reps") {
+      return [
+        { id: "top_set" as const, label: "Reps Máx", title: "Repeticiones de la mejor serie" },
+        { id: "avg_reps" as const, label: "Reps Medias", title: "Media de repeticiones por serie realizada" },
+        { id: "volume" as const, label: "Volumen", title: "Repeticiones totales acumuladas en la sesión" },
+      ];
+    }
+    return [
+      { id: "top_set" as const, label: "Máximo", title: "Valor máximo alcanzado en la sesión" },
+      { id: "volume" as const, label: "Total", title: "Total acumulado de la sesión" },
+    ];
+  }, [unit]);
+
+  const activeMetric: ChartMetricView = useMemo(() => {
+    const isWeight = unit === "kg";
+    const isReps = unit === "reps";
+    if (internalMetric === "est_1rm" && !isWeight) return "top_set";
+    if (internalMetric === "avg_reps" && !isWeight && !isReps) return "top_set";
+    return internalMetric;
+  }, [internalMetric, unit]);
+
+  const currentUnit = useMemo(() => {
+    if (activeMetric === "avg_reps") return "reps";
+    if (activeMetric === "est_1rm") return "kg";
+    if (activeMetric === "volume") return unit === "reps" ? "reps" : "kg";
+    return unit;
+  }, [activeMetric, unit]);
+
+  const currentMetricName = useMemo(() => {
+    if (activeMetric === "avg_reps") return "Media de Reps / Serie";
+    if (activeMetric === "est_1rm") return "1RM Estimado (Fuerza)";
+    if (activeMetric === "volume") return "Volumen Total de Sesión";
+    return metricName;
+  }, [activeMetric, metricName]);
+
+  const getPointValue = useCallback((d: ChartDataPoint): number => {
+    if (activeMetric === "avg_reps") {
+      if (typeof d.avgReps === "number" && !isNaN(d.avgReps)) return d.avgReps;
+      if (typeof d.topReps === "number" && !isNaN(d.topReps)) return d.topReps;
+      return d.primaryValue;
+    }
+    if (activeMetric === "est_1rm") {
+      if (typeof d.est1RM === "number" && !isNaN(d.est1RM) && d.est1RM > 0) return d.est1RM;
+      if (typeof d.secondaryValue === "number" && !isNaN(d.secondaryValue) && d.secondaryValue > 0) return d.secondaryValue;
+      return d.primaryValue;
+    }
+    if (activeMetric === "volume") {
+      if (typeof d.totalVolume === "number" && !isNaN(d.totalVolume)) return d.totalVolume;
+      return d.primaryValue;
+    }
+    return d.primaryValue;
+  }, [activeMetric]);
+
+  // Pre-calculate progressive PRs and all-time records for the active metric
+  const pointMetricsMeta = useMemo(() => {
+    let runningBest = -Infinity;
+    const allTimeBestVal = parsedData.length > 0 ? Math.max(...parsedData.map((d) => getPointValue(d))) : 0;
+
+    return parsedData.map((d) => {
+      const val = getPointValue(d);
+      if (activeMetric === "top_set") {
+        return {
+          val,
+          isPR: !!d.isPR,
+          isAllTimePR: !!d.isAllTimePR,
+        };
+      }
+      const isPR = val > runningBest && val > 0;
+      if (isPR) {
+        runningBest = val;
+      }
+      const isAllTimePR = val >= allTimeBestVal && val > 0 && allTimeBestVal > 0;
+      return {
+        val,
+        isPR,
+        isAllTimePR,
+      };
+    });
+  }, [parsedData, activeMetric, getPointValue]);
+
+  // Global KPIs across period
+  const kpis = useMemo(() => {
+    if (parsedData.length === 0) return null;
+    const firstPt = parsedData[0];
+    const lastPt = parsedData[parsedData.length - 1];
+    let peakIdx = 0;
+    let maxVal = -Infinity;
+
+    pointMetricsMeta.forEach((m, idx) => {
+      if (m.val > maxVal) {
+        maxVal = m.val;
+        peakIdx = idx;
+      }
+    });
+
+    const peakPt = parsedData[peakIdx];
+    const firstVal = pointMetricsMeta[0]?.val ?? 0;
+    const lastVal = pointMetricsMeta[pointMetricsMeta.length - 1]?.val ?? 0;
+    const diff = lastVal - firstVal;
+    const diffPct = firstVal !== 0 ? Math.round((diff / Math.abs(firstVal)) * 100) : 0;
+
+    const repsList = parsedData.map((d) => d.avgReps).filter((r): r is number => typeof r === "number" && r > 0);
+    const globalAvgReps = repsList.length > 0 ? (repsList.reduce((a, b) => a + b, 0) / repsList.length).toFixed(1) : null;
+
+    const totalVolumeSum = parsedData.reduce((acc, d) => acc + (d.totalVolume || 0), 0);
+
+    return {
+      firstPt,
+      lastPt,
+      peakPt,
+      firstVal,
+      lastVal,
+      peakVal: maxVal,
+      diff,
+      diffPct,
+      globalAvgReps,
+      totalVolumeSum,
+    };
+  }, [parsedData, pointMetricsMeta]);
+
   if (!parsedData || parsedData.length === 0) {
     return (
       <div
@@ -363,17 +520,6 @@ export function ProgressionChart({
       </div>
     );
   }
-
-  // Width and padding constants for SVG viewBox
-  const svgWidth = 800;
-  const svgHeight = height;
-  const paddingLeft = 45;
-  const paddingRight = 25;
-  const paddingTop = 25;
-  const paddingBottom = 35;
-
-  const chartWidth = svgWidth - paddingLeft - paddingRight;
-  const chartHeight = svgHeight - paddingTop - paddingBottom;
 
   // Time range calculation for date mode
   const validTimestamps = parsedData
@@ -387,11 +533,12 @@ export function ProgressionChart({
 
   // Calculate min & max values for Y Axis
   const allValues: number[] = [];
-  parsedData.forEach((d) => {
-    if (typeof d.primaryValue === "number" && !isNaN(d.primaryValue)) {
-      allValues.push(d.primaryValue);
+  parsedData.forEach((d, idx) => {
+    const val = pointMetricsMeta[idx]?.val ?? getPointValue(d);
+    if (typeof val === "number" && !isNaN(val)) {
+      allValues.push(val);
     }
-    if (showSecondaryLine && typeof d.secondaryValue === "number" && !isNaN(d.secondaryValue)) {
+    if (activeMetric === "top_set" && showSecondaryLine && typeof d.secondaryValue === "number" && !isNaN(d.secondaryValue)) {
       allValues.push(d.secondaryValue);
     }
   });
@@ -402,229 +549,130 @@ export function ProgressionChart({
   const maxValue = Math.ceil(rawMax * 1.1) || 10;
   const valueRange = maxValue - minValue || 1;
 
-  // Coordinates calculation
-  const getX = (index: number) => {
-    if (parsedData.length <= 1) return paddingLeft + chartWidth / 2;
-
-    if (activeMode === "date" && timeSpan > 0) {
-      const t = parsedData[index]._timestampMs;
-      if (t > 0) {
-        const normalized = (t - minTime) / timeSpan;
-        return paddingLeft + normalized * chartWidth;
-      }
-    }
-
-    // Default: Session mode (equidistant spacing)
-    return paddingLeft + (index / (parsedData.length - 1)) * chartWidth;
-  };
-
-  const getY = (val: number) => {
-    const clamped = Math.max(minValue, Math.min(maxValue, val));
-    const normalized = (clamped - minValue) / valueRange;
-    return paddingTop + chartHeight - normalized * chartHeight;
-  };
-
-  // Build points for primary value
-  const primaryPoints = parsedData.map((d, i) => ({
-    x: getX(i),
-    y: getY(d.primaryValue),
-    d,
-    index: i,
-  }));
-
-  const primaryPathD = buildPath(primaryPoints, activeCurve, paddingTop, paddingTop + chartHeight);
-
-  // Area path for subtle gradient fill under primary line
-  const areaPathD = primaryPoints.length > 0
-    ? `${primaryPathD} L ${primaryPoints[primaryPoints.length - 1].x} ${paddingTop + chartHeight} L ${primaryPoints[0].x} ${paddingTop + chartHeight} Z`
-    : "";
-
-  // Secondary path (1RM) if present
-  const hasSecondary = parsedData.some((d) => typeof d.secondaryValue === "number" && d.secondaryValue > 0);
-  const secondaryPoints = hasSecondary
-    ? parsedData.map((d, i) => ({
-        x: getX(i),
-        y: d.secondaryValue ? getY(d.secondaryValue) : getY(d.primaryValue),
-      }))
-    : [];
-
-  const secondaryPathD = hasSecondary
-    ? buildPath(secondaryPoints, activeCurve, paddingTop, paddingTop + chartHeight)
-    : "";
-
   // Grid steps (4 horizontal lines)
   const gridSteps = [0, 0.33, 0.66, 1];
 
-  // Intermediate date ticks for date mode
-  const dateTicks = useMemo(() => {
-    if (activeMode !== "date" || timeSpan <= 0) return [];
-    return [0.25, 0.5, 0.75].map((fraction) => {
-      const tickTime = minTime + fraction * timeSpan;
-      const x = paddingLeft + fraction * chartWidth;
-      const label = formatAxisDate(tickTime, spanDays);
-      return { x, label, fraction };
-    });
-  }, [activeMode, timeSpan, minTime, chartWidth, spanDays]);
+  // Helper to build and render SVG chart with dynamic dimensions
+  const renderChartSvg = (
+    svgW: number,
+    svgH: number,
+    activeHoverIdx: number | null,
+    onHoverChange: (idx: number | null) => void,
+    gradId: string,
+    isModalView = false
+  ) => {
+    const padL = isModalView ? 55 : 45;
+    const padR = isModalView ? 35 : 25;
+    const padT = isModalView ? 30 : 25;
+    const padB = isModalView ? 40 : 35;
+    const cW = svgW - padL - padR;
+    const cH = svgH - padT - padB;
 
-  const activePoint = hoverIndex !== null && hoverIndex >= 0 && hoverIndex < primaryPoints.length
-    ? primaryPoints[hoverIndex]
-    : null;
-
-  // Fluid hover interaction across entire chart
-  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    if (!rect.width || primaryPoints.length === 0) return;
-
-    const mouseX = ((e.clientX - rect.left) / rect.width) * svgWidth;
-    const mouseY = ((e.clientY - rect.top) / rect.height) * svgHeight;
-
-    if (mouseX < paddingLeft - 20 || mouseX > svgWidth - paddingRight + 20) {
-      setHoverIndex(null);
-      return;
-    }
-
-    let closestIdx = 0;
-    let minDistance = Infinity;
-
-    for (let i = 0; i < primaryPoints.length; i++) {
-      const pt = primaryPoints[i];
-      const dx = pt.x - mouseX;
-      const dy = (pt.y - mouseY) * 0.35;
-      const dist = dx * dx + dy * dy;
-      if (dist < minDistance) {
-        minDistance = dist;
-        closestIdx = i;
+    const getXCoord = (index: number) => {
+      if (parsedData.length <= 1) return padL + cW / 2;
+      if (activeMode === "date" && timeSpan > 0) {
+        const t = parsedData[index]._timestampMs;
+        if (t > 0) {
+          const normalized = (t - minTime) / timeSpan;
+          return padL + normalized * cW;
+        }
       }
-    }
+      return padL + (index / (parsedData.length - 1)) * cW;
+    };
 
-    setHoverIndex(closestIdx);
-  };
+    const getYCoord = (val: number) => {
+      const clamped = Math.max(minValue, Math.min(maxValue, val));
+      const normalized = (clamped - minValue) / valueRange;
+      return padT + cH - normalized * cH;
+    };
 
-  return (
-    <div className="relative w-full select-none">
-      {/* Top Controls Bar: Legend & Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 text-[11px] font-mono">
-        {/* Left: Legend */}
-        <div className="flex items-center gap-3.5 text-zinc-400">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-0.5 bg-accent rounded-full" />
-            <span className="text-zinc-200">{metricName}</span>
-          </div>
-          {showSecondaryLine && hasSecondary && (
-            <div className="flex items-center gap-1.5 text-zinc-500">
-              <span className="w-2.5 h-0.5 border-b border-dashed border-zinc-400" />
-              <span>{secondaryMetricName}</span>
-            </div>
-          )}
-          <div className="flex items-center gap-1 text-zinc-500">
-            <span className="w-2 h-2 rounded-full border border-accent-light bg-accent/20" />
-            <span>PR</span>
-          </div>
-        </div>
+    const primaryPts = parsedData.map((d, i) => {
+      const meta = pointMetricsMeta[i];
+      return {
+        x: getXCoord(i),
+        y: getYCoord(meta?.val ?? getPointValue(d)),
+        d,
+        index: i,
+        val: meta?.val ?? getPointValue(d),
+        isPR: meta?.isPR ?? false,
+        isAllTimePR: meta?.isAllTimePR ?? false,
+      };
+    });
 
-        {/* Right: Mode Switchers & Session Summary */}
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          {/* Segmented Mode Control (Por sesión vs Por fecha) */}
-          <div className="inline-flex items-center p-0.5 rounded-lg bg-zinc-950/90 border border-zinc-800">
-            <button
-              type="button"
-              onClick={() => handleModeChange("session")}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeMode === "session"
-                  ? "bg-zinc-800 text-zinc-100 font-medium shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-300"
-              }`}
-              title="Separación uniforme entre sesiones consecutivas (modo sesión)"
-            >
-              <SessionModeIcon className="w-3 h-3" />
-              <span>Por sesión</span>
-            </button>
+    const primaryD = buildPath(primaryPts, activeCurve, padT, padT + cH);
+    const areaD = primaryPts.length > 0
+      ? `${primaryD} L ${primaryPts[primaryPts.length - 1].x} ${padT + cH} L ${primaryPts[0].x} ${padT + cH} Z`
+      : "";
 
-            <button
-              type="button"
-              onClick={() => handleModeChange("date")}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeMode === "date"
-                  ? "bg-zinc-800 text-zinc-100 font-medium shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-300"
-              }`}
-              title="Separación proporcional a la fecha y tiempo transcurrido (modo temporal)"
-            >
-              <DateModeIcon className="w-3 h-3" />
-              <span>Por fecha</span>
-            </button>
-          </div>
+    // Secondary line (1RM) in top_set mode
+    const hasSec = activeMetric === "top_set" && parsedData.some((d) => typeof d.secondaryValue === "number" && d.secondaryValue > 0);
+    const secondaryPts = hasSec
+      ? parsedData.map((d, i) => ({
+          x: getXCoord(i),
+          y: d.secondaryValue ? getYCoord(d.secondaryValue) : getYCoord(d.primaryValue),
+        }))
+      : [];
+    const secD = hasSec ? buildPath(secondaryPts, activeCurve, padT, padT + cH) : "";
 
-          {/* Segmented Curve Control (Puntos vs Curvas vs Fluida) */}
-          <div className="inline-flex items-center p-0.5 rounded-lg bg-zinc-950/90 border border-zinc-800">
-            <button
-              type="button"
-              onClick={() => handleCurveChange("linear")}
-              className={`px-2 py-1 rounded-md text-[11px] font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeCurve === "linear"
-                  ? "bg-zinc-800 text-zinc-100 font-medium shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-300"
-              }`}
-              title="Trazado lineal con picos entre puntos concretos"
-            >
-              <LinearLineIcon className="w-3 h-3" />
-              <span>Puntos</span>
-            </button>
+    // Intermediate date ticks for date mode
+    const dTicks = activeMode === "date" && timeSpan > 0
+      ? [0.25, 0.5, 0.75].map((fraction) => {
+          const tickTime = minTime + fraction * timeSpan;
+          const x = padL + fraction * cW;
+          const label = formatAxisDate(tickTime, spanDays);
+          return { x, label, fraction };
+        })
+      : [];
 
-            <button
-              type="button"
-              onClick={() => handleCurveChange("smooth")}
-              className={`px-2 py-1 rounded-md text-[11px] font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeCurve === "smooth"
-                  ? "bg-zinc-800 text-zinc-100 font-medium shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-300"
-              }`}
-              title="Vista suavizada con curvas y puntos visibles"
-            >
-              <SmoothLineIcon className="w-3 h-3" />
-              <span>Curvas</span>
-            </button>
+    const activePt = activeHoverIdx !== null && activeHoverIdx >= 0 && activeHoverIdx < primaryPts.length
+      ? primaryPts[activeHoverIdx]
+      : null;
 
-            <button
-              type="button"
-              onClick={() => handleCurveChange("flow")}
-              className={`px-2 py-1 rounded-md text-[11px] font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeCurve === "flow"
-                  ? "bg-zinc-800 text-zinc-100 font-medium shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-300"
-              }`}
-              title="Línea continua ultra suave sin puntos"
-            >
-              <FlowLineIcon className="w-3 h-3" />
-              <span>Fluida</span>
-            </button>
-          </div>
+    const handleSvgMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      if (!rect.width || primaryPts.length === 0) return;
 
-          <div className="hidden lg:flex items-center text-zinc-500 text-[10px] pl-0.5">
-            {parsedData.length} {parsedData.length === 1 ? "sesión" : "sesiones"}
-            {activeMode === "date" && timeSpan > 0 && (
-              <span className="ml-1 text-zinc-600">({formatDurationSpan(timeSpan)})</span>
-            )}
-          </div>
-        </div>
-      </div>
+      const mouseX = ((e.clientX - rect.left) / rect.width) * svgW;
+      const mouseY = ((e.clientY - rect.top) / rect.height) * svgH;
 
-      {/* Main SVG Container */}
-      <div className="relative w-full rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-2 backdrop-blur-sm">
+      if (mouseX < padL - 25 || mouseX > svgW - padR + 25) {
+        onHoverChange(null);
+        return;
+      }
+
+      let closestIdx = 0;
+      let minDistance = Infinity;
+
+      for (let i = 0; i < primaryPts.length; i++) {
+        const pt = primaryPts[i];
+        const dx = pt.x - mouseX;
+        const dy = (pt.y - mouseY) * 0.35;
+        const dist = dx * dx + dy * dy;
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestIdx = i;
+        }
+      }
+
+      onHoverChange(closestIdx);
+    };
+
+    return (
+      <div className="relative w-full rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-2 sm:p-3 backdrop-blur-sm">
         <svg
-          viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+          viewBox={`0 0 ${svgW} ${svgH}`}
           className="w-full overflow-visible"
-          style={{ height }}
-          onMouseMove={handleMouseMove}
-          onMouseLeave={() => setHoverIndex(null)}
+          style={{ height: svgH }}
+          onMouseMove={handleSvgMouseMove}
+          onMouseLeave={() => onHoverChange(null)}
           onClick={() => {
-            if (activePoint) {
-              onPointClick?.(activePoint.d);
+            if (activePt) {
+              onPointClick?.(activePt.d);
             }
           }}
         >
           <defs>
-            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="var(--accent, #f59e0b)" stopOpacity={activeCurve === "flow" ? "0.22" : "0.18"} />
               <stop offset="100%" stopColor="var(--accent, #f59e0b)" stopOpacity="0.0" />
             </linearGradient>
@@ -633,46 +681,46 @@ export function ProgressionChart({
           {/* Grid lines & Y Axis labels */}
           {gridSteps.map((step, idx) => {
             const val = Math.round(minValue + step * valueRange);
-            const yPos = paddingTop + chartHeight - step * chartHeight;
+            const yPos = padT + cH - step * cH;
             return (
               <g key={idx}>
                 <line
-                  x1={paddingLeft}
+                  x1={padL}
                   y1={yPos}
-                  x2={svgWidth - paddingRight}
+                  x2={svgW - padR}
                   y2={yPos}
                   stroke="#27272a"
                   strokeWidth="1"
                   strokeDasharray="2,3"
                 />
                 <text
-                  x={paddingLeft - 8}
+                  x={padL - 8}
                   y={yPos + 3}
                   textAnchor="end"
                   className="text-[9px] fill-zinc-500 font-mono font-medium"
                 >
-                  {val}
-                  {idx === gridSteps.length - 1 ? ` ${unit}` : ""}
+                  {val.toLocaleString()}
+                  {idx === gridSteps.length - 1 ? ` ${currentUnit}` : ""}
                 </text>
               </g>
             );
           })}
 
           {/* Zero reference line for bodyweight baseline (0 kg) when spanning negative and positive */}
-          {minValue < 0 && maxValue > 0 && (
+          {activeMetric === "top_set" && minValue < 0 && maxValue > 0 && (
             <g>
               <line
-                x1={paddingLeft}
-                y1={getY(0)}
-                x2={svgWidth - paddingRight}
-                y2={getY(0)}
+                x1={padL}
+                y1={getYCoord(0)}
+                x2={svgW - padR}
+                y2={getYCoord(0)}
                 stroke="#52525b"
                 strokeWidth="1.25"
                 strokeDasharray="4,4"
               />
               <text
-                x={paddingLeft + 6}
-                y={getY(0) - 4}
+                x={padL + 6}
+                y={getYCoord(0) - 4}
                 textAnchor="start"
                 className="text-[9px] fill-zinc-400 font-mono font-medium"
               >
@@ -682,13 +730,13 @@ export function ProgressionChart({
           )}
 
           {/* Date mode vertical timeline guide lines */}
-          {activeMode === "date" && dateTicks.map((tick) => (
+          {activeMode === "date" && dTicks.map((tick) => (
             <line
               key={`grid-line-${tick.fraction}`}
               x1={tick.x}
-              y1={paddingTop}
+              y1={padT}
               x2={tick.x}
-              y2={paddingTop + chartHeight}
+              y2={padT + cH}
               stroke="#27272a"
               strokeWidth="1"
               strokeDasharray="2,3"
@@ -697,14 +745,14 @@ export function ProgressionChart({
           ))}
 
           {/* Area fill under primary curve */}
-          {areaPathD && (
-            <path d={areaPathD} fill={`url(#${gradientId})`} />
+          {areaD && (
+            <path d={areaD} fill={`url(#${gradId})`} />
           )}
 
-          {/* Secondary dashed curve (1RM) */}
-          {showSecondaryLine && hasSecondary && secondaryPathD && (
+          {/* Secondary dashed curve (1RM) in top_set mode */}
+          {showSecondaryLine && hasSec && secD && (
             <path
-              d={secondaryPathD}
+              d={secD}
               fill="none"
               stroke="#71717a"
               strokeWidth={activeCurve === "flow" ? "1.75" : "1.5"}
@@ -713,10 +761,10 @@ export function ProgressionChart({
             />
           )}
 
-          {/* Primary curve (Top Set) */}
-          {primaryPathD && (
+          {/* Primary curve */}
+          {primaryD && (
             <path
-              d={primaryPathD}
+              d={primaryD}
               fill="none"
               stroke="var(--accent, #f59e0b)"
               strokeWidth={activeCurve === "flow" ? "2.5" : "2"}
@@ -725,30 +773,29 @@ export function ProgressionChart({
             />
           )}
 
-          {/* Data Points on curve: in "flow" mode, hidden unless hovered */}
-          {primaryPoints.map((pt) => {
-            const isHovered = hoverIndex === pt.index;
+          {/* Data Points on curve */}
+          {primaryPts.map((pt) => {
+            const isHovered = activeHoverIdx === pt.index;
             const showPoint = activeCurve !== "flow" || isHovered;
-
             if (!showPoint) return null;
 
             return (
               <g key={pt.index}>
-                {pt.d.isAllTimePR ? (
+                {pt.isAllTimePR ? (
                   <circle
                     cx={pt.x}
                     cy={pt.y}
-                    r={isHovered ? 8 : 6}
+                    r={isHovered ? 8.5 : 6.5}
                     fill="none"
                     stroke="#fbbf24"
                     strokeWidth="2"
                     className="transition-all duration-200 animate-pulse"
                   />
-                ) : pt.d.isPR ? (
+                ) : pt.isPR ? (
                   <circle
                     cx={pt.x}
                     cy={pt.y}
-                    r={isHovered ? 7 : 5}
+                    r={isHovered ? 7.5 : 5.5}
                     fill="none"
                     stroke="var(--accent, #f59e0b)"
                     strokeWidth="1.5"
@@ -758,15 +805,15 @@ export function ProgressionChart({
                 <circle
                   cx={pt.x}
                   cy={pt.y}
-                  r={isHovered ? 5.5 : pt.d.isAllTimePR ? 4.5 : pt.d.isPR ? 3.5 : 2.5}
-                  fill={pt.d.isAllTimePR ? "#fbbf24" : pt.d.isPR ? "var(--accent, #f59e0b)" : "#18181b"}
-                  stroke={pt.d.isAllTimePR ? "#fef08a" : pt.d.isPR ? "var(--accent-lighter, #fef3c7)" : "var(--accent, #f59e0b)"}
+                  r={isHovered ? 5.5 : pt.isAllTimePR ? 4.5 : pt.isPR ? 3.5 : 2.5}
+                  fill={pt.isAllTimePR ? "#fbbf24" : pt.isPR ? "var(--accent, #f59e0b)" : "#18181b"}
+                  stroke={pt.isAllTimePR ? "#fef08a" : pt.isPR ? "var(--accent-lighter, #fef3c7)" : "var(--accent, #f59e0b)"}
                   strokeWidth={isHovered ? "2.5" : "1.5"}
                   className="transition-all duration-200 cursor-pointer"
-                  onMouseEnter={() => setHoverIndex(pt.index)}
+                  onMouseEnter={() => onHoverChange(pt.index)}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setHoverIndex(pt.index);
+                    onHoverChange(pt.index);
                     onPointClick?.(pt.d);
                   }}
                 />
@@ -775,12 +822,12 @@ export function ProgressionChart({
           })}
 
           {/* Hover Crosshair Vertical Line */}
-          {activePoint && (
+          {activePt && (
             <line
-              x1={activePoint.x}
-              y1={paddingTop}
-              x2={activePoint.x}
-              y2={paddingTop + chartHeight}
+              x1={activePt.x}
+              y1={padT}
+              x2={activePt.x}
+              y2={padT + cH}
               stroke="#52525b"
               strokeWidth="1"
               strokeDasharray="2,2"
@@ -791,8 +838,8 @@ export function ProgressionChart({
           {parsedData.length > 0 && (
             <>
               <text
-                x={paddingLeft}
-                y={svgHeight - 8}
+                x={padL}
+                y={svgH - 8}
                 textAnchor="start"
                 className="text-[9px] fill-zinc-500 font-mono"
               >
@@ -800,11 +847,11 @@ export function ProgressionChart({
               </text>
 
               {/* Intermediate Date Ticks in Date Mode */}
-              {activeMode === "date" && dateTicks.map((tick) => (
+              {activeMode === "date" && dTicks.map((tick) => (
                 <text
                   key={`lbl-${tick.fraction}`}
                   x={tick.x}
-                  y={svgHeight - 8}
+                  y={svgH - 8}
                   textAnchor="middle"
                   className="text-[9px] fill-zinc-500 font-mono"
                 >
@@ -812,11 +859,11 @@ export function ProgressionChart({
                 </text>
               ))}
 
-              {/* Intermediate Session Tick in Session Mode if many sessions */}
+              {/* Intermediate Session Tick in Session Mode */}
               {activeMode === "session" && parsedData.length >= 6 && (
                 <text
-                  x={paddingLeft + chartWidth / 2}
-                  y={svgHeight - 8}
+                  x={padL + cW / 2}
+                  y={svgH - 8}
                   textAnchor="middle"
                   className="text-[9px] fill-zinc-600 font-mono"
                 >
@@ -826,8 +873,8 @@ export function ProgressionChart({
 
               {parsedData.length > 1 && (
                 <text
-                  x={svgWidth - paddingRight}
-                  y={svgHeight - 8}
+                  x={svgW - padR}
+                  y={svgH - 8}
                   textAnchor="end"
                   className="text-[9px] fill-zinc-500 font-mono"
                 >
@@ -839,49 +886,49 @@ export function ProgressionChart({
         </svg>
 
         {/* Floating Tooltip Card */}
-        {activePoint && (() => {
+        {activePt && (() => {
           let daysSincePrev: number | null = null;
-          if (activePoint.index > 0) {
-            const prevT = parsedData[activePoint.index - 1]._timestampMs;
-            const currT = parsedData[activePoint.index]._timestampMs;
+          if (activePt.index > 0) {
+            const prevT = parsedData[activePt.index - 1]._timestampMs;
+            const currT = parsedData[activePt.index]._timestampMs;
             if (prevT > 0 && currT > 0) {
               daysSincePrev = Math.round((currT - prevT) / (1000 * 60 * 60 * 24));
             }
           }
 
-          const pctX = (activePoint.x / svgWidth) * 100;
+          const pctX = (activePt.x / svgW) * 100;
           let alignmentClass = "-translate-x-1/2";
-          if (activePoint.x < 110) {
+          if (activePt.x < 120) {
             alignmentClass = "-translate-x-2";
-          } else if (activePoint.x > svgWidth - 110) {
+          } else if (activePt.x > svgW - 120) {
             alignmentClass = "-translate-x-[96%]";
           }
 
           return (
             <div
-              className={`pointer-events-none absolute z-20 ${alignmentClass} rounded-lg border border-zinc-700 bg-zinc-950/95 px-3 py-2 shadow-xl backdrop-blur-md transition-all duration-75 text-left min-w-[160px]`}
+              className={`pointer-events-none absolute z-30 ${alignmentClass} rounded-xl border border-zinc-700 bg-zinc-950/95 px-3 py-2.5 shadow-2xl backdrop-blur-md transition-all duration-75 text-left min-w-[170px] max-w-[240px]`}
               style={{
                 left: `${pctX}%`,
-                top: `${Math.max(8, (activePoint.y / svgHeight) * 100 - 32)}%`,
+                top: `${Math.max(6, (activePt.y / svgH) * 100 - 35)}%`,
               }}
             >
               <div className="flex items-center justify-between gap-2 border-b border-zinc-800 pb-1 mb-1.5">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-[10px] text-zinc-400 font-mono">
-                    {activePoint.d.date}
+                    {activePt.d.date}
                   </span>
-                  {activePoint.d.isAllTimePR ? (
-                    <span className="rounded bg-amber-400/20 px-1.5 py-0.5 text-[9px] font-mono font-bold text-amber-300 border border-amber-400/40">
-                      👑 ALL-TIME PR
+                  {activePt.isAllTimePR ? (
+                    <span className="rounded bg-amber-400/20 px-1.5 py-0.2 text-[9px] font-mono font-bold text-amber-300 border border-amber-400/40">
+                      👑 ALL-TIME
                     </span>
-                  ) : activePoint.d.isPR ? (
+                  ) : activePt.isPR ? (
                     <span className="rounded bg-accent/20 px-1 py-0.2 text-[9px] font-mono font-semibold text-accent-lighter border border-accent/30">
                       ★ PR
                     </span>
                   ) : null}
                 </div>
                 <span className="text-[9px] font-mono text-zinc-500">
-                  #{activePoint.index + 1}
+                  #{activePt.index + 1}
                 </span>
               </div>
 
@@ -898,29 +945,436 @@ export function ProgressionChart({
                 </div>
               )}
 
+              {/* Main Metric Focus Value */}
               <div className="text-xs font-mono font-medium text-zinc-100 flex items-center justify-between gap-3">
-                <span className="text-zinc-400 text-[10px]">{metricName}:</span>
-                <span className="text-accent-light font-semibold">
-                  {activePoint.d.label || `${activePoint.d.primaryValue} ${unit}`}
+                <span className="text-zinc-400 text-[10px]">{currentMetricName}:</span>
+                <span className="text-accent-light font-bold">
+                  {activeMetric === "avg_reps"
+                    ? `${activePt.val} reps`
+                    : activeMetric === "est_1rm"
+                    ? `${activePt.val} kg`
+                    : activeMetric === "volume"
+                    ? `${activePt.val.toLocaleString()} ${currentUnit}`
+                    : activePt.d.label || `${activePt.val} ${currentUnit}`}
                 </span>
               </div>
 
-              {typeof activePoint.d.secondaryValue === "number" && activePoint.d.secondaryValue > 0 && (
-                <div className="text-[11px] font-mono text-zinc-400 flex items-center justify-between gap-3 pt-0.5">
-                  <span className="text-[10px] text-zinc-500">{secondaryMetricName}:</span>
-                  <span>{activePoint.d.secondaryValue} {unit}</span>
-                </div>
-              )}
+              {/* Context metrics in tooltip */}
+              <div className="mt-1.5 pt-1.5 border-t border-zinc-800/80 flex flex-col gap-1 text-[10px] font-mono text-zinc-400">
+                {activeMetric !== "top_set" && activePt.d.label && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500">Top Set:</span>
+                    <span className="text-zinc-200 font-medium">{activePt.d.label}</span>
+                  </div>
+                )}
+                {activeMetric !== "avg_reps" && activePt.d.avgReps !== undefined && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500">Media reps:</span>
+                    <span className="text-zinc-300">{activePt.d.avgReps} reps/serie</span>
+                  </div>
+                )}
+                {activeMetric !== "est_1rm" && activePt.d.est1RM !== undefined && activePt.d.est1RM > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500">1RM Estimado:</span>
+                    <span className="text-zinc-300">{activePt.d.est1RM} kg</span>
+                  </div>
+                )}
+                {activeMetric !== "volume" && activePt.d.totalVolume !== undefined && activePt.d.totalVolume > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500">Volumen sesión:</span>
+                    <span className="text-zinc-300">{activePt.d.totalVolume.toLocaleString()} {unit === "reps" ? "reps" : "kg"}</span>
+                  </div>
+                )}
+                {activePt.d.setsCount !== undefined && (
+                  <div className="flex items-center justify-between text-zinc-500">
+                    <span>Series:</span>
+                    <span>{activePt.d.setsCount} series</span>
+                  </div>
+                )}
+                {onPointClick && (
+                  <div className="pt-1 text-[9px] text-accent-light/80 italic text-right border-t border-zinc-900 mt-0.5">
+                    Clic para ver sesión completa ↗
+                  </div>
+                )}
+              </div>
 
-              {activePoint.d.workoutTitle && (
+              {activePt.d.workoutTitle && (
                 <div className="mt-1 pt-1 border-t border-zinc-800/80 text-[10px] text-zinc-500 truncate max-w-[200px]">
-                  {activePoint.d.workoutTitle}
+                  {activePt.d.workoutTitle}
                 </div>
               )}
             </div>
           );
         })()}
       </div>
+    );
+  };
+
+  const fullscreenSvgHeight = Math.max(420, Math.min(580, windowHeight - 340));
+
+  return (
+    <div className="relative w-full select-none">
+      {/* Top Controls Bar */}
+      <div className="flex flex-col gap-2.5 pb-3 text-[11px] font-mono">
+        {/* Row 1: Selectors & Controls */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {/* Left: Metric View Switcher */}
+          <div className="inline-flex items-center p-0.5 rounded-lg bg-zinc-950/90 border border-zinc-800">
+            {availableMetrics.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => handleMetricChange(m.id)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeMetric === m.id
+                    ? "bg-zinc-800 text-zinc-100 font-semibold shadow-xs text-accent-light"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+                title={m.title}
+              >
+                <span>{m.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Right: Mode & Curve Switchers + Fullscreen Button */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Segmented Mode Control */}
+            <div className="inline-flex items-center p-0.5 rounded-lg bg-zinc-950/90 border border-zinc-800">
+              <button
+                type="button"
+                onClick={() => handleModeChange("session")}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeMode === "session"
+                    ? "bg-zinc-800 text-zinc-100 font-medium shadow-xs"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+                title="Separación uniforme entre sesiones consecutivas (modo sesión)"
+              >
+                <SessionModeIcon className="w-3 h-3" />
+                <span>Por sesión</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleModeChange("date")}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeMode === "date"
+                    ? "bg-zinc-800 text-zinc-100 font-medium shadow-xs"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+                title="Separación proporcional a la fecha y tiempo transcurrido (modo temporal)"
+              >
+                <DateModeIcon className="w-3 h-3" />
+                <span>Por fecha</span>
+              </button>
+            </div>
+
+            {/* Segmented Curve Control */}
+            <div className="inline-flex items-center p-0.5 rounded-lg bg-zinc-950/90 border border-zinc-800">
+              <button
+                type="button"
+                onClick={() => handleCurveChange("linear")}
+                className={`px-2 py-1 rounded-md text-[11px] font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeCurve === "linear"
+                    ? "bg-zinc-800 text-zinc-100 font-medium shadow-xs"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+                title="Trazado lineal con picos entre puntos concretos"
+              >
+                <LinearLineIcon className="w-3 h-3" />
+                <span>Puntos</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleCurveChange("smooth")}
+                className={`px-2 py-1 rounded-md text-[11px] font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeCurve === "smooth"
+                    ? "bg-zinc-800 text-zinc-100 font-medium shadow-xs"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+                title="Vista suavizada con curvas y puntos visibles"
+              >
+                <SmoothLineIcon className="w-3 h-3" />
+                <span>Curvas</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleCurveChange("flow")}
+                className={`px-2 py-1 rounded-md text-[11px] font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeCurve === "flow"
+                    ? "bg-zinc-800 text-zinc-100 font-medium shadow-xs"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+                title="Línea continua ultra suave sin puntos"
+              >
+                <FlowLineIcon className="w-3 h-3" />
+                <span>Fluida</span>
+              </button>
+            </div>
+
+            {/* Fullscreen Expand Button */}
+            <button
+              type="button"
+              onClick={() => setIsFullscreen(true)}
+              className="px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-950/90 text-zinc-400 hover:text-zinc-100 hover:border-zinc-700 transition-all cursor-pointer flex items-center gap-1.5 text-[11px] font-mono"
+              title="Ampliar gráfica a pantalla completa"
+            >
+              <MaximizeIcon className="w-3.5 h-3.5 text-accent-light" />
+              <span className="hidden sm:inline">Pantalla completa</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Legend & Details */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 border-t border-zinc-900 text-zinc-400 text-[10px]">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-0.5 bg-accent rounded-full" />
+              <span className="text-zinc-200 font-semibold">{currentMetricName}</span>
+            </div>
+            {activeMetric === "top_set" && showSecondaryLine && parsedData.some((d) => typeof d.secondaryValue === "number" && d.secondaryValue > 0) && (
+              <div className="flex items-center gap-1.5 text-zinc-500">
+                <span className="w-2.5 h-0.5 border-b border-dashed border-zinc-400" />
+                <span>{secondaryMetricName}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1 text-zinc-500">
+              <span className="w-2 h-2 rounded-full border border-accent-light bg-accent/20" />
+              <span>PR</span>
+            </div>
+            <div className="flex items-center gap-1 text-zinc-500">
+              <span className="w-2 h-2 rounded-full border border-amber-400 bg-amber-400/30" />
+              <span>All-Time</span>
+            </div>
+          </div>
+
+          <div className="flex items-center text-zinc-500 text-[10px]">
+            {parsedData.length} {parsedData.length === 1 ? "sesión" : "sesiones"}
+            {activeMode === "date" && timeSpan > 0 && (
+              <span className="ml-1 text-zinc-600">({formatDurationSpan(timeSpan)})</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Inline Chart SVG */}
+      {renderChartSvg(800, height, hoverIndex, setHoverIndex, inlineGradientId, false)}
+
+      {/* Fullscreen Modal Dialog */}
+      {isFullscreen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-5 bg-black/90 backdrop-blur-xl animate-fade-in text-zinc-100 select-none">
+          {/* Backdrop click to close */}
+          <div className="absolute inset-0" onClick={() => setIsFullscreen(false)} />
+
+          {/* Modal Container */}
+          <div className="relative w-full max-w-7xl max-h-[96vh] flex flex-col rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl overflow-hidden z-10">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-zinc-800/90 bg-zinc-900/70 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base sm:text-lg font-bold text-zinc-100 flex items-center gap-2">
+                      <TrophyIcon className="w-4 h-4 text-accent-light" />
+                      <span>{exerciseName || metricName}</span>
+                    </h3>
+                    {seasonName && (
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                        {seasonName}
+                      </span>
+                    )}
+                    {allTimeBestLabel && (
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-zinc-800 text-zinc-300 border border-zinc-700 flex items-center gap-1">
+                        <CrownIcon className="w-3 h-3 text-amber-400" />
+                        <span>Récord: {allTimeBestLabel}</span>
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] font-mono text-zinc-400 mt-0.5">
+                    {parsedData.length} sesiones en total
+                    {timeSpan > 0 && ` (${formatDurationSpan(timeSpan)})`}
+                    {" · "}Vista detallada de progresión
+                  </p>
+                </div>
+              </div>
+
+              {/* Controls inside Fullscreen Header */}
+              <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
+                {/* Metric Switcher */}
+                <div className="inline-flex items-center p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
+                  {availableMetrics.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => handleMetricChange(m.id)}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-mono transition-all cursor-pointer ${
+                        activeMetric === m.id
+                          ? "bg-zinc-800 text-accent-light font-semibold shadow-xs"
+                          : "text-zinc-500 hover:text-zinc-300"
+                      }`}
+                      title={m.title}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Mode Switcher */}
+                <div className="inline-flex items-center p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => handleModeChange("session")}
+                    className={`px-2 py-1 rounded-md text-[11px] font-mono transition-all flex items-center gap-1 cursor-pointer ${
+                      activeMode === "session"
+                        ? "bg-zinc-800 text-zinc-100 font-medium"
+                        : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    <SessionModeIcon className="w-3 h-3" />
+                    <span>Sesión</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleModeChange("date")}
+                    className={`px-2 py-1 rounded-md text-[11px] font-mono transition-all flex items-center gap-1 cursor-pointer ${
+                      activeMode === "date"
+                        ? "bg-zinc-800 text-zinc-100 font-medium"
+                        : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    <DateModeIcon className="w-3 h-3" />
+                    <span>Fecha</span>
+                  </button>
+                </div>
+
+                {/* Curve Switcher */}
+                <div className="inline-flex items-center p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => handleCurveChange("linear")}
+                    className={`px-2 py-1 rounded-md text-[11px] font-mono transition-all cursor-pointer ${
+                      activeCurve === "linear" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                    title="Puntos lineales"
+                  >
+                    <LinearLineIcon className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCurveChange("smooth")}
+                    className={`px-2 py-1 rounded-md text-[11px] font-mono transition-all cursor-pointer ${
+                      activeCurve === "smooth" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                    title="Curvas suavizadas"
+                  >
+                    <SmoothLineIcon className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCurveChange("flow")}
+                    className={`px-2 py-1 rounded-md text-[11px] font-mono transition-all cursor-pointer ${
+                      activeCurve === "flow" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                    title="Línea fluida continua"
+                  >
+                    <FlowLineIcon className="w-3 h-3" />
+                  </button>
+                </div>
+
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsFullscreen(false)}
+                  className="p-1.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors cursor-pointer ml-1"
+                  title="Cerrar pantalla completa (Esc)"
+                >
+                  <XIcon className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Main Modal Chart Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex flex-col gap-5">
+              {renderChartSvg(1100, fullscreenSvgHeight, modalHoverIndex, setModalHoverIndex, modalGradientId, true)}
+
+              {/* KPI Timeline Highlights Footer */}
+              {kpis && (
+                <div className="flex flex-col gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {/* Primer registro */}
+                    <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/80 flex flex-col justify-between">
+                      <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+                        Primer registro
+                      </span>
+                      <div className="mt-1">
+                        <span className="text-base font-bold font-mono text-zinc-100">
+                          {kpis.firstVal} {currentUnit}
+                        </span>
+                        <span className="block text-[10px] font-mono text-zinc-500 mt-0.5">
+                          {kpis.firstPt.date.split(",")[0]}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Pico máximo */}
+                    <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/80 flex flex-col justify-between">
+                      <span className="text-[10px] font-mono text-amber-400/90 uppercase tracking-wider flex items-center gap-1">
+                        <CrownIcon className="w-3 h-3 text-amber-400" />
+                        <span>Récord periodo</span>
+                      </span>
+                      <div className="mt-1">
+                        <span className="text-base font-bold font-mono text-amber-300">
+                          {kpis.peakVal} {currentUnit}
+                        </span>
+                        <span className="block text-[10px] font-mono text-zinc-500 mt-0.5">
+                          {kpis.peakPt.date.split(",")[0]}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Último registro */}
+                    <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/80 flex flex-col justify-between">
+                      <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+                        Última sesión
+                      </span>
+                      <div className="mt-1">
+                        <span className="text-base font-bold font-mono text-zinc-100">
+                          {kpis.lastVal} {currentUnit}
+                        </span>
+                        <span className="block text-[10px] font-mono text-zinc-500 mt-0.5">
+                          {kpis.lastPt.date.split(",")[0]}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progreso neto o Reps medias */}
+                    <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/80 flex flex-col justify-between">
+                      <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+                        {kpis.globalAvgReps ? "Media reps global" : "Volumen total"}
+                      </span>
+                      <div className="mt-1">
+                        <span className="text-base font-bold font-mono text-accent-light">
+                          {kpis.globalAvgReps ? `${kpis.globalAvgReps} reps` : `${kpis.totalVolumeSum.toLocaleString()} kg`}
+                        </span>
+                        <span className="block text-[10px] font-mono text-zinc-500 mt-0.5">
+                          {kpis.diff >= 0 ? `+${kpis.diff} ${currentUnit} (${kpis.diffPct >= 0 ? "+" : ""}${kpis.diffPct}%)` : `${kpis.diff} ${currentUnit}`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-center text-[11px] font-mono text-zinc-500 flex items-center justify-center gap-1.5 pt-1">
+                    <span>💡</span>
+                    <span>Haz clic sobre cualquier punto de la curva para ver el entrenamiento completo realizado en ese día.</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
