@@ -625,6 +625,107 @@ export async function getJournalWorkouts(): Promise<JournalWorkout[]> {
   return results;
 }
 
+export async function getWorkoutDetail(workoutId: string): Promise<JournalWorkout | null> {
+  const db = getDb();
+  await ensureSchema(db);
+
+  const wRes = await db.execute({
+    sql: "SELECT id, title, start_time, start_timestamp, end_time, duration_seconds, description FROM workouts WHERE id = ?",
+    args: [workoutId],
+  });
+
+  if (wRes.rows.length === 0) return null;
+  const w = wRes.rows[0];
+  const wId = String(w.id);
+
+  const exercisesData = await db.execute({
+    sql: `SELECT we.id as we_id, e.id as exercise_id, e.name as exercise_name, we.exercise_notes,
+                 s.id as set_id, s.set_index, s.set_type, s.weight_kg, s.reps, s.distance_km, s.duration_seconds, s.rpe
+          FROM workout_exercises we
+          JOIN exercises e ON e.id = we.exercise_id
+          JOIN exercise_sets s ON s.workout_exercise_id = we.id
+          WHERE we.workout_id = ?
+          ORDER BY we.order_index ASC, s.set_index ASC`,
+    args: [wId],
+  });
+
+  const exMap = new Map<string, {
+    id: string;
+    name: string;
+    exerciseNotes: string;
+    sets: SetDetail[];
+  }>();
+
+  for (const r of exercisesData.rows) {
+    const weId = String(r.we_id);
+    if (!exMap.has(weId)) {
+      exMap.set(weId, {
+        id: String(r.exercise_id),
+        name: String(r.exercise_name),
+        exerciseNotes: r.exercise_notes ? String(r.exercise_notes) : "",
+        sets: [],
+      });
+    }
+    exMap.get(weId)!.sets.push({
+      id: String(r.set_id),
+      setIndex: Number(r.set_index) + 1,
+      setType: String(r.set_type || "normal"),
+      weightKg: r.weight_kg !== null ? Number(r.weight_kg) : null,
+      reps: r.reps !== null ? Number(r.reps) : null,
+      distanceKm: r.distance_km !== null ? Number(r.distance_km) : null,
+      durationSeconds: r.duration_seconds !== null ? Number(r.duration_seconds) : null,
+      rpe: r.rpe !== null ? Number(r.rpe) : null,
+    });
+  }
+
+  const exList = Array.from(exMap.values()).map((ex) => {
+    let topLabel = "-";
+    if (ex.sets.length > 0) {
+      const first = ex.sets[0];
+      if (first.durationSeconds) {
+        const maxSec = Math.max(...ex.sets.map((s) => s.durationSeconds || 0));
+        topLabel = `${maxSec}s`;
+      } else if (first.distanceKm) {
+        const maxDist = Math.max(...ex.sets.map((s) => s.distanceKm || 0));
+        topLabel = `${maxDist} km`;
+      } else {
+        let best = ex.sets[0];
+        let maxSc = -1;
+        for (const s of ex.sets) {
+          const wt = s.weightKg ?? 0;
+          const rp = s.reps ?? 0;
+          const sc = wt > 0 ? wt * 100 + rp : rp;
+          if (sc > maxSc) {
+            maxSc = sc;
+            best = s;
+          }
+        }
+        if ((best.weightKg ?? 0) > 0) {
+          topLabel = `${best.weightKg} kg × ${best.reps}`;
+        } else if (best.reps) {
+          topLabel = `${best.reps} reps`;
+        }
+      }
+    }
+
+    return {
+      ...ex,
+      topSetLabel: topLabel,
+    };
+  });
+
+  return {
+    id: wId,
+    title: String(w.title),
+    startTime: String(w.start_time),
+    startTimestamp: Number(w.start_timestamp),
+    endTime: w.end_time ? String(w.end_time) : "",
+    durationSeconds: Number(w.duration_seconds) || 0,
+    description: w.description ? String(w.description) : "",
+    exercises: exList,
+  };
+}
+
 export async function clearDatabase() {
   const db = getDb();
   await ensureSchema(db);
