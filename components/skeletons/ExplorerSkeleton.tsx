@@ -4,7 +4,7 @@ import React from "react";
 
 export function ExplorerSidebarSkeleton() {
   return (
-    <div className="flex flex-col gap-3 lg:sticky lg:top-[84px] lg:h-[calc(100vh-6rem)] min-h-0">
+    <div className="flex flex-col gap-3 lg:sticky lg:top-[84px] lg:h-[calc(100vh-7.25rem)] min-h-0">
       {/* Top Controls Skeleton */}
       <div className="shrink-0 flex flex-col gap-2.5">
         {/* Search Input Skeleton */}
@@ -69,7 +69,7 @@ export function ExplorerSidebarSkeleton() {
 
 export function ExplorerDetailSkeleton() {
   return (
-    <div className="flex flex-col gap-3.5 lg:gap-4 lg:min-h-[calc(100vh-6rem)] animate-in fade-in duration-150">
+    <div className="flex flex-col gap-3.5 lg:gap-4 lg:min-h-[calc(100vh-7.25rem)] animate-in fade-in duration-150">
       {/* HERO STAGE: 3D Visualizer & Profile Card Skeleton */}
       <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 sm:p-5 shadow-xl flex flex-col lg:flex-row items-stretch gap-4 sm:gap-5 backdrop-blur-md">
         {/* Left: 3D Visualizer Canvas Skeleton */}

@@ -238,7 +238,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 py-3 lg:py-4">
       {/* Left Sidebar: Exercise List */}
-      <div className="lg:col-span-4 xl:col-span-4 flex flex-col gap-3 lg:sticky lg:top-[84px] lg:h-[calc(100vh-6rem)] min-h-0">
+      <div className="lg:col-span-4 xl:col-span-4 flex flex-col gap-3 lg:sticky lg:top-[84px] lg:h-[calc(100vh-7.25rem)] min-h-0">
         {/* Top pinned controls */}
         <div className="shrink-0 flex flex-col gap-2.5">
           {/* Search */}
@@ -424,8 +424,8 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
         ) : detailData && activeMedia ? (
           <>
 
-            {/* Above-the-fold Viewport Stage: Exercise Profile + Progression Chart fill the screen */}
-            <div className="flex flex-col gap-3.5 lg:gap-4 lg:min-h-[calc(100vh-6rem)]">
+            {/* Above-the-fold Viewport Stage: Exercise Profile + Progression Chart fill the screen with clean bottom margin */}
+            <div className="flex flex-col gap-3.5 lg:gap-4 lg:min-h-[calc(100vh-7.25rem)]">
               {/* HERO STAGE: Anatomical Visualizer & Exercise Profile */}
               <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 sm:p-5 shadow-xl flex flex-col lg:flex-row items-stretch gap-4 sm:gap-5 backdrop-blur-md">
                 {/* 3D Animation Showcase (Prominent and Impressive) */}
