@@ -54,6 +54,7 @@ export interface ExerciseSessionHistory {
     secondaryValue?: number;
     label: string;
     isPR: boolean;
+    isSeasonPR?: boolean;
     isAllTimePR?: boolean;
   };
 }
@@ -65,6 +66,7 @@ export interface ChartPoint {
   secondaryValue?: number;
   label: string;
   isPR: boolean;
+  isSeasonPR?: boolean;
   isAllTimePR?: boolean;
   workoutTitle: string;
   workoutId: string;
@@ -86,14 +88,17 @@ export interface ExerciseDetailData {
       value: number;
       label: string;
       date: string;
+      workoutId?: string;
     } | null;
     seasonBest?: {
       value: number;
       label: string;
       date: string;
+      workoutId?: string;
     } | null;
     estimated1RM: number | null;
     allTimeEstimated1RM?: number | null;
+    allTimeMaxAvg1RM?: number | null;
     activeSeason?: {
       id: string;
       name: string;
@@ -565,21 +570,25 @@ export async function getExerciseDetail(
   );
 
   // 1. Calculate All-Time Best Record across ALL workouts
-  let allTimeBestRecord: { value: number; label: string; date: string } | null = null;
+  let allTimeBestRecord: { value: number; label: string; date: string; workoutId: string } | null = null;
+  let allTimeBestScore = -999999;
   let allTimeMaxEst1RM = 0;
-  let allTimeRunningBest = -1;
+  let allTimeMaxAvg1RM = 0;
 
   for (const w of chronologicalWorkouts) {
     let topVal = 0;
     let est1RM: number | undefined = undefined;
     let label = "";
+    let score = -999999;
 
     if (metricType === "seconds") {
       topVal = Math.max(...w.sets.map((s) => s.durationSeconds || 0));
       label = `${topVal}s`;
+      score = topVal;
     } else if (metricType === "cardio") {
       topVal = Math.max(...w.sets.map((s) => s.distanceKm || 0));
       label = `${topVal} km`;
+      score = topVal;
     } else if (metricType === "weighted_bodyweight") {
       let top = w.sets[0];
       let bestScore = -999999;
@@ -592,18 +601,20 @@ export async function getExerciseDetail(
           top = s;
         }
       }
-      topVal = top.weightKg ?? 0;
+      topVal = top?.weightKg ?? 0;
+      score = bestScore;
       if (topVal > 0) {
-        label = `+${topVal} kg × ${top.reps}`;
-        if (top.reps) est1RM = calculate1RM(topVal, top.reps);
+        label = `+${topVal} kg × ${top?.reps ?? 0}`;
+        if (top?.reps) est1RM = calculate1RM(topVal, top.reps);
       } else if (topVal < 0) {
-        label = `${topVal} kg × ${top.reps}`;
+        label = `${topVal} kg × ${top?.reps ?? 0}`;
       } else {
-        label = `BW × ${top.reps}`;
+        label = `BW × ${top?.reps ?? 0}`;
       }
     } else if (metricType === "bodyweight_reps") {
       topVal = Math.max(...w.sets.map((s) => s.reps || 0));
       label = `${topVal} reps`;
+      score = topVal;
     } else {
       let top = w.sets[0];
       let bestScore = -1;
@@ -616,9 +627,10 @@ export async function getExerciseDetail(
           top = s;
         }
       }
-      topVal = top.weightKg || 0;
-      label = `${topVal} kg × ${top.reps}`;
-      if (topVal > 0 && top.reps) {
+      topVal = top?.weightKg || 0;
+      score = bestScore;
+      label = `${topVal} kg × ${top?.reps ?? 0}`;
+      if (topVal > 0 && top?.reps) {
         est1RM = calculate1RM(topVal, top.reps);
       }
     }
@@ -627,12 +639,32 @@ export async function getExerciseDetail(
       allTimeMaxEst1RM = est1RM;
     }
 
-    if (topVal > allTimeRunningBest && topVal > 0) {
-      allTimeRunningBest = topVal;
+    const workingSets = w.sets.filter((s) => s.setType !== "warmup");
+    const setsToEvaluate = workingSets.length > 0 ? workingSets : w.sets;
+    const set1RMs: number[] = [];
+    for (const s of setsToEvaluate) {
+      const wt = Number(s.weightKg) || 0;
+      const rp = Number(s.reps) || 0;
+      if (wt > 0 && rp > 0) {
+        const sEst = calculate1RM(wt, rp);
+        if (sEst > 0) set1RMs.push(sEst);
+      }
+    }
+    const avg1RM = set1RMs.length > 0
+      ? Number((set1RMs.reduce((sum, val) => sum + val, 0) / set1RMs.length).toFixed(1))
+      : (est1RM ? Number(est1RM.toFixed(1)) : undefined);
+
+    if (avg1RM && avg1RM > allTimeMaxAvg1RM) {
+      allTimeMaxAvg1RM = avg1RM;
+    }
+
+    if (score > allTimeBestScore && (topVal > 0 || score > 0)) {
+      allTimeBestScore = score;
       allTimeBestRecord = {
         value: topVal,
         label,
         date: w.startTime,
+        workoutId: w.workoutId,
       };
     }
   }
@@ -654,21 +686,24 @@ export async function getExerciseDetail(
   const chartPoints: ChartPoint[] = [];
   const sessions: ExerciseSessionHistory[] = [];
 
-  let seasonRunningBestValue = -1;
-  let seasonBestRecord: { value: number; label: string; date: string } | null = null;
+  let seasonRunningBestScore = -999999;
+  let seasonBestRecord: { value: number; label: string; date: string; workoutId: string } | null = null;
   let seasonMaxEst1RM = 0;
 
   for (const w of activeWorkouts) {
     let topVal = 0;
     let est1RM: number | undefined = undefined;
     let label = "";
+    let score = -999999;
 
     if (metricType === "seconds") {
       topVal = Math.max(...w.sets.map((s) => s.durationSeconds || 0));
       label = `${topVal}s`;
+      score = topVal;
     } else if (metricType === "cardio") {
       topVal = Math.max(...w.sets.map((s) => s.distanceKm || 0));
       label = `${topVal} km`;
+      score = topVal;
     } else if (metricType === "weighted_bodyweight") {
       let top = w.sets[0];
       let bestScore = -999999;
@@ -681,18 +716,20 @@ export async function getExerciseDetail(
           top = s;
         }
       }
-      topVal = top.weightKg ?? 0;
+      topVal = top?.weightKg ?? 0;
+      score = bestScore;
       if (topVal > 0) {
-        label = `+${topVal} kg × ${top.reps}`;
-        if (top.reps) est1RM = calculate1RM(topVal, top.reps);
+        label = `+${topVal} kg × ${top?.reps ?? 0}`;
+        if (top?.reps) est1RM = calculate1RM(topVal, top.reps);
       } else if (topVal < 0) {
-        label = `${topVal} kg × ${top.reps}`;
+        label = `${topVal} kg × ${top?.reps ?? 0}`;
       } else {
-        label = `BW × ${top.reps}`;
+        label = `BW × ${top?.reps ?? 0}`;
       }
     } else if (metricType === "bodyweight_reps") {
       topVal = Math.max(...w.sets.map((s) => s.reps || 0));
       label = `${topVal} reps`;
+      score = topVal;
     } else {
       let top = w.sets[0];
       let bestScore = -1;
@@ -705,9 +742,10 @@ export async function getExerciseDetail(
           top = s;
         }
       }
-      topVal = top.weightKg || 0;
-      label = `${topVal} kg × ${top.reps}`;
-      if (topVal > 0 && top.reps) {
+      topVal = top?.weightKg || 0;
+      score = bestScore;
+      label = `${topVal} kg × ${top?.reps ?? 0}`;
+      if (topVal > 0 && top?.reps) {
         est1RM = calculate1RM(topVal, top.reps);
       }
     }
@@ -716,17 +754,20 @@ export async function getExerciseDetail(
       seasonMaxEst1RM = est1RM;
     }
 
-    const isPR = topVal > seasonRunningBestValue && topVal > 0;
+    const isPR = score > seasonRunningBestScore && (topVal > 0 || score > 0);
     if (isPR) {
-      seasonRunningBestValue = topVal;
+      seasonRunningBestScore = score;
       seasonBestRecord = {
         value: topVal,
         label,
         date: w.startTime,
+        workoutId: w.workoutId,
       };
     }
 
-    const isAllTimePR = allTimeBestRecord ? (topVal >= allTimeBestRecord.value && topVal > 0) : false;
+    const isAllTimePR = allTimeBestRecord
+      ? (w.workoutId === allTimeBestRecord.workoutId || (allTimeBestScore > 0 && score >= allTimeBestScore))
+      : false;
 
     // Calculate Average Reps, Volume, and Top Set details for this session
     const setsWithReps = w.sets.filter((s) => s.reps !== null && s.reps !== undefined && Number(s.reps) > 0);
@@ -818,6 +859,24 @@ export async function getExerciseDetail(
     });
   }
 
+  // Mark Season PR (if season is active and seasonBestRecord was achieved)
+  if (season && seasonBestRecord) {
+    for (const pt of chartPoints) {
+      if (pt.workoutId === seasonBestRecord.workoutId) {
+        if (!pt.isAllTimePR) {
+          pt.isSeasonPR = true;
+        }
+      }
+    }
+    for (const sess of sessions) {
+      if (sess.workoutId === seasonBestRecord.workoutId) {
+        if (!sess.topSet.isAllTimePR) {
+          sess.topSet.isSeasonPR = true;
+        }
+      }
+    }
+  }
+
   sessions.reverse();
 
   return {
@@ -829,6 +888,7 @@ export async function getExerciseDetail(
       seasonBest: season ? seasonBestRecord : allTimeBestRecord,
       estimated1RM: season ? (seasonMaxEst1RM > 0 ? seasonMaxEst1RM : null) : (allTimeMaxEst1RM > 0 ? allTimeMaxEst1RM : null),
       allTimeEstimated1RM: allTimeMaxEst1RM > 0 ? allTimeMaxEst1RM : null,
+      allTimeMaxAvg1RM: allTimeMaxAvg1RM > 0 ? allTimeMaxAvg1RM : null,
       activeSeason: season ? {
         id: season.id,
         name: season.name,
