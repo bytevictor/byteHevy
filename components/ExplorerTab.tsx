@@ -625,7 +625,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
 
                 {detailData.chartPoints.length === 0 ? (
                   <div className="py-16 text-center text-xs text-zinc-500">
-                    No hay sesiones de este ejercicio en la season activa ({activeSeason?.name}).
+                    No hay sesiones de este ejercicio en la {activeSeason?.endDate ? `season "${activeSeason?.name}"` : `season activa (${activeSeason?.name})`}.
                   </div>
                 ) : (
                   <ProgressionChart
