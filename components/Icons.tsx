@@ -1,5 +1,18 @@
 import React from "react";
 
+export function ByteHevyLogo({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="9" width="3.5" height="10" rx="1.5" fill="#71717a" />
+      <rect x="7" y="6" width="3.5" height="16" rx="1.5" fill="#f59e0b" />
+      <rect x="10.5" y="12.5" width="7" height="3" rx="1" fill="#e4e4e7" />
+      <rect x="17.5" y="6" width="3.5" height="16" rx="1.5" fill="#f59e0b" />
+      <rect x="22.5" y="9" width="3.5" height="10" rx="1.5" fill="#71717a" />
+      <circle cx="14" cy="14" r="1.5" fill="#ffffff" />
+    </svg>
+  );
+}
+
 export function DumbbellIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>

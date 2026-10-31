@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ByteHevy | Visualizador de Entrenamientos",
+  title: "byteHevy | Visualizador de Entrenamientos",
   description: "Visualizador técnico y minimalista de entrenamientos Hevy",
 };
 

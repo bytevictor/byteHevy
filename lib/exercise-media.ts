@@ -15,6 +15,7 @@ export const MUSCLE_LABELS: Record<MuscleGroup, string> = {
   cardio: "Cardiovascular",
 };
 
+const LOCAL_MEDIA_BASE = "/media/exercises";
 const CDN_BASE = "https://cdn.jsdelivr.net/gh/JahelCuadrado/ExerciseGymGifsDB@v1.1.0";
 
 // Catálogo anatómico 3D GymVisual / ExerciseDB exacto
@@ -26,7 +27,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "chest",
     secondaryMuscles: ["shoulders"],
     equipment: "Máquina de aperturas / Pec Deck",
-    gifUrl: `${CDN_BASE}/pectorals/lever-seated-fly.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/butterfly-pec-deck_anim.gif`,
   },
   {
     id: "chest-press-machine",
@@ -35,7 +36,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "chest",
     secondaryMuscles: ["triceps", "shoulders"],
     equipment: "Máquina de palanca guiada",
-    gifUrl: `${CDN_BASE}/pectorals/lever-chest-press.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/chest-press-machine_anim.gif`,
   },
   {
     id: "iso-lateral-chest-press",
@@ -44,7 +45,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "chest",
     secondaryMuscles: ["triceps", "shoulders"],
     equipment: "Máquina convergente de pecho",
-    gifUrl: `${CDN_BASE}/pectorals/lever-chest-press.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/iso-lateral-chest-press_anim.gif`,
   },
   {
     id: "push-up-weighted",
@@ -53,7 +54,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "chest",
     secondaryMuscles: ["triceps", "abs"],
     equipment: "Peso corporal / Disco lastre",
-    gifUrl: `${CDN_BASE}/pectorals/push-up.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/push-up-weighted_anim.gif`,
   },
   {
     id: "pull-up-weighted",
@@ -62,7 +63,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "lats",
     secondaryMuscles: ["biceps", "upper_back", "forearms"],
     equipment: "Barra de dominadas + Cinturón de lastre",
-    gifUrl: `${CDN_BASE}/lats/weighted-pull-up.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/pull-up-weighted_anim.gif`,
   },
   {
     id: "seated-cable-row",
@@ -71,7 +72,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "upper_back",
     secondaryMuscles: ["lats", "biceps"],
     equipment: "Polea baja con agarre barra",
-    gifUrl: `${CDN_BASE}/upper-back/cable-seated-row.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/seated-cable-row_anim.gif`,
   },
   {
     id: "seated-row-machine",
@@ -80,7 +81,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "upper_back",
     secondaryMuscles: ["lats", "biceps"],
     equipment: "Máquina de remo sentado con apoyo",
-    gifUrl: `${CDN_BASE}/upper-back/lever-seated-row.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/seated-row-machine_anim.gif`,
   },
   {
     id: "seated-shoulder-press",
@@ -89,7 +90,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "shoulders",
     secondaryMuscles: ["triceps", "upper_back"],
     equipment: "Máquina de hombro sentado",
-    gifUrl: `${CDN_BASE}/delts/lever-shoulder-press.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/seated-shoulder-press_anim.gif`,
   },
   {
     id: "triceps-pushdown",
@@ -98,7 +99,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "triceps",
     secondaryMuscles: ["forearms"],
     equipment: "Polea alta con barra o cuerda",
-    gifUrl: `${CDN_BASE}/triceps/cable-pushdown.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/triceps-pushdown_anim.gif`,
   },
   {
     id: "triceps-dip-weighted",
@@ -107,7 +108,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "triceps",
     secondaryMuscles: ["chest", "shoulders"],
     equipment: "Barras paralelas de fondos",
-    gifUrl: `${CDN_BASE}/pectorals/chest-dip.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/triceps-dip-weighted_anim.gif`,
   },
   {
     id: "triceps-dip",
@@ -116,7 +117,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "triceps",
     secondaryMuscles: ["chest", "shoulders"],
     equipment: "Barras paralelas",
-    gifUrl: `${CDN_BASE}/pectorals/chest-dip.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/triceps-dip_anim.gif`,
   },
   {
     id: "preacher-curl-dumbbell",
@@ -125,7 +126,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "biceps",
     secondaryMuscles: ["forearms"],
     equipment: "Banco Scott + Mancuerna",
-    gifUrl: `${CDN_BASE}/biceps/dumbbell-preacher-curl.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/preacher-curl-dumbbell_anim.gif`,
   },
   {
     id: "bicep-curl-dumbbell",
@@ -134,7 +135,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "biceps",
     secondaryMuscles: ["forearms"],
     equipment: "Mancuernas",
-    gifUrl: `${CDN_BASE}/biceps/dumbbell-biceps-curl.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/bicep-curl-dumbbell_anim.gif`,
   },
   {
     id: "cross-body-hammer-curl",
@@ -143,7 +144,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "biceps",
     secondaryMuscles: ["forearms"],
     equipment: "Mancuernas",
-    gifUrl: `${CDN_BASE}/biceps/dumbbell-cross-body-hammer-curl.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/cross-body-hammer-curl_anim.gif`,
   },
   {
     id: "sulek-curl",
@@ -152,7 +153,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "forearms",
     secondaryMuscles: ["biceps"],
     equipment: "Mancuerna apoyada en banco",
-    gifUrl: `${CDN_BASE}/biceps/dumbbell-seated-neutral-wrist-curl.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/sulek-curl_anim.gif`,
   },
   {
     id: "dead-hang",
@@ -161,7 +162,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "forearms",
     secondaryMuscles: ["lats", "shoulders"],
     equipment: "Barra fija de dominadas",
-    gifUrl: `${CDN_BASE}/lats/pull-up.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/dead-hang_anim.gif`,
   },
   {
     id: "front-lever-raise",
@@ -170,7 +171,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "lats",
     secondaryMuscles: ["abs", "forearms"],
     equipment: "Barra fija de calistenia",
-    gifUrl: `${CDN_BASE}/abs/front-lever.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/front-lever-raise_anim.gif`,
   },
   {
     id: "lying-leg-curl",
@@ -179,7 +180,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "hamstrings",
     secondaryMuscles: ["calves"],
     equipment: "Máquina de femoral tumbado",
-    gifUrl: `${CDN_BASE}/hamstrings/lever-lying-leg-curl.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/lying-leg-curl_anim.gif`,
   },
   {
     id: "leg-extension-machine",
@@ -188,7 +189,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "quads",
     secondaryMuscles: [],
     equipment: "Máquina de cuádriceps",
-    gifUrl: `${CDN_BASE}/quads/lever-leg-extension.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/leg-extension-machine_anim.gif`,
   },
   {
     id: "leg-press-horizontal",
@@ -197,7 +198,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "quads",
     secondaryMuscles: ["hamstrings", "calves"],
     equipment: "Prensa de discos / guiada",
-    gifUrl: `${CDN_BASE}/glutes/sled-45-leg-press.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/leg-press-horizontal_anim.gif`,
   },
   {
     id: "single-leg-press",
@@ -206,7 +207,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "quads",
     secondaryMuscles: ["hamstrings"],
     equipment: "Prensa de piernas unilateral",
-    gifUrl: `${CDN_BASE}/glutes/lever-horizontal-one-leg-press.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/single-leg-press_anim.gif`,
   },
   {
     id: "squat-bodyweight",
@@ -215,7 +216,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "quads",
     secondaryMuscles: ["hamstrings", "calves"],
     equipment: "Peso corporal",
-    gifUrl: `${CDN_BASE}/glutes/weighted-squat.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/squat-bodyweight_anim.gif`,
   },
   {
     id: "treadmill",
@@ -224,7 +225,7 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     primaryMuscle: "cardio",
     secondaryMuscles: ["calves", "quads"],
     equipment: "Cinta de correr",
-    gifUrl: `${CDN_BASE}/cardio/walking-on-incline-treadmill.gif`,
+    gifUrl: `${LOCAL_MEDIA_BASE}/treadmill_anim.gif`,
   },
 ];
 

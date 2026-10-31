@@ -61,31 +61,31 @@ export function JournalTab() {
   return (
     <div className="py-6 max-w-5xl mx-auto flex flex-col gap-6">
       {/* Header and Search */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-zinc-100 font-sans flex items-center gap-2">
+          <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2.5">
             <BookOpenIcon className="w-5 h-5 text-amber-400" />
             <span>Diario de Entrenamientos & Bitácora</span>
           </h2>
-          <p className="text-xs font-mono text-zinc-400 mt-1">
+          <p className="text-xs text-zinc-400 mt-1 font-normal">
             Histórico cronológico de cada sesión con tus reflexiones, frases y desglose completo.
           </p>
         </div>
 
         {/* Search */}
-        <div className="relative w-full sm:w-64">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+        <div className="relative w-full sm:w-72">
+          <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
           <input
             type="text"
             placeholder="Buscar por frase o ejercicio..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-xs font-mono text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-700"
+            className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl pl-10 pr-9 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 cursor-pointer"
             >
               <XIcon className="w-3.5 h-3.5" />
             </button>
@@ -95,125 +95,127 @@ export function JournalTab() {
 
       {/* Workouts Feed */}
       {loading ? (
-        <div className="h-48 flex items-center justify-center text-xs font-mono text-zinc-500">
+        <div className="h-48 flex items-center justify-center text-xs text-zinc-500">
           Cargando diario de entrenamientos...
         </div>
       ) : filteredWorkouts.length === 0 ? (
-        <div className="py-16 text-center border border-dashed border-zinc-800 rounded-xl bg-zinc-950/40 p-8 font-mono text-xs text-zinc-500">
-          No se encontraron entrenamientos que coincidan con la búsqueda.
+        <div className="py-16 text-center border border-dashed border-zinc-800 rounded-2xl p-8 bg-zinc-950/40">
+          <p className="text-xs text-zinc-500">
+            No se encontraron entrenamientos que coincidan con la búsqueda.
+          </p>
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          {filteredWorkouts.map((w) => {
-            const isExpanded = expandedIds.has(w.id);
+          {filteredWorkouts.map((wo) => {
+            const isExpanded = expandedIds.has(wo.id);
+
             return (
               <div
-                key={w.id}
-                className="p-5 rounded-xl border border-zinc-800/80 bg-zinc-900/40 hover:border-zinc-700/80 transition-all flex flex-col gap-3"
+                key={wo.id}
+                className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm p-5 flex flex-col gap-4 hover:border-zinc-750 transition-all"
               >
-                {/* Header row: Title, Date, Duration */}
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800/60 pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-400" />
-                    <h3 className="text-base font-bold text-zinc-100 font-sans tracking-tight">
-                      {w.title}
+                {/* Workout Header Info */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-zinc-800/60">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-mono tabular-nums text-amber-400 font-semibold bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg">
+                      {wo.startTime}
+                    </span>
+                    <h3 className="text-base font-bold text-zinc-100 tracking-tight">
+                      {wo.title}
                     </h3>
                   </div>
 
-                  <div className="flex items-center gap-3 text-xs font-mono text-zinc-400">
-                    <span>{w.startTime}</span>
-                    {w.durationSeconds > 0 && (
-                      <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700/60 text-zinc-300 text-[11px]">
-                        <ClockIcon className="w-3 h-3 text-zinc-400" />
-                        {formatDuration(w.durationSeconds)}
-                      </span>
-                    )}
-                  </div>
+                  {wo.durationSeconds && (
+                    <div className="flex items-center gap-1.5 text-xs font-mono text-zinc-400 self-start sm:self-auto">
+                      <ClockIcon className="w-3.5 h-3.5 text-zinc-500" />
+                      <span>{formatDuration(wo.durationSeconds)}</span>
+                    </div>
+                  )}
                 </div>
 
-                {/* Personal Diary Description (Hero block) */}
-                {w.description && (
-                  <div className="p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 text-amber-200/90 text-xs font-mono leading-relaxed whitespace-pre-wrap">
-                    "{w.description}"
+                {/* Unhinged Quote / Workout Notes Box */}
+                {wo.description && (
+                  <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 via-zinc-950/80 to-zinc-950/80 border border-amber-500/20 text-xs text-amber-200/90 italic leading-relaxed">
+                    "{wo.description}"
                   </div>
                 )}
 
                 {/* Exercises Summary Chips */}
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  {w.exercises.map((ex, idx) => (
-                    <span
+                <div className="flex flex-wrap gap-2">
+                  {wo.exercises.map((ex, idx) => (
+                    <div
                       key={idx}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-950/70 border border-zinc-800 text-[11px] font-mono text-zinc-300"
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80 text-xs"
                     >
-                      <span className="text-zinc-200 font-medium">{ex.name}</span>
-                      <span className="text-amber-400/90 text-[10px]">({ex.topSetLabel})</span>
-                    </span>
+                      <span className="font-semibold text-zinc-200">{ex.name}</span>
+                      <span className="text-zinc-600">•</span>
+                      <span className="font-mono tabular-nums text-amber-400 font-medium">
+                        {ex.topSetLabel}
+                      </span>
+                    </div>
                   ))}
                 </div>
 
-                {/* Toggle Detail Button */}
-                <button
-                  onClick={() => toggleExpand(w.id)}
-                  className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-500 hover:text-zinc-300 transition-colors pt-2 self-start cursor-pointer"
-                >
-                  {isExpanded ? (
-                    <>
-                      <ChevronDownIcon className="w-3.5 h-3.5" />
-                      <span>Ocultar desglose de series</span>
-                    </>
-                  ) : (
-                    <>
-                      <ChevronRightIcon className="w-3.5 h-3.5" />
-                      <span>Ver desglose de series y ajustes ({w.exercises.length} ejercicios)</span>
-                    </>
-                  )}
-                </button>
+                {/* Expand / Collapse Button */}
+                <div className="pt-1">
+                  <button
+                    onClick={() => toggleExpand(wo.id)}
+                    className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+                  >
+                    {isExpanded ? (
+                      <>
+                        <ChevronDownIcon className="w-4 h-4 text-amber-400" />
+                        <span>Ocultar desglose de series</span>
+                      </>
+                    ) : (
+                      <>
+                        <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
+                        <span>Ver desglose de series y ajustes</span>
+                      </>
+                    )}
+                  </button>
 
-                {/* Expanded Details Table */}
-                {isExpanded && (
-                  <div className="flex flex-col gap-3 pt-3 border-t border-zinc-800/80 animate-fade-in">
-                    {w.exercises.map((ex, exIdx) => (
-                      <div key={exIdx} className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-mono font-semibold text-zinc-200">
-                            {ex.name}
-                          </span>
-                          {ex.exerciseNotes && (
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/60">
-                              Ajuste: {ex.exerciseNotes}
+                  {/* Collapsible Sets Breakdown Table */}
+                  {isExpanded && (
+                    <div className="mt-4 flex flex-col gap-4 animate-fade-in">
+                      {wo.exercises.map((ex, i) => (
+                        <div
+                          key={i}
+                          className="p-3.5 rounded-xl border border-zinc-800/80 bg-zinc-950/60"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-zinc-200">
+                              {ex.name}
                             </span>
-                          )}
-                        </div>
+                            {ex.exerciseNotes && (
+                              <span className="text-[11px] text-zinc-400 font-normal">
+                                Ajuste: {ex.exerciseNotes}
+                              </span>
+                            )}
+                          </div>
 
-                        {/* Sets Mini Table */}
-                        <div className="border border-zinc-800/80 rounded overflow-hidden">
-                          <table className="w-full text-left text-[11px] font-mono">
-                            <thead>
-                              <tr className="bg-zinc-900/60 text-zinc-500 text-[10px] border-b border-zinc-800/60">
-                                <th className="py-1 px-2.5">Serie</th>
-                                <th className="py-1 px-2.5 text-right">Peso</th>
-                                <th className="py-1 px-2.5 text-right">Reps / Tiempo</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-zinc-800/40">
-                              {ex.sets.map((s) => (
-                                <tr key={s.id} className="text-zinc-300">
-                                  <td className="py-1 px-2.5 text-zinc-500">{s.setIndex + 1}</td>
-                                  <td className="py-1 px-2.5 text-right">
-                                    {s.weightKg !== null ? `${s.weightKg} kg` : "BW"}
-                                  </td>
-                                  <td className="py-1 px-2.5 text-right text-amber-400/90 font-medium">
-                                    {s.durationSeconds ? `${s.durationSeconds}s` : s.reps ? `${s.reps} reps` : s.distanceKm ? `${s.distanceKm} km` : "-"}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                          <div className="flex flex-wrap gap-2 text-xs font-mono tabular-nums">
+                            {ex.sets.map((s) => (
+                              <span
+                                key={s.id}
+                                className="px-2.5 py-1 rounded-lg border bg-zinc-900 border-zinc-800 text-zinc-300"
+                              >
+                                #{s.setIndex}:{" "}
+                                {s.weightKg !== null && s.reps !== null
+                                  ? `${s.weightKg}k × ${s.reps}`
+                                  : s.reps !== null
+                                  ? `${s.reps}r`
+                                  : s.durationSeconds !== null
+                                  ? `${s.durationSeconds}s`
+                                  : "—"}
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -222,4 +224,3 @@ export function JournalTab() {
     </div>
   );
 }
-

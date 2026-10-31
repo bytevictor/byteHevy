@@ -69,8 +69,8 @@ export default function Home() {
         )}
       </main>
 
-      <footer className="border-t border-zinc-900 py-6 text-center text-xs font-mono text-zinc-600">
-        BYTEHEVY · Visualizador de entrenamientos de precisión técnica
+      <footer className="border-t border-zinc-900/80 py-8 text-center text-xs text-zinc-500 font-normal">
+        <span className="font-semibold text-zinc-400">byteHevy</span> · Visualizador de entrenamientos y progresión
       </footer>
     </div>
   );
