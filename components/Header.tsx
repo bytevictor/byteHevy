@@ -23,7 +23,7 @@ export function Header({ activeTab, setActiveTab, stats }: HeaderProps) {
   ];
 
   return (
-    <header className="sticky top-0 z-40 border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-xl transition-colors">
+    <header className="sticky top-0 z-40 border-b border-zinc-800/60 bg-[var(--header-bg)] backdrop-blur-xl transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[72px] flex items-center justify-between gap-4">
         {/* Left: Brand */}
         <div className="flex items-center gap-3 shrink-0">
@@ -33,7 +33,7 @@ export function Header({ activeTab, setActiveTab, stats }: HeaderProps) {
           <div className="flex flex-col">
             <span className="text-lg font-bold tracking-tight leading-none">
               <span className="text-zinc-100">byte</span>
-              <span className="text-amber-400">Hevy</span>
+              <span className="text-accent-light">Hevy</span>
             </span>
             <span className="text-[11px] text-zinc-500 font-normal mt-0.5 tracking-normal">
               Visualizador de Entrenamientos
@@ -56,7 +56,7 @@ export function Header({ activeTab, setActiveTab, stats }: HeaderProps) {
                     : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? "text-amber-400" : "text-zinc-400"}`} />
+                <Icon className={`w-3.5 h-3.5 ${isActive ? "text-accent-light" : "text-zinc-400"}`} />
                 <span>{t.label}</span>
               </button>
             );

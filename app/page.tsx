@@ -19,8 +19,8 @@ export default function Home() {
   const loadStats = async () => {
     try {
       const [exRes, journalRes] = await Promise.all([
-        fetch("/api/exercises"),
-        fetch("/api/journal"),
+        fetch("/api/exercises", { cache: "no-store" }),
+        fetch("/api/journal", { cache: "no-store" }),
       ]);
       const exJson = await exRes.json();
       const journalJson = await journalRes.json();
@@ -41,7 +41,7 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-zinc-800 selection:text-amber-400">
+    <div className="min-h-screen bg-[var(--background)] text-zinc-100 flex flex-col font-sans transition-colors duration-300 selection:bg-zinc-800 selection:text-accent-light">
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
