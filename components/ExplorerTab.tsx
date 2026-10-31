@@ -236,94 +236,97 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
   const activeMedia = currentMedia || (detailData ? getExerciseMedia(detailData.exercise.name) : null);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 py-2.5 lg:py-3">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 py-3 lg:py-4">
       {/* Left Sidebar: Exercise List */}
-      <div className="lg:col-span-4 xl:col-span-4 flex flex-col gap-3.5 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)]">
-        {/* Search */}
-        <div className="relative">
-          <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-          <input
-            type="text"
-            placeholder="Buscar ejercicio..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-zinc-900/60 border border-zinc-800/80 rounded-xl pl-10 pr-9 py-2.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 cursor-pointer"
-            >
-              <XIcon className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-
-        {/* Category Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs scrollbar-none">
-          {[
-            { id: "all", label: "Todos" },
-            { id: "empuje", label: "Empuje" },
-            { id: "tiron", label: "Tirón" },
-            { id: "pierna", label: "Pierna" },
-            { id: "cardio", label: "Cardio" },
-          ].map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setCategoryFilter(cat.id)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${categoryFilter === cat.id
-                  ? "bg-zinc-800 text-zinc-100 border border-zinc-700 shadow-sm"
-                  : "bg-zinc-900/50 text-zinc-400 hover:text-zinc-200 border border-zinc-850 hover:bg-zinc-800/40"
-                }`}
-            >
-              {cat.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Season Filter Bar in Sidebar (if a season is active) */}
-        {activeSeason && seasonColor && (
-          <div
-            className="p-2 rounded-xl border flex items-center justify-between gap-2 text-[11px]"
-            style={{
-              backgroundColor: hexToRgba(seasonColor, 0.1),
-              borderColor: hexToRgba(seasonColor, 0.3),
-            }}
-          >
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span
-                className="w-1.5 h-1.5 rounded-full shrink-0"
-                style={{ backgroundColor: seasonColor }}
-              />
-              <span
-                className="font-semibold truncate"
-                style={{ color: seasonColor }}
+      <div className="lg:col-span-4 xl:col-span-4 flex flex-col gap-3 lg:sticky lg:top-[84px] lg:h-[calc(100vh-6rem)] min-h-0">
+        {/* Top pinned controls */}
+        <div className="shrink-0 flex flex-col gap-2.5">
+          {/* Search */}
+          <div className="relative">
+            <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+            <input
+              type="text"
+              placeholder="Buscar ejercicio..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-zinc-900/60 border border-zinc-800/80 rounded-xl pl-10 pr-9 py-2.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 cursor-pointer"
               >
-                {activeSeason.name}
-              </span>
-            </div>
-            <button
-              onClick={() => setShowAllSeasonExercises((prev) => !prev)}
-              className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 transition-colors cursor-pointer shrink-0"
-            >
-              {showAllSeasonExercises
-                ? `Mostrando todos (${exercises.length})`
-                : `Solo season (${inSeasonCount})`}
-            </button>
+                <XIcon className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
-        )}
 
-        {/* List of Exercises Header */}
-        <div className="flex items-center justify-between px-1 text-[11px] font-mono text-zinc-400">
-          <span className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent-light" />
-            <span>Por cantidad de sesiones</span>
-          </span>
-          <span className="text-zinc-500">{filteredExercises.length} ejercicios</span>
+          {/* Category Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs scrollbar-none">
+            {[
+              { id: "all", label: "Todos" },
+              { id: "empuje", label: "Empuje" },
+              { id: "tiron", label: "Tirón" },
+              { id: "pierna", label: "Pierna" },
+              { id: "cardio", label: "Cardio" },
+            ].map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setCategoryFilter(cat.id)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${categoryFilter === cat.id
+                    ? "bg-zinc-800 text-zinc-100 border border-zinc-700 shadow-sm"
+                    : "bg-zinc-900/50 text-zinc-400 hover:text-zinc-200 border border-zinc-850 hover:bg-zinc-800/40"
+                  }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Season Filter Bar in Sidebar (if a season is active) */}
+          {activeSeason && seasonColor && (
+            <div
+              className="p-2 rounded-xl border flex items-center justify-between gap-2 text-[11px]"
+              style={{
+                backgroundColor: hexToRgba(seasonColor, 0.1),
+                borderColor: hexToRgba(seasonColor, 0.3),
+              }}
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span
+                  className="w-1.5 h-1.5 rounded-full shrink-0"
+                  style={{ backgroundColor: seasonColor }}
+                />
+                <span
+                  className="font-semibold truncate"
+                  style={{ color: seasonColor }}
+                >
+                  {activeSeason.name}
+                </span>
+              </div>
+              <button
+                onClick={() => setShowAllSeasonExercises((prev) => !prev)}
+                className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 transition-colors cursor-pointer shrink-0"
+              >
+                {showAllSeasonExercises
+                  ? `Mostrando todos (${exercises.length})`
+                  : `Solo season (${inSeasonCount})`}
+              </button>
+            </div>
+          )}
+
+          {/* List of Exercises Header */}
+          <div className="flex items-center justify-between px-1 text-[11px] font-mono text-zinc-400">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent-light" />
+              <span>Por cantidad de sesiones</span>
+            </span>
+            <span className="text-zinc-500">{filteredExercises.length} ejercicios</span>
+          </div>
         </div>
 
-        {/* List of Exercises */}
-        <div className="flex flex-col gap-2 flex-1 max-h-[calc(100vh-270px)] overflow-y-auto pr-1">
+        {/* List of Exercises: fills 100% of remaining sidebar space down to viewport bottom */}
+        <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto pr-1 pb-4 scrollbar-thin">
           {filteredExercises.map((ex, idx) => {
             const isSelected = selectedId === ex.id;
             const media = getExerciseMedia(ex.name);
@@ -422,21 +425,21 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
           <>
 
             {/* Above-the-fold Viewport Stage: Exercise Profile + Progression Chart fill the screen */}
-            <div className="flex flex-col gap-3 lg:gap-3.5">
+            <div className="flex flex-col gap-3.5 lg:gap-4 lg:min-h-[calc(100vh-6rem)]">
               {/* HERO STAGE: Anatomical Visualizer & Exercise Profile */}
-              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-3 sm:p-3.5 lg:p-4 shadow-xl flex flex-col lg:flex-row items-stretch gap-4 backdrop-blur-md">
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 sm:p-5 shadow-xl flex flex-col lg:flex-row items-stretch gap-4 sm:gap-5 backdrop-blur-md">
                 {/* 3D Animation Showcase (Prominent and Impressive) */}
-                <div className="w-full lg:w-[320px] xl:w-[360px] shrink-0">
+                <div className="w-full lg:w-[350px] xl:w-[390px] shrink-0">
                   <ExerciseAnimationView
                     media={activeMedia}
-                    className="w-full h-[235px] sm:h-[250px] lg:h-[255px] rounded-xl shadow-lg"
+                    className="w-full h-[270px] sm:h-[285px] lg:h-[295px] rounded-xl shadow-lg"
                   />
                 </div>
 
                 {/* Right: Exercise Name, Metric, Category, Session Count & Anatomy */}
                 <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5 gap-2.5">
                   <div>
-                    <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md bg-accent/10 border border-accent/30 text-accent-light font-semibold">
                         {MUSCLE_LABELS[activeMedia.primaryMuscle] || activeMedia.primaryMuscle}
                       </span>
@@ -464,7 +467,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       )}
                     </div>
 
-                    <h1 className="text-lg sm:text-xl font-bold tracking-tight text-zinc-100 truncate" title={detailData.exercise.name}>
+                    <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-100 truncate" title={detailData.exercise.name}>
                       {detailData.exercise.name}
                     </h1>
 
@@ -478,10 +481,10 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
 
                   {/* PR & 1RM Hero Cards */}
                   {activeSeason && seasonColor ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {/* Season PR Card */}
                       <div
-                        className="p-2.5 rounded-xl border flex flex-col justify-between shadow-xs"
+                        className="p-3 rounded-xl border flex flex-col justify-between shadow-xs"
                         style={{
                           background: `linear-gradient(to bottom right, ${hexToRgba(seasonColor, 0.18)}, rgba(24, 24, 27, 0.95), rgba(24, 24, 27, 0.95))`,
                           borderColor: hexToRgba(seasonColor, 0.4),
@@ -513,7 +516,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       </div>
 
                       {/* ALL-TIME PR Card */}
-                      <div className="p-2.5 rounded-xl bg-gradient-to-br from-yellow-500/10 via-zinc-900 to-zinc-900 border border-yellow-500/30 flex flex-col justify-between shadow-xs">
+                      <div className="p-3 rounded-xl bg-gradient-to-br from-yellow-500/10 via-zinc-900 to-zinc-900 border border-yellow-500/30 flex flex-col justify-between shadow-xs">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] uppercase tracking-wider text-yellow-400 font-bold">
                             ALL-TIME PR
@@ -534,9 +537,9 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {/* PR Card (All-Time) */}
-                      <div className="p-2.5 rounded-xl bg-gradient-to-br from-accent/15 via-zinc-900 to-zinc-900 border border-accent/30 flex flex-col justify-between shadow-xs">
+                      <div className="p-3 rounded-xl bg-gradient-to-br from-accent/15 via-zinc-900 to-zinc-900 border border-accent/30 flex flex-col justify-between shadow-xs">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] uppercase tracking-wider text-accent-light font-bold">
                             Récord Personal (PR)
@@ -552,7 +555,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       </div>
 
                       {/* 1RM Estimado Card */}
-                      <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between shadow-xs">
+                      <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between shadow-xs">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
                             1RM Estimado
@@ -577,14 +580,14 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       Activación Anatómica
                     </span>
                     <div className="flex flex-wrap gap-1.5">
-                      <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/30 text-[10px] sm:text-[11px] text-red-300 font-semibold">
+                      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-500/10 border border-red-500/30 text-[11px] text-red-300 font-semibold">
                         <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
                         {MUSCLE_LABELS[activeMedia.primaryMuscle]} (Primario)
                       </span>
                       {activeMedia.secondaryMuscles.map((sec, i) => (
                         <span
                           key={i}
-                          className="px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-[10px] sm:text-[11px] text-zinc-400"
+                          className="px-2 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400"
                         >
                           {MUSCLE_LABELS[sec] || sec}
                         </span>
@@ -595,8 +598,8 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
               </div>
 
               {/* Progression Chart Card */}
-              <div className="p-3 sm:p-3.5 lg:p-4 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm shadow-xl">
-                <div className="flex items-center justify-between mb-2">
+              <div className="p-4 sm:p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm shadow-xl">
+                <div className="flex items-center justify-between mb-2.5">
                   <div>
                     <h3 className="text-sm font-semibold tracking-tight text-zinc-100 flex items-center gap-2">
                       <span>Curva de Progresión</span>
@@ -639,7 +642,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                     seasonColor={seasonColor || undefined}
                     allTimeBestLabel={detailData.exercise.allTimeBest?.label}
                     seasonBestLabel={detailData.exercise.seasonBest?.label}
-                    height={210}
+                    height={240}
                     onPointClick={(pt) => {
                       if (pt.workoutId) {
                         handleOpenWorkout(pt.workoutId);
@@ -651,7 +654,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
             </div>
 
             {/* Historical Sessions List: Placed cleanly below the viewport fold */}
-            <div className="flex flex-col gap-3 pt-4 border-t border-zinc-800/80">
+            <div className="flex flex-col gap-3 pt-6 border-t border-zinc-800/80">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs uppercase tracking-wider text-zinc-400 font-semibold flex items-center gap-2">
                   <CalendarIcon className="w-3.5 h-3.5 text-zinc-500" />

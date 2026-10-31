@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useId, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   MaximizeIcon,
   XIcon,
@@ -271,7 +272,7 @@ export function ProgressionChart({
   metricName = "Carga Top",
   secondaryMetricName = "1RM Est.",
   showSecondaryLine = false,
-  height = 210,
+  height = 240,
   mode: controlledMode,
   defaultMode = "session",
   onModeChange,
@@ -293,12 +294,14 @@ export function ProgressionChart({
   const [modalHoverIndex, setModalHoverIndex] = useState<number | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [windowHeight, setWindowHeight] = useState(700);
+  const [mounted, setMounted] = useState(false);
 
   const inlineGradientId = useId();
   const modalGradientId = useId();
 
   // Load preferences safely on client
   useEffect(() => {
+    setMounted(true);
     if (controlledMode === undefined) {
       try {
         const savedMode = localStorage.getItem("bytehevy_progression_mode");
@@ -332,16 +335,21 @@ export function ProgressionChart({
     }
   }, [controlledMode, controlledCurve]);
 
-  // Handle Escape key to close fullscreen
+  // Lock body scroll and handle Escape key to close fullscreen
   useEffect(() => {
     if (!isFullscreen) return;
+    document.body.style.overflow = "hidden";
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setIsFullscreen(false);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [isFullscreen]);
 
   const activeMode = controlledMode ?? internalMode;
@@ -1022,7 +1030,7 @@ export function ProgressionChart({
     );
   };
 
-  const fullscreenSvgHeight = Math.max(420, Math.min(580, windowHeight - 340));
+  const fullscreenSvgHeight = Math.max(380, Math.min(640, windowHeight - 320));
 
   return (
     <div className="relative w-full select-none">
@@ -1131,11 +1139,11 @@ export function ProgressionChart({
             <button
               type="button"
               onClick={() => setIsFullscreen(true)}
-              className="px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-950/90 text-zinc-400 hover:text-zinc-100 hover:border-zinc-700 transition-all cursor-pointer flex items-center gap-1.5 text-[11px] font-mono"
-              title="Ampliar gráfica a pantalla completa"
+              className="p-1.5 rounded-lg border border-zinc-800 bg-zinc-950/90 text-zinc-400 hover:text-accent-light hover:border-zinc-700 hover:bg-zinc-900 transition-all cursor-pointer flex items-center justify-center shrink-0"
+              title="Pantalla completa"
+              aria-label="Pantalla completa"
             >
               <MaximizeIcon className="w-3.5 h-3.5 text-accent-light" />
-              <span className="hidden sm:inline">Pantalla completa</span>
             </button>
           </div>
         </div>
@@ -1175,14 +1183,14 @@ export function ProgressionChart({
       {/* Inline Chart SVG */}
       {renderChartSvg(800, height, hoverIndex, setHoverIndex, inlineGradientId, false)}
 
-      {/* Fullscreen Modal Dialog */}
-      {isFullscreen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-5 bg-black/90 backdrop-blur-xl animate-fade-in text-zinc-100 select-none">
+      {/* Fullscreen Modal Dialog (Portaled to document.body to break free of any ancestor transforms or backdrop filters) */}
+      {mounted && isFullscreen && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-5 md:p-6 bg-black/85 backdrop-blur-md animate-fade-in text-zinc-100 select-none">
           {/* Backdrop click to close */}
           <div className="absolute inset-0" onClick={() => setIsFullscreen(false)} />
 
           {/* Modal Container */}
-          <div className="relative w-full max-w-7xl max-h-[96vh] flex flex-col rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl overflow-hidden z-10">
+          <div className="relative w-full max-w-7xl max-h-[94vh] flex flex-col rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl overflow-hidden z-10">
             {/* Header */}
             <div className="p-4 sm:p-5 border-b border-zinc-800/90 bg-zinc-900/70 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -1400,7 +1408,8 @@ export function ProgressionChart({
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
