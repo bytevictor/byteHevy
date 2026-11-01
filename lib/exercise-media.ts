@@ -162,14 +162,9 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
     aliases: [
       "alternating hammer curl",
       "dumbbell alternating hammer curl",
-      "dumbbell alternating bicep curl",
-      "bicep curl (dumbbell)",
-      "cross body hammer curl",
-      "bicep curl",
-      "hammer curl",
-      "biceps",
-      "curl mancuerna",
+      "curl martillo alterno",
       "curl martillo",
+      "hammer curl",
     ],
     primaryMuscle: "biceps",
     secondaryMuscles: ["forearms"],
@@ -180,7 +175,16 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
   {
     id: "bicep-curl-dumbbell",
     name: "Bicep Curl (Dumbbell)",
-    aliases: ["bicep curl", "curl mancuerna", "curl de bíceps"],
+    aliases: [
+      "bicep curl",
+      "bicep curl (dumbbell)",
+      "dumbbell bicep curl",
+      "curl mancuerna",
+      "curl de bíceps",
+      "curl de bicep",
+      "curl bíceps",
+      "curl bicep",
+    ],
     primaryMuscle: "biceps",
     secondaryMuscles: ["forearms"],
     equipment: "Mancuernas",
@@ -403,13 +407,28 @@ export function getExerciseMedia(exerciseName: string): ExerciseMedia {
   );
   if (exact) return exact;
 
-  // 2. Búsqueda por alias
-  const byAlias = EXERCISE_MEDIA_REGISTRY.find((e) =>
-    e.aliases.some((alias) => normalized.includes(alias) || alias.includes(normalized))
+  // 2. Búsqueda por alias exacto (ej. "incline bench press" coincide con el inclinado, no con el plano)
+  const exactAlias = EXERCISE_MEDIA_REGISTRY.find((e) =>
+    e.aliases.some((alias) => alias.toLowerCase() === normalized)
+  );
+  if (exactAlias) return exactAlias;
+
+  // 3. Búsqueda por contención ordenada por mayor especificidad (alias más largos primero)
+  const sortedBySpecificity = [...EXERCISE_MEDIA_REGISTRY].sort((a, b) => {
+    const maxA = Math.max(...a.aliases.map((al) => al.length));
+    const maxB = Math.max(...b.aliases.map((al) => al.length));
+    return maxB - maxA;
+  });
+
+  const byAlias = sortedBySpecificity.find((e) =>
+    e.aliases.some((alias) => {
+      const aLower = alias.toLowerCase();
+      return normalized.includes(aLower) || aLower.includes(normalized);
+    })
   );
   if (byAlias) return byAlias;
 
-  // 3. Deducción heurística de músculo principal (soporta términos en inglés y español)
+  // 4. Deducción heurística de músculo principal (soporta términos en inglés y español)
   let primary: MuscleGroup = "chest";
 
   if (
@@ -442,6 +461,7 @@ export function getExerciseMedia(exerciseName: string): ExerciseMedia {
     normalized.includes("jalon") ||
     normalized.includes("jalón") ||
     normalized.includes("pulldown") ||
+    normalized.includes("chest pull") ||
     normalized.includes("dominada") ||
     normalized.includes("pull up") ||
     normalized.includes("pull-up") ||

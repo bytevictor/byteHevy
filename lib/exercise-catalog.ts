@@ -77,8 +77,10 @@ const SPANISH_SYNONYMS: Record<string, string[]> = {
   pecho: ["chest", "pectoral", "press", "bench", "fly"],
   pectoral: ["chest", "pectoral"],
   banca: ["bench", "press"],
-  espalda: ["back", "lat", "row", "pull"],
-  dorsal: ["lat", "lats", "pulldown", "row"],
+  espalda: ["back", "lat", "row", "pull", "chest pull"],
+  dorsal: ["lat", "lats", "pulldown", "row", "chest pull"],
+  jalon: ["chest pull", "lat pulldown", "pulldown"],
+  "jalón": ["chest pull", "lat pulldown", "pulldown"],
   remo: ["row", "cable", "seated"],
   dominada: ["pull-up", "pull up", "chin-up", "chin up"],
   hombro: ["shoulder", "delt", "press", "raise"],
@@ -141,6 +143,11 @@ export function searchCatalog(
     translation.englishQuery.split(/\s+/).forEach((w) => {
       if (w.length > 2) expandedTerms.add(w);
     });
+    // Si la traducción es "chest pull", buscar también "lat pulldown"
+    if (translation.englishQuery === "chest pull") {
+      expandedTerms.add("lat pulldown");
+      expandedTerms.add("pulldown");
+    }
   }
 
   for (const word of originalWords) {
@@ -281,8 +288,8 @@ export function detectEquipmentFromTitle(title: string): string {
 
 /**
  * Resuelve multimedia anatómica buscando en inglés en el catálogo de 1,323 ejercicios GymVisual.
- * Si no está en el registro local, traduce el nombre a inglés, busca en el manifiesto
- * y si no encuentra coincidencia estricta, asigna el GIF del grupo muscular correspondiente (NUNCA press de pecho universal).
+ * Traduce el nombre del ejercicio a inglés estándar sin forzar prefijos innecesarios (a secas).
+ * Si no encuentra coincidencia estricta, asigna el GIF del grupo muscular correspondiente (NUNCA press de pecho universal).
  */
 export function resolveExerciseMediaFromCatalog(
   exerciseName: string,
@@ -290,7 +297,7 @@ export function resolveExerciseMediaFromCatalog(
 ): ExerciseMedia {
   const normalized = exerciseName.toLowerCase().trim();
 
-  // 1. Comprobar primero registro estático por nombre exacto o alias
+  // 1. Comprobar primero registro estático por nombre exacto
   const exact = EXERCISE_MEDIA_REGISTRY.find(
     (e) => e.name.toLowerCase() === normalized
   );
@@ -298,22 +305,57 @@ export function resolveExerciseMediaFromCatalog(
     return { ...exact };
   }
 
-  const byAlias = EXERCISE_MEDIA_REGISTRY.find((e) =>
-    e.aliases.some((alias) => normalized.includes(alias) || alias.includes(normalized))
+  // 2. Coincidencia exacta por alias (ej. "incline bench press" va al inclinado)
+  const exactAlias = EXERCISE_MEDIA_REGISTRY.find((e) =>
+    e.aliases.some((alias) => alias.toLowerCase() === normalized)
+  );
+  if (exactAlias) {
+    return { ...exactAlias, name: exerciseName };
+  }
+
+  // 3. Traducir el nombre a inglés gym estándar a secas
+  const translation = translateExerciseNameToEnglish(exerciseName);
+  const englishQuery = translation.englishQuery.toLowerCase().trim();
+  const detectedMuscle = translation.detectedMuscle || preferredMuscle;
+
+  // 4. Coincidencia exacta con la traducción en inglés
+  const exactTranslated = EXERCISE_MEDIA_REGISTRY.find(
+    (e) =>
+      e.name.toLowerCase() === englishQuery ||
+      e.aliases.some((alias) => alias.toLowerCase() === englishQuery)
+  );
+  if (exactTranslated) {
+    return { ...exactTranslated, name: exerciseName };
+  }
+
+  // 5. Coincidencia por contención ordenada por mayor especificidad
+  const sortedBySpecificity = [...EXERCISE_MEDIA_REGISTRY].sort((a, b) => {
+    const maxA = Math.max(...a.aliases.map((al) => al.length));
+    const maxB = Math.max(...b.aliases.map((al) => al.length));
+    return maxB - maxA;
+  });
+
+  const byAlias = sortedBySpecificity.find((e) =>
+    e.aliases.some((alias) => {
+      const aLower = alias.toLowerCase();
+      return normalized.includes(aLower) || englishQuery.includes(aLower);
+    })
   );
   if (byAlias) {
     return { ...byAlias, name: exerciseName };
   }
 
-  // 2. Traducir el nombre a inglés gym estándar
-  const translation = translateExerciseNameToEnglish(exerciseName);
-  const englishQuery = translation.englishQuery.toLowerCase().trim();
-  const detectedMuscle = translation.detectedMuscle || preferredMuscle;
-
   // 3. Buscar en el catálogo GymVisual (1,323 ejercicios)
   const manifest = getManifest();
   if (manifest.length > 0) {
-    const qWords = englishQuery.split(/[\s-]+/).filter((w) => w.length > 2);
+    const cleanQ = englishQuery.replace(/-/g, " ");
+    const qWords = cleanQ.split(/\s+/).filter((w) => w.length > 2);
+
+    // Caso específico para "Chest pull" (Jalón al pecho): en el catálogo anatómico es el pulldown al pecho para dorsales
+    const searchTerms =
+      cleanQ === "chest pull"
+        ? ["cable lat pulldown", "lat pulldown", "cable pulldown", "chest pull"]
+        : [cleanQ];
 
     const scored = manifest
       .map((item) => {
@@ -324,31 +366,78 @@ export function resolveExerciseMediaFromCatalog(
 
         // Bonificación de categoría si coincide con el músculo detectado
         if (detectedMuscle && itemMuscle === detectedMuscle) {
-          score += 100;
+          score += 160;
         }
 
-        // Coincidencia exacta o por prefijo
-        if (titleLower === englishQuery) {
-          score += 600;
-        } else if (titleLower.startsWith(englishQuery)) {
-          score += 300;
-        } else if (titleLower.includes(englishQuery)) {
-          score += 180;
+        // Coincidencia exacta de frase
+        for (const term of searchTerms) {
+          if (titleLower === term) {
+            score += 800;
+          } else if (
+            titleLower === `barbell ${term}` ||
+            titleLower === `dumbbell ${term}` ||
+            titleLower === `cable ${term}` ||
+            titleLower === `lever ${term}`
+          ) {
+            score += 450;
+          } else if (titleLower.startsWith(term)) {
+            score += 320;
+          } else if (titleLower.includes(term)) {
+            score += 200;
+          }
         }
 
-        // Palabras clave
+        // Palabras clave individuales con coincidencia de palabra completa
+        let matchedWordCount = 0;
         for (const w of qWords) {
-          if (titleLower.includes(w)) score += 60;
-          if (filenameLower.includes(w)) score += 30;
+          const reg = new RegExp(`\\b${w}\\b`, "i");
+          if (reg.test(titleLower)) {
+            score += 80;
+            matchedWordCount++;
+          } else if (titleLower.includes(w)) {
+            score += 40;
+            matchedWordCount++;
+          } else if (filenameLower.includes(w)) {
+            score += 20;
+          }
         }
 
-        // Bonificación de equipamiento si coincide
+        if (qWords.length > 0 && matchedWordCount === qWords.length) {
+          score += 120;
+        }
+
+        // Penalizar variaciones con equipamiento secundario si el usuario no lo pidió
+        const isWeirdEquipment =
+          titleLower.includes("band") ||
+          titleLower.includes("towel") ||
+          titleLower.includes("exercise ball") ||
+          titleLower.includes("stability ball") ||
+          titleLower.includes("bosu") ||
+          titleLower.includes("archer") ||
+          titleLower.includes("potty") ||
+          titleLower.includes("assisted");
+
+        if (
+          isWeirdEquipment &&
+          !cleanQ.includes("band") &&
+          !cleanQ.includes("ball") &&
+          !cleanQ.includes("towel") &&
+          !cleanQ.includes("assisted")
+        ) {
+          score -= 300;
+        }
+
+        // Bonificación de equipamiento si coincide con el detectado
         if (translation.detectedEquipment) {
           const eqLower = translation.detectedEquipment.toLowerCase();
-          if (eqLower.includes("mancuerna") && titleLower.includes("dumbbell")) score += 50;
-          if (eqLower.includes("barra") && titleLower.includes("barbell")) score += 50;
-          if (eqLower.includes("polea") && titleLower.includes("cable")) score += 50;
-          if (eqLower.includes("máquina") && (titleLower.includes("lever") || titleLower.includes("machine") || titleLower.includes("sled"))) score += 50;
+          if (eqLower.includes("mancuerna") && titleLower.includes("dumbbell")) score += 60;
+          if (eqLower.includes("barra") && titleLower.includes("barbell")) score += 60;
+          if (eqLower.includes("polea") && titleLower.includes("cable")) score += 60;
+          if (
+            eqLower.includes("máquina") &&
+            (titleLower.includes("lever") || titleLower.includes("machine") || titleLower.includes("sled"))
+          )
+            score += 60;
         }
 
         return { item, score };
@@ -364,7 +453,7 @@ export function resolveExerciseMediaFromCatalog(
         id: `catalog-${best.filename.replace(".gif", "").replace(/[^a-z0-9_-]/g, "_")}`,
         name: exerciseName,
         aliases: [best.title, englishQuery],
-        primaryMuscle,
+        primaryMuscle: detectedMuscle || primaryMuscle,
         secondaryMuscles: [],
         equipment: translation.detectedEquipment || detectEquipmentFromTitle(best.title),
         gifUrl: best.cdnUrl,
