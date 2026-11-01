@@ -404,7 +404,7 @@ export function GoalsTab() {
                             <CrownIcon className="w-3 h-3 text-amber-400 shrink-0" />
                             <span>Récord Histórico</span>
                           </span>
-                          <div className="flex items-center">
+                          <div className="flex items-center min-h-[18px]">
                             {goal.allTimeReached ? (
                               isCompleted ? (
                                 <span className="inline-flex items-center gap-1 text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/35 text-emerald-400">
@@ -420,11 +420,7 @@ export function GoalsTab() {
                                   <span>Recuperar</span>
                                 </span>
                               )
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[9px] font-mono text-zinc-500 px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">
-                                <span>No conseguido</span>
-                              </span>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                         <div className="mt-1">
