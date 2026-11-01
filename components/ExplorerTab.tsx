@@ -458,12 +458,12 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                   </div>
                   {idx < 3 && !searchQuery && categoryFilter === "all" && (
                     <span
-                      className={`absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center border shadow-md tabular-nums select-none ${
+                      className={`absolute -top-1.5 -left-1.5 h-4 min-w-4 px-1 rounded-full text-[8.5px] font-black flex items-center justify-center border shadow-md tabular-nums select-none tracking-tight ${
                         RANK_BADGE_STYLES[idx]?.bg || "bg-accent text-zinc-950 border-accent"
                       }`}
                       title={RANK_BADGE_STYLES[idx]?.title || `#${idx + 1}`}
                     >
-                      {idx + 1}
+                      #{idx + 1}
                     </span>
                   )}
                 </div>
