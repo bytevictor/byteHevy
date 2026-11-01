@@ -26,17 +26,17 @@ import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
 const RANK_BADGE_STYLES: Record<number, { bg: string; title: string }> = {
   0: {
     // 1º Puesto: Oro
-    bg: "bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-white border-amber-300 shadow-amber-500/30",
+    bg: "bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-500 text-zinc-950 border-yellow-200 shadow-amber-500/30",
     title: "1º puesto (Oro) en número de sesiones",
   },
   1: {
     // 2º Puesto: Plata
-    bg: "bg-gradient-to-br from-slate-100 via-zinc-200 to-slate-400 text-zinc-900 border-white shadow-slate-400/30",
+    bg: "bg-gradient-to-br from-slate-100 via-zinc-200 to-slate-300 text-zinc-950 border-white shadow-slate-400/30",
     title: "2º puesto (Plata) en número de sesiones",
   },
   2: {
     // 3º Puesto: Bronce
-    bg: "bg-gradient-to-br from-[#f09355] via-[#c66e2c] to-[#8d4416] text-white border-amber-300/60 shadow-orange-700/30",
+    bg: "bg-gradient-to-br from-[#f8a86b] via-[#e88944] to-[#c76826] text-zinc-950 border-orange-200/80 shadow-orange-700/30",
     title: "3º puesto (Bronce) en número de sesiones",
   },
 };
