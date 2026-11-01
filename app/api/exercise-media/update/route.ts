@@ -93,6 +93,7 @@ export async function POST(request: Request) {
       secondaryMuscles: [],
       equipment,
       gifUrl: finalGifUrl,
+      cdnUrl: gifUrl.startsWith("http") ? gifUrl : undefined,
       posterUrl: finalGifUrl,
       difficulty: "intermediate",
     };

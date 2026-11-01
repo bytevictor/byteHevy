@@ -15,7 +15,7 @@ function ensureMediaDir() {
 
 /**
  * Descarga y guarda localmente un archivo multimedia si es una URL remota.
- * Si ya fue descargado previamente, devuelve inmediatamente la ruta local (/media/exercises/...).
+ * Si ya fue descargado previamente y existe físicamente en disco, devuelve inmediatamente la ruta local (/media/exercises/...).
  */
 export async function cacheFileLocally(
   remoteUrl: string | undefined,
@@ -23,11 +23,6 @@ export async function cacheFileLocally(
   type: "video" | "gif" | "image"
 ): Promise<string | undefined> {
   if (!remoteUrl) return undefined;
-
-  // Si ya es una ruta local, no hacemos nada
-  if (remoteUrl.startsWith("/") || !remoteUrl.startsWith("http")) {
-    return remoteUrl;
-  }
 
   ensureMediaDir();
 
@@ -43,14 +38,24 @@ export async function cacheFileLocally(
   const localFilePath = path.join(MEDIA_DIR, filename);
   const localPublicUrl = `/media/exercises/${filename}`;
 
-  // Si el archivo ya existe en disco, devolver la URL local fija
+  // Si ya es una ruta local y el archivo ya existe físicamente en disco, no hay nada que descargar
+  if (remoteUrl.startsWith("/") || !remoteUrl.startsWith("http")) {
+    const directLocalPath = path.join(process.cwd(), "public", remoteUrl);
+    if (fs.existsSync(directLocalPath) && fs.statSync(directLocalPath).size > 0) {
+      return remoteUrl;
+    }
+    // Si es ruta local pero no existe en disco, no podemos descargar de una URL local sin origen remoto
+    return remoteUrl;
+  }
+
+  // Si el archivo ya existe en disco y tiene contenido válido (> 0 bytes), devolver la URL local fija
   if (fs.existsSync(localFilePath) && fs.statSync(localFilePath).size > 0) {
     return localPublicUrl;
   }
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000); // 12s timeout
+    const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
     const res = await fetch(remoteUrl, {
       signal: controller.signal,
@@ -67,7 +72,7 @@ export async function cacheFileLocally(
 
     const arrayBuffer = await res.arrayBuffer();
     fs.writeFileSync(localFilePath, Buffer.from(arrayBuffer));
-    console.log(`[MediaCache] Guardado localmente en LXC: ${localPublicUrl}`);
+    console.log(`[MediaCache] Guardado localmente en LXC: ${localPublicUrl} (${(arrayBuffer.byteLength / 1024).toFixed(1)} KB)`);
     return localPublicUrl;
   } catch (error) {
     console.warn(`[MediaCache] Error al descargar y guardar ${remoteUrl}:`, error);
@@ -76,22 +81,44 @@ export async function cacheFileLocally(
 }
 
 /**
- * Procesa un ExerciseMedia: descarga vídeo, gif o póster y los reemplaza por URLs locales.
+ * Procesa un ExerciseMedia: descarga vídeo, gif o póster a disco local y los reemplaza por URLs locales.
+ * En un contenedor LXC nuevo o limpio, si gifUrl apunta a un archivo local ausente, usa cdnUrl para descargarlo.
  */
 export async function localizeExerciseMedia(media: ExerciseMedia): Promise<ExerciseMedia> {
   const sanitizedId = media.id.toLowerCase().replace(/[^a-z0-9_-]/g, "_");
 
+  // Si gifUrl apunta a un archivo local que NO existe físicamente en disco (ej. contenedor LXC nuevo),
+  // y disponemos de cdnUrl o URL remota, usamos esa URL remota como origen para descargarlo.
+  let targetGifUrl = media.gifUrl;
+  if (targetGifUrl && targetGifUrl.startsWith("/")) {
+    const localPath = path.join(process.cwd(), "public", targetGifUrl);
+    if (!fs.existsSync(localPath) || fs.statSync(localPath).size === 0) {
+      if (media.cdnUrl) {
+        targetGifUrl = media.cdnUrl;
+      }
+    }
+  }
+
+  let targetPosterUrl = media.posterUrl;
+  if (targetPosterUrl && targetPosterUrl.startsWith("/")) {
+    const localPath = path.join(process.cwd(), "public", targetPosterUrl);
+    if (!fs.existsSync(localPath) || fs.statSync(localPath).size === 0) {
+      if (media.cdnUrl) {
+        targetPosterUrl = media.cdnUrl;
+      }
+    }
+  }
+
   const [localVideo, localGif, localPoster] = await Promise.all([
     cacheFileLocally(media.videoUrl, `${sanitizedId}_video`, "video"),
-    cacheFileLocally(media.gifUrl, `${sanitizedId}_anim`, "gif"),
-    cacheFileLocally(media.posterUrl, `${sanitizedId}_poster`, "image"),
+    cacheFileLocally(targetGifUrl || media.cdnUrl, `${sanitizedId}_anim`, "gif"),
+    cacheFileLocally(targetPosterUrl, `${sanitizedId}_poster`, "image"),
   ]);
 
   return {
     ...media,
     videoUrl: localVideo,
-    gifUrl: localGif,
-    posterUrl: localPoster,
+    gifUrl: localGif || targetGifUrl,
+    posterUrl: localPoster || targetPosterUrl,
   };
 }
-

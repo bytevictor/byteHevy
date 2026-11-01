@@ -1,6 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import { MuscleGroup } from "@/types/exercise-media";
+import { ExerciseMedia, MuscleGroup } from "@/types/exercise-media";
+import {
+  EXERCISE_MEDIA_REGISTRY,
+  MUSCLE_FALLBACK_GIFS,
+  CDN_BASE,
+} from "./exercise-media";
+import { translateExerciseNameToEnglish } from "./exercise-translator";
 
 export interface CatalogExerciseItem {
   id: string;
@@ -128,8 +134,15 @@ export function searchCatalog(
   // Desglosar palabras clave originales
   const originalWords = qClean.split(/\s+/).filter(Boolean);
 
-  // Expandir con sinónimos en inglés
+  // Expandir con traducción automática y sinónimos en inglés
   const expandedTerms = new Set<string>(originalWords);
+  const translation = translateExerciseNameToEnglish(qClean);
+  if (translation.englishQuery) {
+    translation.englishQuery.split(/\s+/).forEach((w) => {
+      if (w.length > 2) expandedTerms.add(w);
+    });
+  }
+
   for (const word of originalWords) {
     const normalizedWord = word.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const singularWord = normalizedWord.endsWith("es")
@@ -163,11 +176,11 @@ export function searchCatalog(
     let score = 0;
 
     // Coincidencia exacta de frase
-    if (titleLower === qClean) {
+    if (titleLower === qClean || titleLower === translation.englishQuery) {
       score += 500;
-    } else if (titleLower.startsWith(qClean)) {
+    } else if (titleLower.startsWith(qClean) || titleLower.startsWith(translation.englishQuery)) {
       score += 250;
-    } else if (titleLower.includes(qClean)) {
+    } else if (titleLower.includes(qClean) || titleLower.includes(translation.englishQuery)) {
       score += 150;
     }
 
@@ -183,7 +196,7 @@ export function searchCatalog(
       }
     }
 
-    // Coincidencias de sinónimos expandidos
+    // Coincidencias de sinónimos y traducción expandidos
     for (const term of expandedTerms) {
       if (!originalWords.includes(term)) {
         const regexTerm = new RegExp(`\\b${term}\\b`, "i");
@@ -264,4 +277,117 @@ export function detectEquipmentFromTitle(title: string): string {
     return "Peso Corporal";
   }
   return "Gimnasio";
+}
+
+/**
+ * Resuelve multimedia anatómica buscando en inglés en el catálogo de 1,323 ejercicios GymVisual.
+ * Si no está en el registro local, traduce el nombre a inglés, busca en el manifiesto
+ * y si no encuentra coincidencia estricta, asigna el GIF del grupo muscular correspondiente (NUNCA press de pecho universal).
+ */
+export function resolveExerciseMediaFromCatalog(
+  exerciseName: string,
+  preferredMuscle?: MuscleGroup
+): ExerciseMedia {
+  const normalized = exerciseName.toLowerCase().trim();
+
+  // 1. Comprobar primero registro estático por nombre exacto o alias
+  const exact = EXERCISE_MEDIA_REGISTRY.find(
+    (e) => e.name.toLowerCase() === normalized
+  );
+  if (exact) {
+    return { ...exact };
+  }
+
+  const byAlias = EXERCISE_MEDIA_REGISTRY.find((e) =>
+    e.aliases.some((alias) => normalized.includes(alias) || alias.includes(normalized))
+  );
+  if (byAlias) {
+    return { ...byAlias, name: exerciseName };
+  }
+
+  // 2. Traducir el nombre a inglés gym estándar
+  const translation = translateExerciseNameToEnglish(exerciseName);
+  const englishQuery = translation.englishQuery.toLowerCase().trim();
+  const detectedMuscle = translation.detectedMuscle || preferredMuscle;
+
+  // 3. Buscar en el catálogo GymVisual (1,323 ejercicios)
+  const manifest = getManifest();
+  if (manifest.length > 0) {
+    const qWords = englishQuery.split(/[\s-]+/).filter((w) => w.length > 2);
+
+    const scored = manifest
+      .map((item) => {
+        let score = 0;
+        const titleLower = item.title.toLowerCase();
+        const filenameLower = item.filename.toLowerCase();
+        const itemMuscle = mapCategoryToMuscleGroup(item.category);
+
+        // Bonificación de categoría si coincide con el músculo detectado
+        if (detectedMuscle && itemMuscle === detectedMuscle) {
+          score += 100;
+        }
+
+        // Coincidencia exacta o por prefijo
+        if (titleLower === englishQuery) {
+          score += 600;
+        } else if (titleLower.startsWith(englishQuery)) {
+          score += 300;
+        } else if (titleLower.includes(englishQuery)) {
+          score += 180;
+        }
+
+        // Palabras clave
+        for (const w of qWords) {
+          if (titleLower.includes(w)) score += 60;
+          if (filenameLower.includes(w)) score += 30;
+        }
+
+        // Bonificación de equipamiento si coincide
+        if (translation.detectedEquipment) {
+          const eqLower = translation.detectedEquipment.toLowerCase();
+          if (eqLower.includes("mancuerna") && titleLower.includes("dumbbell")) score += 50;
+          if (eqLower.includes("barra") && titleLower.includes("barbell")) score += 50;
+          if (eqLower.includes("polea") && titleLower.includes("cable")) score += 50;
+          if (eqLower.includes("máquina") && (titleLower.includes("lever") || titleLower.includes("machine") || titleLower.includes("sled"))) score += 50;
+        }
+
+        return { item, score };
+      })
+      .filter((s) => s.score >= 120)
+      .sort((a, b) => b.score - a.score);
+
+    if (scored.length > 0) {
+      const best = scored[0].item;
+      const primaryMuscle = mapCategoryToMuscleGroup(best.category);
+
+      return {
+        id: `catalog-${best.filename.replace(".gif", "").replace(/[^a-z0-9_-]/g, "_")}`,
+        name: exerciseName,
+        aliases: [best.title, englishQuery],
+        primaryMuscle,
+        secondaryMuscles: [],
+        equipment: translation.detectedEquipment || detectEquipmentFromTitle(best.title),
+        gifUrl: best.cdnUrl,
+        cdnUrl: best.cdnUrl,
+        posterUrl: best.cdnUrl,
+        difficulty: "intermediate",
+      };
+    }
+  }
+
+  // 4. Fallback inteligente por grupo muscular (NUNCA press de pecho universal)
+  const finalMuscle: MuscleGroup = detectedMuscle || "chest";
+  const fallbackCdn = MUSCLE_FALLBACK_GIFS[finalMuscle] || MUSCLE_FALLBACK_GIFS.chest;
+
+  return {
+    id: `fallback-${translation.cleanOriginal.replace(/[^a-z0-9_-]/g, "-")}`,
+    name: exerciseName,
+    aliases: [englishQuery],
+    primaryMuscle: finalMuscle,
+    secondaryMuscles: [],
+    equipment: translation.detectedEquipment || "Gimnasio",
+    gifUrl: fallbackCdn,
+    cdnUrl: fallbackCdn,
+    posterUrl: fallbackCdn,
+  };
 }

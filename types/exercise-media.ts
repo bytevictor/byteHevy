@@ -21,6 +21,7 @@ export interface ExerciseMedia {
   equipment: string;
   videoUrl?: string;   // MP4 / WebM continuo
   gifUrl?: string;     // Fallback animado
+  cdnUrl?: string;     // URL remota directa CDN jsDelivr / GymVisual
   posterUrl?: string;  // Imagen estática (primer frame / thumbnail)
   difficulty?: "beginner" | "intermediate" | "advanced";
 }

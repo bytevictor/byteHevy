@@ -288,7 +288,16 @@ export async function getCachedMediaMap(db: ReturnType<typeof getDb>): Promise<M
     for (const row of res.rows) {
       const key = String(row.exercise_name).toLowerCase().trim();
       try {
-        map.set(key, JSON.parse(String(row.data_json)));
+        const parsed = JSON.parse(String(row.data_json)) as ExerciseMedia;
+        const isBogusChestPress =
+          (parsed.gifUrl?.includes("chest-press") || parsed.gifUrl?.includes("lever-chest-press")) &&
+          parsed.primaryMuscle !== "chest" &&
+          !key.includes("chest") &&
+          !key.includes("pecho");
+
+        if (!isBogusChestPress) {
+          map.set(key, parsed);
+        }
       } catch {}
     }
   } catch (e) {

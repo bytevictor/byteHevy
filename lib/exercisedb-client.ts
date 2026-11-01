@@ -1,6 +1,9 @@
+import fs from "node:fs";
+import path from "node:path";
 import { ExerciseMedia, MuscleGroup } from "@/types/exercise-media";
 import { getDb, ensureSchema } from "./db";
-import { getExerciseMedia as getLocalFallbackMedia } from "./exercise-media";
+import { resolveExerciseMediaFromCatalog } from "./exercise-catalog";
+import { translateExerciseNameToEnglish } from "./exercise-translator";
 import { localizeExerciseMedia } from "./media-cache";
 
 // ExerciseDB API schema interface
@@ -38,38 +41,17 @@ export function mapExerciseDbTarget(target: string, bodyPart?: string): MuscleGr
 }
 
 /**
- * Normaliza nombres de Hevy a términos de búsqueda reconocidos por ExerciseDB:
- * Ej: "Chest Press (Machine)" -> "lever chest press" o "chest press"
- * "Pull Up (Weighted)" -> "pull up"
- * "Curl Antebrazo (Sulek Curl)" -> "wrist curl"
+ * Normaliza y traduce nombres de ejercicios (Español, Hevy, Jefit) a términos en inglés
+ * reconocidos por ExerciseDB y por el catálogo anatómico 3D.
  */
 export function normalizeExerciseNameForApi(name: string): string {
-  const lower = name.toLowerCase().trim();
-
-  if (lower.includes("chest press")) return "lever chest press";
-  if (lower.includes("pull up") || lower.includes("dominada")) return "pull-up";
-  if (lower.includes("cable row") || lower.includes("seated row")) return "cable seated row";
-  if (lower.includes("shoulder press")) return "lever shoulder press";
-  if (lower.includes("triceps pushdown") || lower.includes("triceps cable")) return "cable pushdown";
-  if (lower.includes("dead hang")) return "dead hang";
-  if (lower.includes("preacher curl")) return "dumbbell preacher curl";
-  if (lower.includes("bicep curl")) return "dumbbell bicep curl";
-  if (lower.includes("triceps dip") || lower.includes("dip")) return "chest dip";
-  if (lower.includes("leg press")) return "sled horizontal leg press";
-  if (lower.includes("leg extension")) return "lever leg extension";
-  if (lower.includes("leg curl")) return "lever lying leg curl";
-  if (lower.includes("sulek") || lower.includes("antebrazo")) return "dumbbell seated palms up wrist curl";
-  if (lower.includes("treadmill") || lower.includes("cinta")) return "running treadmill";
-  if (lower.includes("pec deck") || lower.includes("butterfly")) return "lever seated fly";
-  if (lower.includes("front lever")) return "front lever";
-  if (lower.includes("push up")) return "push-up";
-
-  // Quitar paréntesis típicos de Hevy: " (Machine)", " (Weighted)", " (Dumbbell)"
-  return lower.replace(/\s*\([^)]*\)/g, "").trim();
+  const translation = translateExerciseNameToEnglish(name);
+  return translation.englishQuery;
 }
 
 /**
- * Obtiene la información visual desde ExerciseDB API con persistencia local en SQLite.
+ * Obtiene la información visual desde ExerciseDB API o el catálogo GymVisual integrado
+ * con traducción en inglés y persistencia local en SQLite.
  */
 export async function fetchExerciseMediaFromApi(exerciseName: string): Promise<ExerciseMedia> {
   const db = getDb();
@@ -86,7 +68,7 @@ export async function fetchExerciseMediaFromApi(exerciseName: string): Promise<E
 
   const cacheKey = exerciseName.toLowerCase().trim();
 
-  // 2. Comprobar caché local
+  // 2. Comprobar caché local existente
   const cached = await db.execute({
     sql: "SELECT data_json FROM exercisedb_cache WHERE exercise_name = ?",
     args: [cacheKey],
@@ -94,21 +76,42 @@ export async function fetchExerciseMediaFromApi(exerciseName: string): Promise<E
 
   if (cached.rows.length > 0 && cached.rows[0].data_json) {
     try {
-      return JSON.parse(String(cached.rows[0].data_json)) as ExerciseMedia;
+      const data = JSON.parse(String(cached.rows[0].data_json)) as ExerciseMedia;
+
+      // Validar que no sea un chest press erróneo asignado por un bug anterior a ejercicios de otro músculo
+      const isBogusChestPress =
+        (data.gifUrl?.includes("chest-press") || data.gifUrl?.includes("lever-chest-press")) &&
+        data.primaryMuscle !== "chest" &&
+        !cacheKey.includes("chest") &&
+        !cacheKey.includes("pecho");
+
+      // Validar si apunta a un archivo local ausente en disco (típico en despliegue de LXC nuevo)
+      let fileMissing = false;
+      if (data.gifUrl?.startsWith("/media/exercises/")) {
+        const localPath = path.join(process.cwd(), "public", data.gifUrl);
+        if (!fs.existsSync(localPath) || fs.statSync(localPath).size === 0) {
+          fileMissing = true;
+        }
+      }
+
+      if (!isBogusChestPress && !fileMissing) {
+        return data;
+      }
+      console.log(`[ExerciseDbClient] Re-resolviendo multimedia para "${exerciseName}" (isBogusChestPress: ${isBogusChestPress}, fileMissing: ${fileMissing})`);
     } catch {
       // Si el JSON falla, continuar con fetch
     }
   }
 
-  // 3. Fallback si no hay API key configurada
+  // 3. Fallback / Modo offline si no hay API key de RapidAPI
   const apiKey = process.env.EXERCISEDB_API_KEY || process.env.RAPIDAPI_KEY;
   const apiHost = process.env.EXERCISEDB_API_HOST || "exercisedb.p.rapidapi.com";
   const baseUrl = process.env.EXERCISEDB_API_URL || `https://${apiHost}`;
 
   if (!apiKey) {
-    // Usar catálogo offline integrado y persistir sus archivos en local
-    const fallback = getLocalFallbackMedia(exerciseName);
-    const localized = await localizeExerciseMedia(fallback);
+    // Buscar en inglés en el catálogo offline de 1,323 GymVisual y guardar en SQLite y disco local
+    const catalogMedia = resolveExerciseMediaFromCatalog(exerciseName);
+    const localized = await localizeExerciseMedia(catalogMedia);
 
     await db.execute({
       sql: `INSERT OR REPLACE INTO exercisedb_cache (exercise_name, data_json, updated_at) 
@@ -119,7 +122,7 @@ export async function fetchExerciseMediaFromApi(exerciseName: string): Promise<E
     return localized;
   }
 
-  // 4. Consultar ExerciseDB API
+  // 4. Consultar ExerciseDB API usando el nombre traducido al inglés
   const queryTerm = normalizeExerciseNameForApi(exerciseName);
   try {
     const url = `${baseUrl}/exercises/name/${encodeURIComponent(queryTerm)}?limit=1`;
@@ -133,16 +136,26 @@ export async function fetchExerciseMediaFromApi(exerciseName: string): Promise<E
     });
 
     if (!response.ok) {
-      console.warn(`ExerciseDB API HTTP ${response.status} for "${queryTerm}", usando fallback`);
-      const fallback = getLocalFallbackMedia(exerciseName);
+      console.warn(`ExerciseDB API HTTP ${response.status} for "${queryTerm}", usando catálogo integrado`);
+      const fallback = resolveExerciseMediaFromCatalog(exerciseName);
       const localized = await localizeExerciseMedia(fallback);
+      await db.execute({
+        sql: `INSERT OR REPLACE INTO exercisedb_cache (exercise_name, data_json, updated_at) 
+              VALUES (?, ?, strftime('%s', 'now'))`,
+        args: [cacheKey, JSON.stringify(localized)],
+      });
       return localized;
     }
 
     const items: ExerciseDbItem[] = await response.json();
     if (!Array.isArray(items) || items.length === 0) {
-      const fallback = getLocalFallbackMedia(exerciseName);
+      const fallback = resolveExerciseMediaFromCatalog(exerciseName);
       const localized = await localizeExerciseMedia(fallback);
+      await db.execute({
+        sql: `INSERT OR REPLACE INTO exercisedb_cache (exercise_name, data_json, updated_at) 
+              VALUES (?, ?, strftime('%s', 'now'))`,
+        args: [cacheKey, JSON.stringify(localized)],
+      });
       return localized;
     }
 
@@ -160,6 +173,7 @@ export async function fetchExerciseMediaFromApi(exerciseName: string): Promise<E
       secondaryMuscles,
       equipment: item.equipment || "Gimnasio",
       gifUrl: item.gifUrl,
+      cdnUrl: item.gifUrl,
       videoUrl: item.videoUrl,
       posterUrl: item.gifUrl,
       difficulty: "intermediate",
@@ -168,7 +182,7 @@ export async function fetchExerciseMediaFromApi(exerciseName: string): Promise<E
     // 5. Descargar los ficheros (video/gif/poster) a public/media/exercises/
     const localized = await localizeExerciseMedia(mediaResult);
 
-    // 6. Guardar en SQLite caché para consultas futuras (0ms y 0 peticiones posteriores)
+    // 6. Guardar en SQLite caché para consultas futuras
     await db.execute({
       sql: `INSERT OR REPLACE INTO exercisedb_cache (exercise_name, data_json, updated_at) 
             VALUES (?, ?, strftime('%s', 'now'))`,
@@ -178,7 +192,13 @@ export async function fetchExerciseMediaFromApi(exerciseName: string): Promise<E
     return localized;
   } catch (error) {
     console.error(`Error al conectar con ExerciseDB API para "${exerciseName}":`, error);
-    const fallback = getLocalFallbackMedia(exerciseName);
-    return await localizeExerciseMedia(fallback);
+    const fallback = resolveExerciseMediaFromCatalog(exerciseName);
+    const localized = await localizeExerciseMedia(fallback);
+    await db.execute({
+      sql: `INSERT OR REPLACE INTO exercisedb_cache (exercise_name, data_json, updated_at) 
+            VALUES (?, ?, strftime('%s', 'now'))`,
+      args: [cacheKey, JSON.stringify(localized)],
+    });
+    return localized;
   }
 }
