@@ -22,6 +22,25 @@ import {
 import { useSeason } from "@/lib/season-context";
 import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
 
+// Estilos de medallas olímpicas (Oro, Plata y Bronce) para el Top 3 de ejercicios
+const RANK_BADGE_STYLES: Record<number, { bg: string; title: string }> = {
+  0: {
+    // 1º Puesto: Oro
+    bg: "bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-500 text-amber-950 border-yellow-200 shadow-amber-500/30",
+    title: "1º puesto (Oro) en número de sesiones",
+  },
+  1: {
+    // 2º Puesto: Plata
+    bg: "bg-gradient-to-br from-slate-100 via-zinc-200 to-slate-400 text-zinc-900 border-white shadow-slate-400/30",
+    title: "2º puesto (Plata) en número de sesiones",
+  },
+  2: {
+    // 3º Puesto: Bronce
+    bg: "bg-gradient-to-br from-[#f09355] via-[#c66e2c] to-[#8d4416] text-white border-amber-300/60 shadow-orange-700/30",
+    title: "3º puesto (Bronce) en número de sesiones",
+  },
+};
+
 interface ExplorerTabProps {
   initialExercises?: ExerciseSummary[];
   onGoToSync?: () => void;
@@ -438,7 +457,12 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                     />
                   </div>
                   {idx < 3 && !searchQuery && categoryFilter === "all" && (
-                    <span className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full bg-accent text-zinc-950 text-[9px] font-bold flex items-center justify-center shadow-md">
+                    <span
+                      className={`absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center border shadow-md tabular-nums select-none ${
+                        RANK_BADGE_STYLES[idx]?.bg || "bg-accent text-zinc-950 border-accent"
+                      }`}
+                      title={RANK_BADGE_STYLES[idx]?.title || `#${idx + 1}`}
+                    >
                       {idx + 1}
                     </span>
                   )}
