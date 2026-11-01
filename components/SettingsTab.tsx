@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { ImportResult } from "@/lib/csv-parser";
 import {
   UploadCloudIcon,
@@ -14,6 +14,11 @@ import {
   EditIcon,
   TrophyIcon,
   XIcon,
+  DatabaseIcon,
+  DownloadIcon,
+  CheckCircleIcon,
+  AlertTriangleIcon,
+  PhotoIcon,
 } from "./Icons";
 import { ThemeCustomizer } from "./ThemeCustomizer";
 import { ExerciseMediaManager } from "./ExerciseMediaManager";
@@ -25,6 +30,34 @@ import {
   hexToRgba,
   DEFAULT_SEASON_COLOR,
 } from "@/lib/season-colors";
+
+interface DbRestoreResult {
+  workoutsCount: number;
+  exercisesCount: number;
+  setsCount: number;
+  seasonsCount: number;
+  goalsCount: number;
+  mediaPresentCount: number;
+  mediaMissingCount: number;
+  fileSizeFormatted: string;
+}
+
+interface MediaRestoreResult {
+  processed: number;
+  downloaded: number;
+  alreadyValid: number;
+  failed: number;
+  diskUsageFormatted: string;
+}
+
+interface MediaCacheStatus {
+  totalExercises: number;
+  cachedCount: number;
+  missingCount: number;
+  missingList: string[];
+  diskUsageFormatted: string;
+  diskFilesCount: number;
+}
 
 interface SettingsTabProps {
   onSyncComplete?: () => void;
@@ -45,6 +78,54 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
   const { seasons, activeSeasonId, setActiveSeasonId, refreshSeasons } = useSeason();
   const [isSeasonModalOpen, setIsSeasonModalOpen] = useState(false);
   const [editingSeason, setEditingSeason] = useState<Season | null>(null);
+
+  // SQLite .db Restore state
+  const [dbDragActive, setDbDragActive] = useState(false);
+  const [dbUploading, setDbUploading] = useState(false);
+  const [dbResult, setDbResult] = useState<DbRestoreResult | null>(null);
+  const [dbError, setDbError] = useState<string | null>(null);
+  const dbFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Media Cache Restore & Audit state
+  const [mediaStatus, setMediaStatus] = useState<MediaCacheStatus | null>(null);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaRestoring, setMediaRestoring] = useState(false);
+  const [mediaForce, setMediaForce] = useState(false);
+  const [mediaResult, setMediaResult] = useState<MediaRestoreResult | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const mediaFileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchMediaStatus = useCallback(async () => {
+    setMediaLoading(true);
+    try {
+      const res = await fetch("/api/exercise-media/restore");
+      const json = await res.json();
+      if (json.success && json.data) {
+        setMediaStatus(json.data);
+      }
+    } catch (e) {
+      console.error("Error al cargar estado de caché de imágenes:", e);
+    } finally {
+      setMediaLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetch("/api/exercise-media/restore")
+      .then((res) => res.json())
+      .then((json) => {
+        if (isMounted && json.success && json.data) {
+          setMediaStatus(json.data);
+        }
+      })
+      .catch((e) => {
+        console.error("Error al cargar estado de caché de imágenes:", e);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
   const [seasonForm, setSeasonForm] = useState<{
     name: string;
     startDate: string;
@@ -80,6 +161,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
       if (json.success) {
         setResult(json.data);
         await refreshSeasons();
+        await fetchMediaStatus();
         if (onSyncComplete) onSyncComplete();
       } else {
         setError(json.error || "Error al procesar el archivo CSV");
@@ -121,7 +203,9 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
       const json = await res.json();
       if (json.success) {
         setResult(null);
+        setDbResult(null);
         await refreshSeasons();
+        await fetchMediaStatus();
         alert("Base de datos SQLite reiniciada con éxito.");
         if (onSyncComplete) onSyncComplete();
       }
@@ -129,6 +213,124 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
       console.error("Error clearing db:", e);
     } finally {
       setClearing(false);
+    }
+  };
+
+  // SQLite .db Restore Handlers
+  const handleDbFile = async (file: File) => {
+    if (!file) return;
+    const lowerName = file.name.toLowerCase();
+    const isDb = lowerName.endsWith(".db") || lowerName.endsWith(".sqlite") || lowerName.endsWith(".sqlite3");
+    if (!isDb) {
+      setDbError("Por favor selecciona un archivo con extensión .db, .sqlite o .sqlite3");
+      return;
+    }
+
+    if (
+      !confirm(
+        `¿Estás seguro de que deseas restaurar la base de datos con "${file.name}"?\n\nSe creará una copia de seguridad automática de tus datos actuales antes de reemplazarla.`
+      )
+    ) {
+      return;
+    }
+
+    setDbUploading(true);
+    setDbError(null);
+    setDbResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/database/restore", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setDbResult(json.data);
+        await refreshSeasons();
+        await fetchMediaStatus();
+        if (onSyncComplete) onSyncComplete();
+      } else {
+        setDbError(json.error || "Error al restaurar la base de datos");
+      }
+    } catch (e: unknown) {
+      const err = e as Error;
+      console.error("DB restore error:", err);
+      setDbError(err.message || "Error al subir y restaurar la base de datos");
+    } finally {
+      setDbUploading(false);
+    }
+  };
+
+  const handleDbDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDbDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDbDragActive(false);
+    }
+  };
+
+  const handleDbDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDbDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleDbFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  // Media Restore & Cache Handlers
+  const handleRestoreMedia = async () => {
+    setMediaRestoring(true);
+    setMediaError(null);
+    setMediaResult(null);
+
+    try {
+      const res = await fetch("/api/exercise-media/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: mediaForce }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setMediaResult(json.data);
+        await fetchMediaStatus();
+      } else {
+        setMediaError(json.error || "Error al sincronizar imágenes multimedia");
+      }
+    } catch (e: unknown) {
+      const err = e as Error;
+      console.error("Media restore error:", err);
+      setMediaError(err.message || "Error de red al sincronizar imágenes multimedia");
+    } finally {
+      setMediaRestoring(false);
+    }
+  };
+
+  const handleCustomMediaUpload = async (file: File) => {
+    if (!file) return;
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/exercise-media/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (json.success) {
+        await fetchMediaStatus();
+        alert(`Imagen "${file.name}" guardada con éxito en public/media/exercises/`);
+      } else {
+        alert(json.error || "Error al subir archivo de imagen");
+      }
+    } catch (e: unknown) {
+      const err = e as Error;
+      alert(err.message || "Error al subir archivo de imagen");
     }
   };
 
@@ -632,7 +834,285 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
         )}
       </section>
 
-      {/* 4. Bottom: Maintenance Box */}
+      {/* 4. Segundo Actualizador de Almacenamiento: Base de Datos SQLite (.db) y Sincronizador de Imágenes */}
+      <section className="flex flex-col gap-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-accent/15 border border-accent/30 flex items-center justify-center text-accent-light">
+              <DatabaseIcon className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-zinc-100">
+                Segundo Actualizador de Almacenamiento (Base de Datos SQLite .db)
+              </h3>
+              <p className="text-xs text-zinc-400">
+                Restaura un archivo <code className="text-zinc-300 font-mono">bytehevy.db</code> completo para migrar entre contenedores o descarga una copia de respaldo.
+              </p>
+            </div>
+          </div>
+
+          <a
+            href="/api/database/backup"
+            download
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-zinc-700 bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition-all cursor-pointer shadow-sm self-start sm:self-center shrink-0"
+            title="Descargar copia de seguridad actual de bytehevy.db"
+          >
+            <DownloadIcon className="w-4 h-4 text-accent-light" />
+            <span>Descargar Copia (.db)</span>
+          </a>
+        </div>
+
+        {/* Dropzone para .db */}
+        <div
+          onDragEnter={handleDbDrag}
+          onDragLeave={handleDbDrag}
+          onDragOver={handleDbDrag}
+          onDrop={handleDbDrop}
+          onClick={() => dbFileInputRef.current?.click()}
+          className={`p-9 rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+            dbDragActive
+              ? "border-accent-light bg-accent/10 scale-[1.01]"
+              : "border-zinc-800 bg-zinc-900/30 hover:border-zinc-700 hover:bg-zinc-900/50 shadow-inner"
+          }`}
+        >
+          <input
+            ref={dbFileInputRef}
+            type="file"
+            accept=".db,.sqlite,.sqlite3"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files && e.target.files[0]) {
+                handleDbFile(e.target.files[0]);
+              }
+            }}
+          />
+
+          <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-accent-light mb-3 shadow-md">
+            <DatabaseIcon className="w-6 h-6" />
+          </div>
+
+          <h4 className="text-sm font-semibold text-zinc-200 mb-1">
+            {dbUploading
+              ? "Validando integridad y restaurando base de datos SQLite..."
+              : "Arrastra y suelta tu archivo .db aquí o haz clic para explorar"}
+          </h4>
+          <p className="text-xs text-zinc-500 max-w-sm">
+            Admite archivos SQLite 3 (<span className="text-zinc-400 font-mono">.db, .sqlite</span>). Se generará automáticamente un respaldo previo de tus datos.
+          </p>
+        </div>
+
+        {/* Error de restauración de DB */}
+        {dbError && (
+          <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-xs flex items-start gap-3">
+            <AlertTriangleIcon className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-red-200">Error en la restauración de la base de datos</p>
+              <p className="mt-0.5 text-red-300/90">{dbError}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Éxito de restauración de DB */}
+        {dbResult && (
+          <div className="p-5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-emerald-400 text-sm font-semibold">
+              <CheckCircleIcon className="w-4 h-4" />
+              <span>Base de datos SQLite restaurada correctamente ({dbResult.fileSizeFormatted})</span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center pt-1">
+              <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
+                <span className="block text-base font-bold text-zinc-100">{dbResult.workoutsCount}</span>
+                <span className="text-[11px] text-zinc-400 font-medium">Entrenamientos</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
+                <span className="block text-base font-bold text-zinc-100">{dbResult.exercisesCount}</span>
+                <span className="text-[11px] text-zinc-400 font-medium">Ejercicios</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
+                <span className="block text-base font-bold text-zinc-100">{dbResult.setsCount}</span>
+                <span className="text-[11px] text-zinc-400 font-medium">Series</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
+                <span className="block text-base font-bold text-zinc-100">{dbResult.seasonsCount}</span>
+                <span className="text-[11px] text-zinc-400 font-medium">Temporadas</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
+                <span className="block text-base font-bold text-zinc-100">{dbResult.goalsCount}</span>
+                <span className="text-[11px] text-zinc-400 font-medium">Objetivos</span>
+              </div>
+            </div>
+
+            {dbResult.mediaMissingCount > 0 ? (
+              <div className="mt-1 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangleIcon className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>
+                    <strong>Atención:</strong> {dbResult.mediaMissingCount} de los {dbResult.exercisesCount} ejercicios no tienen animación 3D en disco.
+                  </span>
+                </div>
+                <button
+                  onClick={handleRestoreMedia}
+                  disabled={mediaRestoring}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-zinc-950 font-semibold text-xs transition-colors shrink-0 cursor-pointer disabled:opacity-50"
+                >
+                  {mediaRestoring ? "Descargando..." : "Descargar imágenes ahora"}
+                </button>
+              </div>
+            ) : (
+              <div className="mt-1 text-xs text-emerald-400/90 flex items-center gap-1.5">
+                <CheckIcon className="w-3.5 h-3.5" />
+                <span>Todas las animaciones 3D están verificadas y disponibles localmente ({dbResult.mediaPresentCount} ejercicios).</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Panel dedicado de Restauración y Sincronización de Imágenes 3D */}
+        <div className="p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700/80 flex items-center justify-center text-accent-light">
+                <PhotoIcon className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                  <span>Caché y Restauración de Imágenes 3D</span>
+                  {mediaStatus && (
+                    <span
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                        mediaStatus.missingCount === 0
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                          : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                      }`}
+                    >
+                      {mediaStatus.missingCount === 0
+                        ? "100% Sincronizado"
+                        : `${mediaStatus.missingCount} pendientes`}
+                    </span>
+                  )}
+                </h4>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Verifica que las animaciones de <code className="text-zinc-300 font-mono">public/media/exercises/</code> coincidan con tus ejercicios o descárgalas desde el CDN si faltan o han cambiado.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={fetchMediaStatus}
+              disabled={mediaLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 text-xs transition-colors cursor-pointer self-start sm:self-center shrink-0 disabled:opacity-50"
+              title="Auditar archivos multimedia en disco"
+            >
+              <RefreshCwIcon className={`w-3.5 h-3.5 ${mediaLoading ? "animate-spin" : ""}`} />
+              <span>Verificar Estado</span>
+            </button>
+          </div>
+
+          {/* Métricas de estado de medios */}
+          {mediaStatus && (
+            <div className="p-3.5 rounded-xl bg-zinc-950/50 border border-zinc-800/70 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-4 flex-wrap">
+                <div>
+                  <span className="text-zinc-500 block text-[10px] uppercase tracking-wider font-semibold">Ejercicios en disco</span>
+                  <span className="font-semibold text-zinc-200">
+                    {mediaStatus.cachedCount} / {mediaStatus.totalExercises} listos
+                  </span>
+                </div>
+                <div className="w-px h-6 bg-zinc-800 hidden sm:block" />
+                <div>
+                  <span className="text-zinc-500 block text-[10px] uppercase tracking-wider font-semibold">Espacio en disco</span>
+                  <span className="font-semibold text-zinc-200">{mediaStatus.diskUsageFormatted}</span>
+                </div>
+                {mediaStatus.missingCount > 0 && (
+                  <>
+                    <div className="w-px h-6 bg-zinc-800 hidden sm:block" />
+                    <div>
+                      <span className="text-zinc-500 block text-[10px] uppercase tracking-wider font-semibold">Faltantes</span>
+                      <span className="font-semibold text-amber-400">{mediaStatus.missingCount} ejercicios</span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  ref={mediaFileInputRef}
+                  accept=".gif,.mp4,.webm,.png,.jpg,.jpeg,.webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      handleCustomMediaUpload(e.target.files[0]);
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => mediaFileInputRef.current?.click()}
+                  className="px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200 text-xs transition-colors cursor-pointer"
+                  title="Subir un archivo .gif o de vídeo local directamente"
+                >
+                  + Subir GIF local
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Opciones y botón de acción */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+            <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={mediaForce}
+                onChange={(e) => setMediaForce(e.target.checked)}
+                className="rounded border-zinc-700 bg-zinc-800 text-accent focus:ring-accent/30"
+              />
+              <span>Forzar regeneración completa (re-descargar todas las imágenes desde CDN aunque ya existan)</span>
+            </label>
+
+            <button
+              onClick={handleRestoreMedia}
+              disabled={mediaRestoring}
+              className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-accent hover:bg-accent-hover text-zinc-950 font-semibold text-xs transition-all shadow-md cursor-pointer self-start sm:self-center shrink-0 disabled:opacity-50"
+            >
+              <RefreshCwIcon className={`w-3.5 h-3.5 ${mediaRestoring ? "animate-spin" : ""}`} />
+              <span>
+                {mediaRestoring
+                  ? "Sincronizando imágenes 3D..."
+                  : mediaForce
+                  ? "Re-descargar Todo el Catálogo"
+                  : "Reparar y Sincronizar Imágenes"}
+              </span>
+            </button>
+          </div>
+
+          {/* Feedback de resultado de restauración de imágenes */}
+          {mediaResult && (
+            <div className="p-3.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-xs text-emerald-300 flex items-start gap-2.5">
+              <CheckIcon className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-emerald-200">Sincronización de imágenes finalizada</p>
+                <p className="text-emerald-300/90 mt-0.5">
+                  {mediaResult.downloaded} imágenes descargadas/actualizadas, {mediaResult.alreadyValid} ya estaban listas ({mediaResult.diskUsageFormatted} en disco).
+                  {mediaResult.failed > 0 && ` (${mediaResult.failed} descargas pendientes por conexión)`}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {mediaError && (
+            <div className="p-3.5 rounded-xl border border-red-500/30 bg-red-500/10 text-xs text-red-300 flex items-start gap-2.5">
+              <AlertTriangleIcon className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-red-200">Error al sincronizar imágenes</p>
+                <p className="text-red-300/90 mt-0.5">{mediaError}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* 5. Bottom: Maintenance Box */}
       <div className="p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h4 className="text-sm font-semibold text-zinc-200">
