@@ -19,18 +19,21 @@ const TRANSLATION_RULES: TranslationRule[] = [
   // --- PECHO / CHEST ---
   { pattern: /press (de )?banca inclinad[oa]/i, english: "barbell incline bench press", muscle: "chest", equipment: "Barra Olímpica" },
   { pattern: /press (de )?banca declinad[oa]/i, english: "barbell decline bench press", muscle: "chest", equipment: "Barra Olímpica" },
-  { pattern: /press (de )?banca plano|press banca/i, english: "barbell bench press", muscle: "chest", equipment: "Barra Olímpica" },
+  { pattern: /press (de )?banca/i, english: "barbell bench press", muscle: "chest", equipment: "Barra Olímpica" },
   { pattern: /press (de )?pecho en m[aá]quina|press de pecho|chest press/i, english: "lever chest press", muscle: "chest", equipment: "Máquina" },
   { pattern: /press inclinad[oa] con mancuernas?|press mancuernas? inclinad[oa]/i, english: "dumbbell incline bench press", muscle: "chest", equipment: "Mancuerna" },
   { pattern: /press plano con mancuernas?|press mancuernas?/i, english: "dumbbell bench press", muscle: "chest", equipment: "Mancuerna" },
   { pattern: /aperturas? en m[aá]quina|pec deck|peck deck|butterfly|contractor/i, english: "lever seated fly", muscle: "chest", equipment: "Máquina" },
+  { pattern: /aperturas? posteriores?|p[aá]jaros|deltoides? posterior|rear delt fly/i, english: "dumbbell reverse fly", muscle: "shoulders", equipment: "Mancuerna" },
   { pattern: /aperturas? inclinadas?|aperturas? con mancuernas?|aperturas?/i, english: "dumbbell fly", muscle: "chest", equipment: "Mancuerna" },
   { pattern: /cruces? en polea|cruce de poleas?|aperturas? en polea/i, english: "cable standing fly", muscle: "chest", equipment: "Polea" },
   { pattern: /flexiones?( de pecho)?|push[- ]?up/i, english: "push-up", muscle: "chest", equipment: "Peso Corporal" },
   { pattern: /pullover|pull over/i, english: "dumbbell pullover", muscle: "chest", equipment: "Mancuerna" },
 
   // --- ESPALDA / LATS / UPPER BACK ---
-  { pattern: /jal[oó]n al pecho|jal[oó]n tras nuca|jal[oó]n polea|polea al pecho|lat pulldown/i, english: "cable pulldown", muscle: "lats", equipment: "Polea" },
+  { pattern: /jal[oó]n al pecho|jal[oó]n polea|polea al pecho|lat pulldown/i, english: "cable lat pulldown", muscle: "lats", equipment: "Polea" },
+  { pattern: /jal[oó]n tras nuca|rear pulldown/i, english: "cable rear pulldown behind neck", muscle: "lats", equipment: "Polea" },
+  { pattern: /jal[oó]n en m[aá]quina|jal[oó]n convergente|machine lat pulldown/i, english: "lever front pulldown", muscle: "lats", equipment: "Máquina" },
   { pattern: /dominadas? asistidas?|assisted pull[- ]?up/i, english: "assisted pull-up", muscle: "lats", equipment: "Máquina" },
   { pattern: /dominadas? neutras?|dominadas? supinas?|dominadas?|chin[- ]?up|pull[- ]?up/i, english: "pull-up", muscle: "lats", equipment: "Peso Corporal" },
   { pattern: /remo con barra|remo 90|remo pendlay|bent over row/i, english: "barbell bent over row", muscle: "upper_back", equipment: "Barra Olímpica" },
@@ -38,19 +41,20 @@ const TRANSLATION_RULES: TranslationRule[] = [
   { pattern: /remo en polea|remo sentado|remo gironda|cable seated row/i, english: "cable seated row", muscle: "upper_back", equipment: "Polea" },
   { pattern: /remo en m[aá]quina|remo maquina|lever seated row/i, english: "lever seated row", muscle: "upper_back", equipment: "Máquina" },
   { pattern: /remo t|remo en barra t|t[- ]?bar row/i, english: "lever t-bar row", muscle: "upper_back", equipment: "Barra Olímpica" },
+  { pattern: /remo/i, english: "cable seated row", muscle: "upper_back", equipment: "Polea" },
   { pattern: /encogimientos?( de hombros?)?|shrugs?/i, english: "dumbbell shrug", muscle: "upper_back", equipment: "Mancuerna" },
   { pattern: /face[- ]?pull/i, english: "cable face pull", muscle: "shoulders", equipment: "Polea" },
   { pattern: /pulldown brazos rectos|jal[oó]n con brazos rectos/i, english: "cable straight arm pulldown", muscle: "lats", equipment: "Polea" },
-  { pattern: /dead hang|colgado( en barra)?|suspensi[oó]n/i, english: "dead hang pull-up", muscle: "forearms", equipment: "Peso Corporal" },
+  { pattern: /dead hang|colgado( en barra)?|suspensi[oó]n/i, english: "dead hang", muscle: "forearms", equipment: "Peso Corporal" },
 
   // --- HOMBROS / SHOULDERS / DELTS ---
-  { pattern: /press militar|press (de )?hombros? sentado|press frontal/i, english: "barbell seated overhead press", muscle: "shoulders", equipment: "Barra Olímpica" },
-  { pattern: /press militar con mancuernas?|press hombro mancuerna/i, english: "dumbbell seated shoulder press", muscle: "shoulders", equipment: "Mancuerna" },
-  { pattern: /press militar en m[aá]quina|press hombros? m[aá]quina/i, english: "lever shoulder press", muscle: "shoulders", equipment: "Máquina" },
+  { pattern: /press militar|press frontal/i, english: "barbell seated overhead press", muscle: "shoulders", equipment: "Barra Olímpica" },
+  { pattern: /press (de )?hombros? con mancuernas?|press hombro mancuerna/i, english: "dumbbell seated shoulder press", muscle: "shoulders", equipment: "Mancuerna" },
+  { pattern: /press (de )?hombros? en m[aá]quina|press hombros? m[aá]quina/i, english: "lever shoulder press", muscle: "shoulders", equipment: "Máquina" },
+  { pattern: /press (de )?hombros?/i, english: "barbell seated overhead press", muscle: "shoulders", equipment: "Barra Olímpica" },
   { pattern: /elevaciones? laterales? con mancuernas?|elevaciones? laterales?|vuelos laterales?/i, english: "dumbbell lateral raise", muscle: "shoulders", equipment: "Mancuerna" },
   { pattern: /elevaciones? laterales? en polea/i, english: "cable lateral raise", muscle: "shoulders", equipment: "Polea" },
   { pattern: /elevaciones? frontales?/i, english: "dumbbell front raise", muscle: "shoulders", equipment: "Mancuerna" },
-  { pattern: /p[aá]jaros|aperturas posteriores|rear delt fly|reverse fly/i, english: "cable standing cross over high reverse fly", muscle: "shoulders", equipment: "Polea" },
 
   // --- BÍCEPS / BICEPS ---
   { pattern: /curl predicador|curl scott|banco scott/i, english: "dumbbell preacher curl", muscle: "biceps", equipment: "Banco Scott" },
@@ -66,10 +70,11 @@ const TRANSLATION_RULES: TranslationRule[] = [
   { pattern: /curl antebrazo|curl de mu[nñ]eca|sulek curl|antebrazo|wrist curl/i, english: "dumbbell seated palms up wrist curl", muscle: "forearms", equipment: "Mancuerna" },
 
   // --- TRÍCEPS / TRICEPS ---
-  { pattern: /tr[ií]ceps polea|extensi[oó]n de tr[ií]ceps?( en polea)?|pushdown/i, english: "cable pushdown", muscle: "triceps", equipment: "Polea" },
+  { pattern: /tr[ií]ceps polea|pushdown/i, english: "cable pushdown", muscle: "triceps", equipment: "Polea" },
+  { pattern: /extension(es)? de tr[ií]ceps?( en polea)?/i, english: "cable pushdown", muscle: "triceps", equipment: "Polea" },
   { pattern: /press franc[eé]s|skull crusher/i, english: "barbell lying triceps extension skull crusher", muscle: "triceps", equipment: "Barra Olímpica" },
-  { pattern: /fondos?( en paralelas?)?|paralelas|triceps dip/i, english: "triceps dip", muscle: "triceps", equipment: "Barras Paralelas" },
   { pattern: /fondos en banco|bench dip/i, english: "bench dip on floor", muscle: "triceps", equipment: "Peso Corporal" },
+  { pattern: /fondos?( en paralelas?)?|paralelas|triceps dip/i, english: "triceps dip", muscle: "triceps", equipment: "Barras Paralelas" },
   { pattern: /copa tr[ií]ceps?|extensi[oó]n sobre la cabeza con mancuerna/i, english: "dumbbell seated triceps extension", muscle: "triceps", equipment: "Mancuerna" },
   { pattern: /patada de tr[ií]ceps?|kickback/i, english: "dumbbell kickback", muscle: "triceps", equipment: "Mancuerna" },
 
@@ -79,8 +84,8 @@ const TRANSLATION_RULES: TranslationRule[] = [
   { pattern: /sentadillas? b[uú]lgaras?|bulgarian split squat/i, english: "dumbbell single leg split squat", muscle: "quads", equipment: "Mancuerna" },
   { pattern: /sentadillas? con mancuernas?|goblet squat/i, english: "dumbbell goblet squat", muscle: "quads", equipment: "Mancuerna" },
   { pattern: /sentadillas? libre|sentadilla con barra|sentadillas?|back squat|squat/i, english: "barbell full squat", muscle: "quads", equipment: "Barra Olímpica" },
-  { pattern: /prensa inclinada|prensa 45|prensa de piernas?|prensa horizontal|leg press/i, english: "sled 45 leg press", muscle: "quads", equipment: "Prensa de Discos" },
-  { pattern: /prensa a una pierna|single leg press/i, english: "glutes/lever-horizontal-one-leg-press.gif", muscle: "quads", equipment: "Máquina" },
+  { pattern: /prensa a una pierna|prensa unilateral|single leg press/i, english: "lever horizontal one leg press", muscle: "quads", equipment: "Máquina" },
+  { pattern: /prensa inclinada|prensa 45|prensa de piernas?|prensa horizontal|prensa|leg press/i, english: "sled 45 leg press", muscle: "quads", equipment: "Prensa de Discos" },
   { pattern: /extensi[oó]n de piernas?|extensiones? de piernas?|extensiones? de cu[aá]driceps?|leg extension/i, english: "lever leg extension", muscle: "quads", equipment: "Máquina" },
   { pattern: /zancadas?|estocadas?|lunges?/i, english: "dumbbell rear lunge", muscle: "quads", equipment: "Mancuerna" },
 
