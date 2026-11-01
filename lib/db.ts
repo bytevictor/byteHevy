@@ -5,24 +5,127 @@ import fs from "node:fs";
 let dbInstance: Client | null = null;
 let initialized = false;
 
-export function getDb(): Client {
-  if (dbInstance) return dbInstance;
+function isIoOrLockError(err: any): boolean {
+  if (!err) return false;
+  const code = err.code || "";
+  const extendedCode = err.extendedCode || "";
+  const msg = String(err.message || "");
+  return (
+    code === "SQLITE_IOERR" ||
+    code === "SQLITE_BUSY" ||
+    code === "SQLITE_LOCKED" ||
+    extendedCode === "SQLITE_IOERR_SHORT_READ" ||
+    msg.includes("SQLITE_IOERR") ||
+    msg.includes("disk I/O error") ||
+    msg.includes("database is locked")
+  );
+}
 
+function cleanStaleAuxFiles(dbPath: string) {
+  const walPath = `${dbPath}-wal`;
+  if (fs.existsSync(walPath)) {
+    try {
+      const stat = fs.statSync(walPath);
+      if (stat.size === 0) {
+        fs.unlinkSync(walPath);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const shmPath = `${dbPath}-shm`;
+  if (fs.existsSync(shmPath) && !fs.existsSync(walPath)) {
+    try {
+      fs.unlinkSync(shmPath);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+export function resetDb() {
+  if (dbInstance) {
+    try {
+      dbInstance.close();
+    } catch {
+      // ignore
+    }
+    dbInstance = null;
+  }
+  initialized = false;
+}
+
+function createRawClient(): Client {
   const dataDir = path.join(process.cwd(), "data");
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
 
   const dbPath = path.join(dataDir, "bytehevy.db");
-  dbInstance = createClient({
+  cleanStaleAuxFiles(dbPath);
+
+  return createClient({
     url: `file:${dbPath}`,
   });
+}
 
+export function getDb(): Client {
+  if (dbInstance) return dbInstance;
+
+  const rawClient = createRawClient();
+
+  const resilientClient = new Proxy(rawClient, {
+    get(target, prop, receiver) {
+      if (prop === "execute") {
+        return async (...args: any[]) => {
+          try {
+            return await (target.execute as any)(args[0]);
+          } catch (err: any) {
+            if (isIoOrLockError(err)) {
+              console.warn("Recovering from SQLite I/O or lock error, resetting connection...", err?.message);
+              resetDb();
+              const fresh = getDb();
+              return await (fresh.execute as any)(args[0]);
+            }
+            throw err;
+          }
+        };
+      }
+      if (prop === "batch") {
+        return async (...args: any[]) => {
+          try {
+            return await (target.batch as any)(args[0], args[1]);
+          } catch (err: any) {
+            if (isIoOrLockError(err)) {
+              console.warn("Recovering from SQLite I/O or lock error, resetting connection...", err?.message);
+              resetDb();
+              const fresh = getDb();
+              return await (fresh.batch as any)(args[0], args[1]);
+            }
+            throw err;
+          }
+        };
+      }
+      const val = Reflect.get(target, prop, receiver);
+      return typeof val === "function" ? val.bind(target) : val;
+    },
+  });
+
+  dbInstance = resilientClient;
   return dbInstance;
 }
 
 export async function ensureSchema(db: Client) {
   if (initialized) return;
+
+  try {
+    await db.execute("PRAGMA busy_timeout = 5000;");
+    await db.execute("PRAGMA journal_mode = WAL;");
+    await db.execute("PRAGMA synchronous = NORMAL;");
+  } catch (e) {
+    // ignore
+  }
 
   // Check if goals table needs migration (e.g., old milestone schema)
   try {
