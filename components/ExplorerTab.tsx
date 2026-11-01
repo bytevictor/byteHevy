@@ -26,7 +26,7 @@ import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
 const RANK_BADGE_STYLES: Record<number, { bg: string; title: string }> = {
   0: {
     // 1º Puesto: Oro
-    bg: "bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-500 text-amber-950 border-yellow-200 shadow-amber-500/30",
+    bg: "bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-white border-amber-300 shadow-amber-500/30",
     title: "1º puesto (Oro) en número de sesiones",
   },
   1: {
