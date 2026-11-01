@@ -58,6 +58,12 @@ export interface ProgressionChartProps {
   seasonBestLabel?: string;
   allTimeBestValue?: number;
   allTimeBestAvg1RM?: number;
+  targetGoal?: {
+    targetWeight?: number;
+    targetReps?: number;
+    target1RM?: number;
+    targetLabel?: string;
+  } | null;
 }
 
 const SPANISH_MONTHS: Record<string, number> = {
@@ -293,6 +299,7 @@ export function ProgressionChart({
   seasonBestLabel,
   allTimeBestValue,
   allTimeBestAvg1RM,
+  targetGoal,
 }: ProgressionChartProps) {
   const [internalMode, setInternalMode] = useState<ChartMode>(defaultMode);
   const [internalCurve, setInternalCurve] = useState<CurveType>(defaultCurveType);
@@ -485,6 +492,26 @@ export function ProgressionChart({
     return isWeightMetric ? "Peso Máximo" : metricName;
   }, [activeMetric, isWeightMetric, isRepsMetric, metricName]);
 
+  // Target reference value for current metric view (if exercise has weight & reps goal)
+  const targetRef = useMemo(() => {
+    if (!targetGoal || !targetGoal.targetWeight || !targetGoal.targetReps) return null;
+    if (activeMetric === "top_set" && isWeightMetric && targetGoal.targetWeight > 0) {
+      return {
+        value: targetGoal.targetWeight,
+        label: `Objetivo: ${targetGoal.targetWeight} kg`,
+        subLabel: `${targetGoal.targetWeight} kg × ${targetGoal.targetReps}`,
+      };
+    }
+    if (activeMetric === "avg_1rm" && isWeightMetric && targetGoal.target1RM && targetGoal.target1RM > 0) {
+      return {
+        value: targetGoal.target1RM,
+        label: `Objetivo 1RM: ${targetGoal.target1RM} kg`,
+        subLabel: `${targetGoal.target1RM} kg (${targetGoal.targetWeight} kg × ${targetGoal.targetReps})`,
+      };
+    }
+    return null;
+  }, [targetGoal, activeMetric, isWeightMetric]);
+
   const getPointValue = useCallback((d: ChartDataPoint): number => {
     if (activeMetric === "avg_1rm") {
       if (isRepsMetric) {
@@ -623,6 +650,10 @@ export function ProgressionChart({
       allValues.push(d.secondaryValue);
     }
   });
+
+  if (targetRef && targetRef.value > 0) {
+    allValues.push(targetRef.value);
+  }
 
   const rawMin = allValues.length > 0 ? Math.min(...allValues) : 0;
   const rawMax = allValues.length > 0 ? Math.max(...allValues) : 10;
@@ -847,6 +878,59 @@ export function ProgressionChart({
               strokeLinecap="round"
             />
           )}
+
+          {/* Target Goal Horizontal Reference Line */}
+          {targetRef && targetRef.value > 0 && (() => {
+            const targetY = getYCoord(targetRef.value);
+            const isNearTop = targetY < padT + 18;
+            const badgeY = isNearTop ? targetY + 3 : targetY - 16;
+            const textY = isNearTop ? targetY + 13 : targetY - 5;
+            const badgeW = isModalView ? 150 : 132;
+            const badgeH = 14;
+
+            return (
+              <g key="target-goal-ref-line" className="transition-all duration-300 pointer-events-none">
+                {/* Horizontal reference line */}
+                <line
+                  x1={padL}
+                  y1={targetY}
+                  x2={svgW - padR}
+                  y2={targetY}
+                  stroke="#10b981"
+                  strokeWidth="1.5"
+                  strokeDasharray="5,4"
+                  strokeOpacity="0.85"
+                />
+
+                {/* Left intersection indicator pip */}
+                <circle cx={padL} cy={targetY} r="2.5" fill="#10b981" opacity="0.9" />
+
+                {/* Badge Container */}
+                <rect
+                  x={svgW - padR - badgeW}
+                  y={badgeY}
+                  width={badgeW}
+                  height={badgeH}
+                  rx={3.5}
+                  fill="#064e3b"
+                  fillOpacity="0.92"
+                  stroke="#10b981"
+                  strokeWidth="0.8"
+                  strokeOpacity="0.75"
+                />
+
+                {/* Target Label */}
+                <text
+                  x={svgW - padR - 6}
+                  y={textY}
+                  textAnchor="end"
+                  className="text-[9px] fill-emerald-200 font-mono font-bold tracking-tight"
+                >
+                  🎯 {targetRef.label}
+                </text>
+              </g>
+            );
+          })()}
 
           {/* Primary curve */}
           {primaryD && (
@@ -1302,6 +1386,15 @@ export function ProgressionChart({
               <CrownIcon className="w-3.5 h-3.5 text-amber-400" />
               <span>All-Time</span>
             </div>
+            {targetRef && (
+              <div
+                className="flex items-center gap-1.5 text-emerald-400 font-medium"
+                title={`Punto de referencia del objetivo (${targetRef.subLabel})`}
+              >
+                <span className="w-2.5 h-0.5 border-b-2 border-dashed border-emerald-400" />
+                <span>{targetRef.label}</span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center text-zinc-500 text-[10px]">
@@ -1357,6 +1450,11 @@ export function ProgressionChart({
                       <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-zinc-800 text-amber-300 border border-amber-500/30 flex items-center gap-1 font-semibold">
                         <CrownIcon className="w-3 h-3 text-amber-400" />
                         <span>All-Time: {allTimeBestLabel}</span>
+                      </span>
+                    )}
+                    {targetRef && (
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 font-semibold">
+                        <span>🎯 {targetRef.label}</span>
                       </span>
                     )}
                   </div>

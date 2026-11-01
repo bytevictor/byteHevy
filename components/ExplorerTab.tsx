@@ -744,6 +744,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       seasonBestLabel={detailData.exercise.seasonBest?.label}
                       allTimeBestValue={detailData.exercise.allTimeBest?.value}
                       allTimeBestAvg1RM={detailData.exercise.allTimeMaxAvg1RM ?? undefined}
+                      targetGoal={detailData.exercise.targetGoal}
                       onPointClick={(pt) => {
                         if (pt.workoutId) {
                           handleOpenWorkout(pt.workoutId);

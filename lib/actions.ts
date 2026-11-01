@@ -110,6 +110,12 @@ export interface ExerciseDetailData {
       startDate: string;
       endDate: string | null;
     } | null;
+    targetGoal?: {
+      targetWeight?: number;
+      targetReps?: number;
+      target1RM?: number;
+      targetLabel?: string;
+    } | null;
   };
   chartPoints: ChartPoint[];
   sessions: ExerciseSessionHistory[];
@@ -913,6 +919,40 @@ export async function getExerciseDetail(
     exerciseMedia = getExerciseMedia(String(ex.name));
   }
 
+  // Fetch target goal for this exercise if configured with weight and repetitions
+  let targetGoal: {
+    targetWeight?: number;
+    targetReps?: number;
+    target1RM?: number;
+    targetLabel?: string;
+  } | null = null;
+
+  try {
+    const goalRes = await db.execute({
+      sql: `SELECT target_weight, target_reps, target_seconds, target_distance_km, metric_type
+            FROM goals
+            WHERE exercise_id = ?`,
+      args: [exerciseId],
+    });
+
+    if (goalRes.rows.length > 0) {
+      const g = goalRes.rows[0];
+      const gWeight = g.target_weight !== null && g.target_weight !== undefined ? Number(g.target_weight) : undefined;
+      const gReps = g.target_reps !== null && g.target_reps !== undefined ? Number(g.target_reps) : undefined;
+      if (gWeight !== undefined && gReps !== undefined && gWeight > 0 && gReps > 0) {
+        const g1RM = calculate1RM(gWeight, gReps);
+        targetGoal = {
+          targetWeight: gWeight,
+          targetReps: gReps,
+          target1RM: g1RM,
+          targetLabel: `${gWeight} kg × ${gReps}`,
+        };
+      }
+    }
+  } catch (e) {
+    console.error("Error fetching goal for exercise detail:", e);
+  }
+
   return {
     exercise: {
       id: String(ex.id),
@@ -930,6 +970,7 @@ export async function getExerciseDetail(
         startDate: season.startDate,
         endDate: season.endDate,
       } : null,
+      targetGoal,
     },
     chartPoints,
     sessions,
