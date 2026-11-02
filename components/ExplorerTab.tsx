@@ -612,9 +612,9 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
             {/* Above-the-fold Viewport Stage: Exercise Profile + Progression Chart fill the screen with clean bottom margin */}
             <div className="flex flex-col gap-3.5 lg:gap-4 lg:min-h-[calc(100vh-7.25rem)]">
               {/* HERO STAGE: Anatomical Visualizer & Exercise Profile */}
-              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 sm:p-5 shadow-xl flex flex-col lg:flex-row items-stretch gap-4 sm:gap-5 backdrop-blur-md">
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 sm:p-5 shadow-xl flex flex-col lg:flex-row items-stretch lg:items-center gap-4 sm:gap-5 backdrop-blur-md">
                 {/* 3D Animation Showcase (Prominent and Impressive) */}
-                <div className="w-full lg:w-[350px] xl:w-[390px] shrink-0">
+                <div className="w-full lg:w-[350px] xl:w-[390px] shrink-0 flex items-center justify-center my-auto">
                   <ExerciseAnimationView
                     media={activeMedia}
                     className="w-full h-[270px] sm:h-[285px] lg:h-[295px] rounded-xl shadow-lg"
@@ -622,7 +622,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 </div>
 
                 {/* Right: Exercise Name, Metric, Category, Session Count & Anatomy */}
-                <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5 gap-2.5">
+                <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5 gap-2.5 my-auto">
                   <div>
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md bg-accent/10 border border-accent/30 text-accent-light font-semibold">
