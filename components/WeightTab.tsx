@@ -40,6 +40,7 @@ import {
   getSampleCsvContent,
   estimateBodyComposition,
   enrichWithMovingAverages,
+  aggregateRecordsByDay,
   DEFAULT_USER_PROFILE,
 } from "@/lib/mock-weight-data";
 
@@ -246,6 +247,23 @@ export function WeightTab() {
   const [hoveredPoint, setHoveredPoint] = useState<WeightRecord | null>(null);
   const [hoverX, setHoverX] = useState<number | null>(null);
 
+  // Días con múltiples medidas: días expandidos en la tabla y modal de detalle del día
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const [selectedDayModal, setSelectedDayModal] = useState<WeightRecord | null>(null);
+  const [tableGroupByDay, setTableGroupByDay] = useState<boolean>(true);
+
+  const toggleExpandDay = useCallback((fecha: string) => {
+    setExpandedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(fecha)) {
+        next.delete(fecha);
+      } else {
+        next.add(fecha);
+      }
+      return next;
+    });
+  }, []);
+
   // Paginación de tabla
   const [tablePage, setTablePage] = useState(1);
   const pageSize = 15;
@@ -313,6 +331,15 @@ export function WeightTab() {
     setRecords((prev) => enrichWithMovingAverages(prev.map((r) => (r.id === editingRecord.id ? updatedRecord : r))));
     setEditingRecord(null);
 
+    // Si el modal de medidas del día está abierto, refrescarlo
+    if (selectedDayModal) {
+      const updatedList = (selectedDayModal.measurements || []).map((m) =>
+        m.id === editingRecord.id ? updatedRecord : m
+      );
+      const agg = aggregateRecordsByDay(updatedList, profile)[0];
+      setSelectedDayModal(agg || null);
+    }
+
     try {
       await fetch("/api/weight", {
         method: "PUT",
@@ -336,6 +363,16 @@ export function WeightTab() {
       setHoverX(null);
     }
 
+    if (selectedDayModal) {
+      const remaining = (selectedDayModal.measurements || []).filter((m) => m.id !== idToDelete);
+      if (remaining.length === 0) {
+        setSelectedDayModal(null);
+      } else {
+        const agg = aggregateRecordsByDay(remaining, profile)[0];
+        setSelectedDayModal(agg || null);
+      }
+    }
+
     try {
       await fetch(`/api/weight?id=${encodeURIComponent(idToDelete)}`, {
         method: "DELETE",
@@ -345,12 +382,12 @@ export function WeightTab() {
     }
   };
 
-  // Eliminar directamente desde la tabla
+  // Eliminar directamente desde la tabla o modal
   const handleDeleteRecord = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const target = records.find((r) => r.id === id);
     const msg = target
-      ? `¿Eliminar el pesaje del ${target.fecha} (${target.peso} kg)?`
+      ? `¿Eliminar el pesaje del ${target.fecha} a las ${target.hora} (${target.peso} kg)?`
       : "¿Eliminar este pesaje?";
     if (confirm(msg)) {
       setRecords((prev) => enrichWithMovingAverages(prev.filter((r) => r.id !== id)));
@@ -358,6 +395,16 @@ export function WeightTab() {
       if (hoveredPoint?.id === id) {
         setHoveredPoint(null);
         setHoverX(null);
+      }
+
+      if (selectedDayModal) {
+        const remaining = (selectedDayModal.measurements || []).filter((m) => m.id !== id);
+        if (remaining.length === 0) {
+          setSelectedDayModal(null);
+        } else {
+          const agg = aggregateRecordsByDay(remaining, profile)[0];
+          setSelectedDayModal(agg || null);
+        }
       }
 
       try {
@@ -370,7 +417,30 @@ export function WeightTab() {
     }
   };
 
-  // Filtrado de datos por rango temporal y season
+  // Eliminar todas las medidas de un día completo
+  const handleDeleteDayGroup = async (dayRecord: WeightRecord, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const count = dayRecord.measurements?.length || 1;
+    if (count > 1) {
+      if (confirm(`¿Eliminar las ${count} medidas registradas el día ${dayRecord.fecha}?`)) {
+        const ids = (dayRecord.measurements || []).map((m) => m.id);
+        setRecords((prev) => enrichWithMovingAverages(prev.filter((r) => !ids.includes(r.id))));
+        if (selectedDayModal?.fecha === dayRecord.fecha) setSelectedDayModal(null);
+        for (const id of ids) {
+          try {
+            await fetch(`/api/weight?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+          } catch (err) {
+            console.error("Error al eliminar pesaje:", err);
+          }
+        }
+      }
+    } else {
+      const singleId = dayRecord.measurements?.[0]?.id || dayRecord.id;
+      handleDeleteRecord(singleId, e);
+    }
+  };
+
+  // Filtrado de datos por rango temporal y season (registros brutos)
   const filteredRecords = useMemo(() => {
     let result = [...records];
 
@@ -393,9 +463,16 @@ export function WeightTab() {
     return result.sort((a, b) => a.timestamp - b.timestamp);
   }, [records, timeRange, syncWithSeason, activeSeason, activeSeasonId]);
 
-  // Resumen de Métricas Clave (KPIs)
+  // Agrupación de pesajes por día para la gráfica:
+  // Cuando hay varias medidas el mismo día, el punto que aparece en la gráfica es la media
+  const chartRecords = useMemo(() => {
+    const aggregated = aggregateRecordsByDay(filteredRecords, profile);
+    return enrichWithMovingAverages(aggregated);
+  }, [filteredRecords, profile]);
+
+  // Resumen de Métricas Clave (KPIs) basado en chartRecords
   const stats = useMemo(() => {
-    if (filteredRecords.length === 0) {
+    if (chartRecords.length === 0) {
       return {
         latestWeight: 0,
         latestFat: 0,
@@ -412,25 +489,26 @@ export function WeightTab() {
         minWeight: 0,
         maxWeight: 0,
         count: 0,
+        totalMeasurements: 0,
       };
     }
 
-    const latest = filteredRecords[filteredRecords.length - 1];
-    const first = filteredRecords[0];
+    const latest = chartRecords[chartRecords.length - 1];
+    const first = chartRecords[0];
 
     const weekAgoTarget = latest.timestamp - 7 * 24 * 3600 * 1000;
     const weekAgoRecord =
-      [...filteredRecords].reverse().find((r) => r.timestamp <= weekAgoTarget) || first;
+      [...chartRecords].reverse().find((r) => r.timestamp <= weekAgoTarget) || first;
 
     const deltaWeightWeek = Math.round((latest.peso - weekAgoRecord.peso) * 100) / 100;
     const deltaWeightTotal = Math.round((latest.peso - first.peso) * 100) / 100;
 
     const latestFatRecord =
-      [...filteredRecords].reverse().find((r) => typeof r.grasaPct === "number" && !isNaN(r.grasaPct)) || latest;
+      [...chartRecords].reverse().find((r) => typeof r.grasaPct === "number" && !isNaN(r.grasaPct)) || latest;
     const firstFatRecord =
-      filteredRecords.find((r) => typeof r.grasaPct === "number" && !isNaN(r.grasaPct)) || first;
+      chartRecords.find((r) => typeof r.grasaPct === "number" && !isNaN(r.grasaPct)) || first;
     const weekAgoFatRecord =
-      [...filteredRecords].reverse().find((r) => r.timestamp <= weekAgoTarget && typeof r.grasaPct === "number") || firstFatRecord;
+      [...chartRecords].reverse().find((r) => r.timestamp <= weekAgoTarget && typeof r.grasaPct === "number") || firstFatRecord;
 
     const deltaFatWeek =
       typeof latestFatRecord.grasaPct === "number" && typeof weekAgoFatRecord.grasaPct === "number"
@@ -441,7 +519,7 @@ export function WeightTab() {
         ? Math.round((latestFatRecord.grasaPct - firstFatRecord.grasaPct) * 10) / 10
         : 0;
 
-    const weights = filteredRecords.map((r) => r.peso);
+    const weights = chartRecords.map((r) => r.peso);
     const minWeight = Math.min(...weights);
     const maxWeight = Math.max(...weights);
 
@@ -460,26 +538,38 @@ export function WeightTab() {
       deltaFatTotal,
       minWeight,
       maxWeight,
-      count: filteredRecords.length,
+      count: chartRecords.length,
+      totalMeasurements: filteredRecords.length,
     };
-  }, [filteredRecords]);
+  }, [chartRecords, filteredRecords.length]);
 
-  // Filtrado y ordenación de la tabla
+  // Filtrado y ordenación de la tabla (agrupada por día o desglose total)
   const tableRecords = useMemo(() => {
-    let result = [...records];
+    let baseList = tableGroupByDay
+      ? aggregateRecordsByDay(records, profile)
+      : [...records];
+
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
-      result = result.filter(
-        (r) =>
-          r.fecha.includes(q) ||
-          r.hora.includes(q) ||
-          String(r.peso).includes(q) ||
-          String(r.grasaPct).includes(q)
-      );
+      baseList = baseList.filter((r) => {
+        const matchesDate = r.fecha.includes(q);
+        const matchesHora = r.hora.includes(q);
+        const matchesPeso = String(r.peso).includes(q);
+        const matchesGrasa = r.grasaPct !== null && String(r.grasaPct).includes(q);
+        const matchesSub = r.measurements?.some(
+          (m) =>
+            m.fecha.includes(q) ||
+            m.hora.includes(q) ||
+            String(m.peso).includes(q) ||
+            (m.grasaPct !== null && String(m.grasaPct).includes(q))
+        );
+        return matchesDate || matchesHora || matchesPeso || matchesGrasa || Boolean(matchesSub);
+      });
     }
-    result.sort((a, b) => (sortAsc ? a.timestamp - b.timestamp : b.timestamp - a.timestamp));
-    return result;
-  }, [records, searchTerm, sortAsc]);
+
+    baseList.sort((a, b) => (sortAsc ? a.timestamp - b.timestamp : b.timestamp - a.timestamp));
+    return baseList;
+  }, [records, profile, tableGroupByDay, searchTerm, sortAsc]);
 
   const totalPages = Math.ceil(tableRecords.length / pageSize) || 1;
   const paginatedTableRecords = useMemo(() => {
@@ -593,16 +683,16 @@ export function WeightTab() {
 
   // Escalas matemáticas para el gráfico
   const chartScales = useMemo(() => {
-    if (filteredRecords.length === 0) return null;
+    if (chartRecords.length === 0) return null;
 
-    const timestamps = filteredRecords.map((r) => r.timestamp);
+    const timestamps = chartRecords.map((r) => r.timestamp);
     const minTime = Math.min(...timestamps);
     const maxTime = Math.max(...timestamps);
     const timeSpan = maxTime - minTime || 1;
 
     // Escala Peso (kg)
-    const weights = filteredRecords.map((r) => r.peso);
-    const maWeights = filteredRecords.map((r) => r.ma7Peso || r.peso);
+    const weights = chartRecords.map((r) => r.peso);
+    const maWeights = chartRecords.map((r) => r.ma7Peso || r.peso);
     const allWeightVals = [...weights, ...maWeights];
     const rawMinW = Math.min(...allWeightVals);
     const rawMaxW = Math.max(...allWeightVals);
@@ -611,10 +701,10 @@ export function WeightTab() {
     const weightSpan = maxWeight - minWeight || 1;
 
     // Escala % Graso
-    const fats = filteredRecords
+    const fats = chartRecords
       .map((r) => r.grasaPct)
       .filter((f): f is number => typeof f === "number" && !isNaN(f));
-    const maFats = filteredRecords
+    const maFats = chartRecords
       .map((r) => r.ma7Grasa)
       .filter((f): f is number => typeof f === "number" && !isNaN(f));
     const allFatVals = [...fats, ...maFats];
@@ -641,18 +731,18 @@ export function WeightTab() {
       getYWeight,
       getYFat,
     };
-  }, [filteredRecords, chartInnerWidth, chartInnerHeight, padding]);
+  }, [chartRecords, chartInnerWidth, chartInnerHeight, padding]);
 
   // Generador de rutas SVG respetando curveType ("linear" | "smooth" | "flow")
   const chartPaths = useMemo(() => {
-    if (!chartScales || filteredRecords.length === 0) return null;
+    if (!chartScales || chartRecords.length === 0) return null;
     const { getX, getYWeight, getYFat } = chartScales;
     const bottomY = padding.top + chartInnerHeight;
-    const firstX = getX(filteredRecords[0].timestamp);
-    const lastX = getX(filteredRecords[filteredRecords.length - 1].timestamp);
+    const firstX = getX(chartRecords[0].timestamp);
+    const lastX = getX(chartRecords[chartRecords.length - 1].timestamp);
 
-    // 1. Puntos de Peso Diario
-    const weightPoints = filteredRecords.map((r) => ({
+    // 1. Puntos de Peso Diario (media diaria)
+    const weightPoints = chartRecords.map((r) => ({
       x: getX(r.timestamp),
       y: getYWeight(r.peso),
     }));
@@ -660,14 +750,14 @@ export function WeightTab() {
     const weightArea = `${weightLine} L ${lastX.toFixed(1)} ${bottomY} L ${firstX.toFixed(1)} ${bottomY} Z`;
 
     // 2. Puntos de Media Móvil 7D de Peso (suavizada con curveType)
-    const maWeightPoints = filteredRecords.map((r) => ({
+    const maWeightPoints = chartRecords.map((r) => ({
       x: getX(r.timestamp),
       y: getYWeight(r.ma7Peso || r.peso),
     }));
     const maWeightLine = buildPath(maWeightPoints, curveType, padding.top, bottomY);
 
     // 3. Puntos de % Graso
-    const validFatRecords = filteredRecords.filter(
+    const validFatRecords = chartRecords.filter(
       (r) => typeof r.grasaPct === "number" && !isNaN(r.grasaPct!)
     );
     const fatPoints = validFatRecords.map((r) => ({
@@ -680,7 +770,7 @@ export function WeightTab() {
     const fatArea = `${fatLine} L ${fatLastX.toFixed(1)} ${bottomY} L ${fatFirstX.toFixed(1)} ${bottomY} Z`;
 
     // 4. Puntos de Media Móvil 7D de Grasa
-    const validMaFatRecords = filteredRecords.filter(
+    const validMaFatRecords = chartRecords.filter(
       (r) => typeof (r.ma7Grasa ?? r.grasaPct) === "number"
     );
     const maFatPoints = validMaFatRecords.map((r) => ({
@@ -690,7 +780,7 @@ export function WeightTab() {
     const maFatLine = buildPath(maFatPoints, curveType, padding.top, bottomY);
 
     // 5. Modo Composición (Masa Magra y Masa Grasa)
-    const validLeanRecords = filteredRecords.filter(
+    const validLeanRecords = chartRecords.filter(
       (r) => typeof r.masaMagraKg === "number" && !isNaN(r.masaMagraKg!)
     );
     const leanPoints = validLeanRecords.map((r) => ({
@@ -699,7 +789,7 @@ export function WeightTab() {
     }));
     const leanLine = buildPath(leanPoints, curveType, padding.top, bottomY);
 
-    const validFatKgRecords = filteredRecords.filter(
+    const validFatKgRecords = chartRecords.filter(
       (r) => typeof r.masaGrasaKg === "number" && !isNaN(r.masaGrasaKg!)
     );
     const fatKgPoints = validFatKgRecords.map((r) => ({
@@ -718,11 +808,11 @@ export function WeightTab() {
       leanLine,
       fatKgLine,
     };
-  }, [chartScales, filteredRecords, curveType, padding, chartInnerHeight]);
+  }, [chartScales, chartRecords, curveType, padding, chartInnerHeight]);
 
   // Manejador del cursor sobre el SVG
   const handleSvgMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (!chartScales || filteredRecords.length === 0) return;
+    if (!chartScales || chartRecords.length === 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const clientX = e.clientX - rect.left;
     const svgX = (clientX / rect.width) * svgWidth;
@@ -730,7 +820,7 @@ export function WeightTab() {
     let closest: WeightRecord | null = null;
     let closestDist = Infinity;
 
-    for (const r of filteredRecords) {
+    for (const r of chartRecords) {
       const px = chartScales.getX(r.timestamp);
       const dist = Math.abs(px - svgX);
       if (dist < closestDist) {
@@ -1198,14 +1288,20 @@ export function WeightTab() {
 
         {/* Canvas SVG Interactivo */}
         <div className="relative w-full overflow-hidden select-none">
-          {chartScales && chartPaths && filteredRecords.length > 0 ? (
+          {chartScales && chartPaths && chartRecords.length > 0 ? (
             <svg
               viewBox={`0 0 ${svgWidth} ${svgHeight}`}
               className="w-full h-auto overflow-visible cursor-crosshair"
               onMouseMove={handleSvgMouseMove}
               onMouseLeave={handleSvgMouseLeave}
               onClick={() => {
-                if (hoveredPoint) handleOpenEdit(hoveredPoint);
+                if (hoveredPoint) {
+                  if (hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1) {
+                    setSelectedDayModal(hoveredPoint);
+                  } else {
+                    handleOpenEdit(hoveredPoint.measurements?.[0] || hoveredPoint);
+                  }
+                }
               }}
             >
               <defs>
@@ -1298,28 +1394,46 @@ export function WeightTab() {
                     strokeDasharray={chartMode === "weight_only" ? undefined : "3 3"}
                   />
 
-                  {/* Puntos individuales de pesaje (clicables para editar/eliminar) */}
-                  {filteredRecords.map((r) => {
+                  {/* Puntos individuales de pesaje (media diaria cuando hay varias tomas) */}
+                  {chartRecords.map((r) => {
                     const cx = chartScales.getX(r.timestamp);
                     const cy = chartScales.getYWeight(r.peso);
                     const isHovered = hoveredPoint?.id === r.id;
                     const isFlow = curveType === "flow";
+                    const isMulti = Boolean(r.isDailyAverage && r.measurements && r.measurements.length > 1);
 
                     return (
-                      <circle
-                        key={r.id}
-                        cx={cx}
-                        cy={cy}
-                        r={isHovered ? 6 : isFlow ? 1.5 : 3}
-                        fill={isHovered ? "#ffffff" : seasonColor}
-                        stroke="#18181b"
-                        strokeWidth={isHovered ? 2.5 : 1}
-                        className="transition-all cursor-pointer hover:r-[6px]"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenEdit(r);
-                        }}
-                      />
+                      <g key={r.id}>
+                        {isMulti && (
+                          <circle
+                            cx={cx}
+                            cy={cy}
+                            r={isHovered ? 9 : 6}
+                            fill="none"
+                            stroke={seasonColor}
+                            strokeWidth={1.5}
+                            strokeDasharray="2 2"
+                            className="pointer-events-none opacity-85"
+                          />
+                        )}
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={isHovered ? 6 : isFlow ? (isMulti ? 3 : 1.5) : (isMulti ? 4 : 3)}
+                          fill={isHovered ? "#ffffff" : seasonColor}
+                          stroke="#18181b"
+                          strokeWidth={isHovered ? 2.5 : 1}
+                          className="transition-all cursor-pointer hover:r-[6px]"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isMulti) {
+                              setSelectedDayModal(r);
+                            } else {
+                              handleOpenEdit(r.measurements?.[0] || r);
+                            }
+                          }}
+                        />
+                      </g>
                     );
                   })}
                 </>
@@ -1349,29 +1463,47 @@ export function WeightTab() {
                     strokeDasharray={chartMode === "fat_only" ? undefined : "3 3"}
                   />
 
-                  {filteredRecords
+                  {chartRecords
                     .filter((r): r is typeof r & { grasaPct: number } => typeof r.grasaPct === "number")
                     .map((r) => {
                       const cx = chartScales.getX(r.timestamp);
                       const cy = chartScales.getYFat(r.grasaPct);
                       const isHovered = hoveredPoint?.id === r.id;
                       const isFlow = curveType === "flow";
+                      const isMulti = Boolean(r.isDailyAverage && r.measurements && r.measurements.length > 1);
 
                       return (
-                        <circle
-                          key={`f-${r.id}`}
-                          cx={cx}
-                          cy={cy}
-                          r={isHovered ? 6 : isFlow ? 1.5 : 3}
-                          fill={isHovered ? "#ffffff" : "#06b6d4"}
-                          stroke="#18181b"
-                          strokeWidth={isHovered ? 2.5 : 1}
-                          className="transition-all cursor-pointer hover:r-[6px]"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenEdit(r);
-                          }}
-                        />
+                        <g key={`f-${r.id}`}>
+                          {isMulti && (
+                            <circle
+                              cx={cx}
+                              cy={cy}
+                              r={isHovered ? 9 : 6}
+                              fill="none"
+                              stroke="#06b6d4"
+                              strokeWidth={1.5}
+                              strokeDasharray="2 2"
+                              className="pointer-events-none opacity-85"
+                            />
+                          )}
+                          <circle
+                            cx={cx}
+                            cy={cy}
+                            r={isHovered ? 6 : isFlow ? (isMulti ? 3 : 1.5) : (isMulti ? 4 : 3)}
+                            fill={isHovered ? "#ffffff" : "#06b6d4"}
+                            stroke="#18181b"
+                            strokeWidth={isHovered ? 2.5 : 1}
+                            className="transition-all cursor-pointer hover:r-[6px]"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isMulti) {
+                                setSelectedDayModal(r);
+                              } else {
+                                handleOpenEdit(r.measurements?.[0] || r);
+                              }
+                            }}
+                          />
+                        </g>
                       );
                     })}
                 </>
@@ -1383,49 +1515,59 @@ export function WeightTab() {
                   <path d={chartPaths.leanLine} fill="none" stroke="#10b981" strokeWidth="2.5" />
                   <path d={chartPaths.fatKgLine} fill="none" stroke="#f43f5e" strokeWidth="2.5" />
 
-                  {filteredRecords
+                  {chartRecords
                     .filter((r): r is typeof r & { masaMagraKg: number } => typeof r.masaMagraKg === "number")
                     .map((r) => {
                       const cx = chartScales.getX(r.timestamp);
                       const cyLean = chartScales.getYWeight(r.masaMagraKg);
                       const isHovered = hoveredPoint?.id === r.id;
+                      const isMulti = Boolean(r.isDailyAverage && r.measurements && r.measurements.length > 1);
                       return (
                         <circle
                           key={`lean-${r.id}`}
                           cx={cx}
                           cy={cyLean}
-                          r={isHovered ? 6 : 3}
+                          r={isHovered ? 6 : (isMulti ? 4 : 3)}
                           fill="#10b981"
                           stroke="#18181b"
                           strokeWidth={1.5}
                           className="cursor-pointer"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleOpenEdit(r);
+                            if (isMulti) {
+                              setSelectedDayModal(r);
+                            } else {
+                              handleOpenEdit(r.measurements?.[0] || r);
+                            }
                           }}
                         />
                       );
                     })}
 
-                  {filteredRecords
+                  {chartRecords
                     .filter((r): r is typeof r & { masaGrasaKg: number } => typeof r.masaGrasaKg === "number")
                     .map((r) => {
                       const cx = chartScales.getX(r.timestamp);
                       const cyFatKg = chartScales.getYWeight(r.masaGrasaKg);
                       const isHovered = hoveredPoint?.id === r.id;
+                      const isMulti = Boolean(r.isDailyAverage && r.measurements && r.measurements.length > 1);
                       return (
                         <circle
                           key={`fatkg-${r.id}`}
                           cx={cx}
                           cy={cyFatKg}
-                          r={isHovered ? 6 : 3}
+                          r={isHovered ? 6 : (isMulti ? 4 : 3)}
                           fill="#f43f5e"
                           stroke="#18181b"
                           strokeWidth={1.5}
                           className="cursor-pointer"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleOpenEdit(r);
+                            if (isMulti) {
+                              setSelectedDayModal(r);
+                            } else {
+                              handleOpenEdit(r.measurements?.[0] || r);
+                            }
                           }}
                         />
                       );
@@ -1450,12 +1592,12 @@ export function WeightTab() {
 
               {/* Eje X: Fechas destacadas */}
               {(() => {
-                const step = Math.max(1, Math.floor(filteredRecords.length / 6));
+                const step = Math.max(1, Math.floor(chartRecords.length / 6));
                 const samples: WeightRecord[] = [];
-                for (let i = 0; i < filteredRecords.length; i += step) {
-                  samples.push(filteredRecords[i]);
+                for (let i = 0; i < chartRecords.length; i += step) {
+                  samples.push(chartRecords[i]);
                 }
-                const last = filteredRecords[filteredRecords.length - 1];
+                const last = chartRecords[chartRecords.length - 1];
                 if (!samples.includes(last)) samples.push(last);
 
                 return samples.map((r, i) => {
@@ -1485,28 +1627,46 @@ export function WeightTab() {
           {/* Tooltip flotante interactivo con botón de edición rápida */}
           {hoveredPoint && hoverX !== null && (
             <div
-              className="absolute top-2 pointer-events-auto z-20 bg-zinc-900/95 border border-zinc-700/80 rounded-xl p-3 shadow-2xl backdrop-blur-md text-xs space-y-1.5 min-w-[220px] transition-all cursor-pointer hover:border-accent-light"
+              className="absolute top-2 pointer-events-auto z-20 bg-zinc-900/95 border border-zinc-700/80 rounded-xl p-3 shadow-2xl backdrop-blur-md text-xs space-y-1.5 min-w-[230px] transition-all cursor-pointer hover:border-accent-light"
               style={{
                 left: Math.min(Math.max(20, (hoverX / svgWidth) * 100), 75) + "%",
                 transform: "translateX(-50%)",
               }}
-              onClick={() => handleOpenEdit(hoveredPoint)}
-              title="Haz clic para modificar o eliminar este pesaje"
+              onClick={() => {
+                if (hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1) {
+                  setSelectedDayModal(hoveredPoint);
+                } else {
+                  handleOpenEdit(hoveredPoint.measurements?.[0] || hoveredPoint);
+                }
+              }}
+              title={
+                hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1
+                  ? "Haz clic para ver las distintas medidas de este día"
+                  : "Haz clic para modificar o eliminar este pesaje"
+              }
             >
               <div className="flex items-center justify-between border-b border-zinc-800 pb-1 text-zinc-400 font-mono text-[11px]">
                 <span className="flex items-center gap-1 font-semibold text-zinc-200">
                   <CalendarIcon className="w-3.5 h-3.5 text-zinc-400" />
                   {hoveredPoint.fecha}
                 </span>
-                <span className="flex items-center gap-1">
-                  <ClockIcon className="w-3 h-3 text-zinc-500" />
-                  {hoveredPoint.hora}
-                </span>
+                {hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1 ? (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-cyan-500/15 text-cyan-300 font-semibold text-[10px] border border-cyan-500/30">
+                    Media ({hoveredPoint.measurements.length} tomas)
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <ClockIcon className="w-3 h-3 text-zinc-500" />
+                    {hoveredPoint.hora}
+                  </span>
+                )}
               </div>
 
               <div className="grid grid-cols-3 gap-2 pt-0.5">
                 <div>
-                  <span className="text-[10px] text-zinc-400 block">Peso</span>
+                  <span className="text-[10px] text-zinc-400 block">
+                    {hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1 ? "Peso Medio" : "Peso"}
+                  </span>
                   <span className="font-extrabold text-sm text-zinc-100 font-mono">
                     {hoveredPoint.peso.toFixed(1)} kg
                   </span>
@@ -1526,7 +1686,9 @@ export function WeightTab() {
                 </div>
 
                 <div>
-                  <span className="text-[10px] text-zinc-400 block">% Graso</span>
+                  <span className="text-[10px] text-zinc-400 block">
+                    {hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1 ? "% Grasa Media" : "% Graso"}
+                  </span>
                   <span className="font-extrabold text-sm text-cyan-300 font-mono">
                     {typeof hoveredPoint.grasaPct === "number" ? `${hoveredPoint.grasaPct.toFixed(1)}%` : "—"}
                   </span>
@@ -1590,10 +1752,27 @@ export function WeightTab() {
                 </div>
               )}
 
-              <div className="pt-1.5 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-accent-light font-medium">
-                <span>Clic para editar o borrar</span>
-                <EditIcon className="w-3.5 h-3.5" />
-              </div>
+              {hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1 ? (
+                <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-zinc-400 font-mono">
+                    Rango: {hoveredPoint.minPeso?.toFixed(1)} - {hoveredPoint.maxPeso?.toFixed(1)} kg
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedDayModal(hoveredPoint);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold text-[10px] cursor-pointer transition-colors shadow-sm"
+                  >
+                    Ver {hoveredPoint.measurements.length} medidas
+                  </button>
+                </div>
+              ) : (
+                <div className="pt-1.5 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-accent-light font-medium">
+                  <span>Clic para editar o borrar</span>
+                  <EditIcon className="w-3.5 h-3.5" />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1630,6 +1809,13 @@ export function WeightTab() {
               </div>
             </>
           )}
+
+          <div className="flex items-center gap-1.5 text-zinc-400">
+            <span className="w-3.5 h-3.5 rounded-full border border-dashed border-cyan-400/80 inline-flex items-center justify-center">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+            </span>
+            <span className="text-[11px] text-zinc-300">Días con varias tomas (Media)</span>
+          </div>
         </div>
       </div>
 
@@ -1640,15 +1826,40 @@ export function WeightTab() {
             <h2 className="text-base font-bold text-zinc-100 flex items-center gap-2">
               <span>Historial de Pesajes</span>
               <span className="text-xs font-mono font-normal text-zinc-400 bg-zinc-800/80 px-2 py-0.5 rounded-full">
-                {tableRecords.length} registros
+                {tableGroupByDay
+                  ? `${tableRecords.length} días (${records.length} tomas)`
+                  : `${tableRecords.length} tomas`}
               </span>
             </h2>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Haz clic en cualquier fila para editar sus datos o eliminar el pesaje
+              {tableGroupByDay
+                ? "Días con múltiples tomas muestran la media. Pulsa en el botón de medidas para ver el desglose."
+                : "Mostrando todas las tomas individuales en orden cronológico."}
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Toggle de modo de agrupación */}
+            <button
+              onClick={() => {
+                setTableGroupByDay(!tableGroupByDay);
+                setTablePage(1);
+              }}
+              className={`px-2.5 py-1.5 rounded-xl border text-xs font-medium cursor-pointer transition-colors flex items-center gap-1.5 ${
+                tableGroupByDay
+                  ? "bg-cyan-500/15 border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25"
+                  : "bg-zinc-800/80 border-zinc-700/80 text-zinc-300 hover:text-white"
+              }`}
+              title={
+                tableGroupByDay
+                  ? "Modo: Agrupado por día (medias). Haz clic para ver todas las tomas individuales"
+                  : "Modo: Todas las tomas individuales. Haz clic para agrupar por día (medias)"
+              }
+            >
+              <ScaleIcon className="w-3.5 h-3.5" />
+              <span>{tableGroupByDay ? "Agrupado por día" : "Todas las tomas"}</span>
+            </button>
+
             {/* Buscador */}
             <div className="relative">
               <SearchIcon className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
@@ -1660,7 +1871,7 @@ export function WeightTab() {
                   setSearchTerm(e.target.value);
                   setTablePage(1);
                 }}
-                className="pl-8 pr-3 py-1.5 bg-zinc-950/80 border border-zinc-800 rounded-xl text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-zinc-600 w-44 sm:w-56"
+                className="pl-8 pr-3 py-1.5 bg-zinc-950/80 border border-zinc-800 rounded-xl text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-zinc-600 w-36 sm:w-48"
               />
             </div>
 
@@ -1694,101 +1905,286 @@ export function WeightTab() {
             </thead>
             <tbody className="divide-y divide-zinc-800/60 font-mono">
               {paginatedTableRecords.length > 0 ? (
-                paginatedTableRecords.map((r) => (
-                  <tr
-                    key={r.id}
-                    onClick={() => handleOpenEdit(r)}
-                    className="hover:bg-zinc-850/70 transition-colors cursor-pointer group"
-                  >
-                    <td className="py-3 px-3 text-zinc-300 font-sans">
-                      <div className="flex items-center gap-1.5 font-medium group-hover:text-accent-light transition-colors">
-                        <CalendarIcon className="w-3.5 h-3.5 text-zinc-500 group-hover:text-accent-light" />
-                        <span>{r.fecha}</span>
-                        <span className="text-zinc-500 text-[11px] font-mono">· {r.hora}</span>
-                      </div>
-                    </td>
+                paginatedTableRecords.map((r) => {
+                  const isMulti = Boolean(r.isDailyAverage && r.measurements && r.measurements.length > 1);
+                  const isExpanded = expandedDays.has(r.fecha);
 
-                    <td className="py-3 px-3 font-bold text-zinc-100 text-sm">
-                      {r.peso.toFixed(1)}{" "}
-                      <span className="text-[10px] text-zinc-500 font-normal">kg</span>
-                    </td>
-
-                    <td className="py-3 px-3">
-                      {r.deltaPeso !== undefined && r.deltaPeso !== 0 ? (
-                        <span
-                          className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${
-                            r.deltaPeso < 0 ? "text-emerald-400" : "text-rose-400"
-                          }`}
-                        >
-                          {r.deltaPeso < 0 ? "▼" : "▲"}{" "}
-                          {r.deltaPeso > 0 ? `+${r.deltaPeso.toFixed(2)}` : r.deltaPeso.toFixed(2)}
-                        </span>
-                      ) : (
-                        <span className="text-zinc-600 text-[11px]">-</span>
-                      )}
-                    </td>
-
-                    <td className="py-3 px-3">
-                      {(() => {
-                        const bVal = r.bmi || calculateBmi(r.peso);
-                        const cat = getBmiCategory(bVal);
-                        return (
-                          <div className="flex items-center gap-1.5 font-mono">
-                            <span className="font-bold text-zinc-100">{bVal.toFixed(1)}</span>
-                            <span
-                              className={`px-1.5 py-0.2 rounded text-[9px] font-semibold border ${cat.bgColor} ${cat.color} ${cat.borderColor}`}
-                              title={cat.description}
-                            >
-                              {cat.label.split(" ")[0]}
-                            </span>
-                          </div>
-                        );
-                      })()}
-                    </td>
-
-                    <td className="py-3 px-3 font-semibold text-cyan-400">
-                      {typeof r.grasaPct === "number" ? `${r.grasaPct.toFixed(1)}%` : <span className="text-zinc-600">—</span>}
-                    </td>
-
-                    <td className="py-3 px-3 text-emerald-400 font-medium">
-                      {typeof r.masaMagraKg === "number" ? `${r.masaMagraKg.toFixed(1)} kg` : <span className="text-zinc-600">—</span>}
-                    </td>
-
-                    <td className="py-3 px-3 text-rose-400 font-medium">
-                      {typeof r.masaGrasaKg === "number" ? `${r.masaGrasaKg.toFixed(1)} kg` : <span className="text-zinc-600">—</span>}
-                    </td>
-
-                    <td className="py-3 px-3 text-amber-300 font-medium">
-                      {typeof r.impedancia === "number" ? `${Math.round(r.impedancia)} Ω` : <span className="text-zinc-600">—</span>}
-                    </td>
-
-                    <td className="py-3 px-3 text-zinc-400">
-                      {typeof r.impedanciaLow === "number" ? `${Math.round(r.impedanciaLow)} Ω` : <span className="text-zinc-600">—</span>}
-                    </td>
-
-                    <td className="py-3 px-3 text-right">
-                      <div
-                        className="inline-flex items-center gap-1"
-                        onClick={(e) => e.stopPropagation()}
+                  return (
+                    <React.Fragment key={r.id}>
+                      <tr
+                        onClick={() => {
+                          if (isMulti) {
+                            toggleExpandDay(r.fecha);
+                          } else {
+                            handleOpenEdit(r.measurements?.[0] || r);
+                          }
+                        }}
+                        className={`hover:bg-zinc-850/70 transition-colors cursor-pointer group ${
+                          isExpanded ? "bg-zinc-850/40" : ""
+                        }`}
                       >
-                        <button
-                          onClick={() => handleOpenEdit(r)}
-                          className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
-                          title="Modificar pesaje"
-                        >
-                          <EditIcon className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteRecord(r.id, e)}
-                          className="p-1.5 rounded-lg hover:bg-rose-500/15 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
-                          title="Eliminar pesaje"
-                        >
-                          <TrashIcon className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                        <td className="py-3 px-3 text-zinc-300 font-sans">
+                          <div className="flex flex-wrap items-center gap-2 font-medium">
+                            <div className="flex items-center gap-1.5 group-hover:text-accent-light transition-colors">
+                              <CalendarIcon className="w-3.5 h-3.5 text-zinc-500 group-hover:text-accent-light" />
+                              <span>{r.fecha}</span>
+                              {!isMulti && (
+                                <span className="text-zinc-500 text-[11px] font-mono">· {r.hora}</span>
+                              )}
+                            </div>
+
+                            {/* BOTÓN: Al pulsar salen las distintas medidas del día */}
+                            {isMulti && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleExpandDay(r.fecha);
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-[11px] font-sans font-semibold transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
+                                title="Pulsar para ver las distintas medidas de este día"
+                              >
+                                <span>{r.measurements?.length} medidas</span>
+                                <ChevronDownIcon
+                                  className={`w-3 h-3 transition-transform duration-200 ${
+                                    isExpanded ? "rotate-180" : ""
+                                  }`}
+                                />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-3 font-bold text-zinc-100 text-sm">
+                          {r.peso.toFixed(1)}{" "}
+                          <span className="text-[10px] text-zinc-500 font-normal">kg</span>
+                          {isMulti && (
+                            <span className="block text-[9px] text-cyan-400/90 font-normal font-mono">
+                              (media)
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="py-3 px-3">
+                          {r.deltaPeso !== undefined && r.deltaPeso !== 0 ? (
+                            <span
+                              className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${
+                                r.deltaPeso < 0 ? "text-emerald-400" : "text-rose-400"
+                              }`}
+                            >
+                              {r.deltaPeso < 0 ? "▼" : "▲"}{" "}
+                              {r.deltaPeso > 0 ? `+${r.deltaPeso.toFixed(2)}` : r.deltaPeso.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="text-zinc-600 text-[11px]">-</span>
+                          )}
+                        </td>
+
+                        <td className="py-3 px-3">
+                          {(() => {
+                            const bVal = r.bmi || calculateBmi(r.peso);
+                            const cat = getBmiCategory(bVal);
+                            return (
+                              <div className="flex items-center gap-1.5 font-mono">
+                                <span className="font-bold text-zinc-100">{bVal.toFixed(1)}</span>
+                                <span
+                                  className={`px-1.5 py-0.2 rounded text-[9px] font-semibold border ${cat.bgColor} ${cat.color} ${cat.borderColor}`}
+                                  title={cat.description}
+                                >
+                                  {cat.label.split(" ")[0]}
+                                </span>
+                              </div>
+                            );
+                          })()}
+                        </td>
+
+                        <td className="py-3 px-3 font-semibold text-cyan-400">
+                          {typeof r.grasaPct === "number" ? `${r.grasaPct.toFixed(1)}%` : <span className="text-zinc-600">—</span>}
+                        </td>
+
+                        <td className="py-3 px-3 text-emerald-400 font-medium">
+                          {typeof r.masaMagraKg === "number" ? `${r.masaMagraKg.toFixed(1)} kg` : <span className="text-zinc-600">—</span>}
+                        </td>
+
+                        <td className="py-3 px-3 text-rose-400 font-medium">
+                          {typeof r.masaGrasaKg === "number" ? `${r.masaGrasaKg.toFixed(1)} kg` : <span className="text-zinc-600">—</span>}
+                        </td>
+
+                        <td className="py-3 px-3 text-amber-300 font-medium">
+                          {typeof r.impedancia === "number" ? `${Math.round(r.impedancia)} Ω` : <span className="text-zinc-600">—</span>}
+                        </td>
+
+                        <td className="py-3 px-3 text-zinc-400">
+                          {typeof r.impedanciaLow === "number" ? `${Math.round(r.impedanciaLow)} Ω` : <span className="text-zinc-600">—</span>}
+                        </td>
+
+                        <td className="py-3 px-3 text-right">
+                          <div
+                            className="inline-flex items-center gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {isMulti ? (
+                              <>
+                                <button
+                                  onClick={() => setSelectedDayModal(r)}
+                                  className="p-1.5 rounded-lg hover:bg-cyan-500/15 text-cyan-400 hover:text-cyan-200 transition-colors cursor-pointer"
+                                  title="Ver desglose en modal"
+                                >
+                                  <InfoIcon className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={(e) => handleDeleteDayGroup(r, e)}
+                                  className="p-1.5 rounded-lg hover:bg-rose-500/15 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                  title="Eliminar todas las medidas de este día"
+                                >
+                                  <TrashIcon className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => handleOpenEdit(r.measurements?.[0] || r)}
+                                  className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+                                  title="Modificar pesaje"
+                                >
+                                  <EditIcon className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={(e) => handleDeleteRecord(r.measurements?.[0]?.id || r.id, e)}
+                                  className="p-1.5 rounded-lg hover:bg-rose-500/15 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                  title="Eliminar pesaje"
+                                >
+                                  <TrashIcon className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Desglose desplegado de las medidas individuales de este día */}
+                      {isMulti && isExpanded && r.measurements && (
+                        <tr className="bg-zinc-950/80 border-b border-zinc-800">
+                          <td colSpan={10} className="p-3 pl-6 sm:pl-10">
+                            <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/80 p-3.5 space-y-2.5 shadow-inner">
+                              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-zinc-800/60 text-xs">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-zinc-200">
+                                    Medidas tomadas el {r.fecha}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 text-[10px] font-mono border border-cyan-500/20">
+                                    Media: {r.peso.toFixed(1)} kg
+                                    {typeof r.grasaPct === "number" && ` · ${r.grasaPct.toFixed(1)}%`}
+                                  </span>
+                                  {r.minPeso !== undefined && r.maxPeso !== undefined && (
+                                    <span className="text-zinc-500 text-[11px] font-mono">
+                                      (Rango: {r.minPeso.toFixed(1)} - {r.maxPeso.toFixed(1)} kg)
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedDayModal(r);
+                                    }}
+                                    className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                                    title="Abrir desglose en modal"
+                                  >
+                                    <InfoIcon className="w-3 h-3 text-cyan-400" />
+                                    <span>Ver en modal</span>
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setNewDate(r.fecha);
+                                      setManualEntryModalOpen(true);
+                                    }}
+                                    className="px-2 py-1 rounded-lg bg-accent/20 hover:bg-accent/30 text-accent-light border border-accent/30 text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                                  >
+                                    <PlusIcon className="w-3 h-3" />
+                                    <span>+ Toma a este día</span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs font-mono">
+                                  <thead>
+                                    <tr className="text-[10px] text-zinc-500 uppercase tracking-wider border-b border-zinc-800/60">
+                                      <th className="py-1 px-2">#</th>
+                                      <th className="py-1 px-2">Hora</th>
+                                      <th className="py-1 px-2">Peso</th>
+                                      <th className="py-1 px-2">BMI</th>
+                                      <th className="py-1 px-2">% Grasa</th>
+                                      <th className="py-1 px-2">Masa Magra</th>
+                                      <th className="py-1 px-2">Masa Grasa</th>
+                                      <th className="py-1 px-2">Impedancia</th>
+                                      <th className="py-1 px-2">Origen</th>
+                                      <th className="py-1 px-2 text-right">Acciones</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-zinc-800/40 text-[11px]">
+                                    {r.measurements.map((sub, idx) => (
+                                      <tr key={sub.id} className="hover:bg-zinc-800/50 transition-colors">
+                                        <td className="py-1.5 px-2 text-zinc-500 font-sans text-[10px]">
+                                          Toma {idx + 1}
+                                        </td>
+                                        <td className="py-1.5 px-2 text-zinc-200 font-semibold flex items-center gap-1">
+                                          <ClockIcon className="w-3 h-3 text-zinc-500" />
+                                          {sub.hora}
+                                        </td>
+                                        <td className="py-1.5 px-2 font-bold text-zinc-100">
+                                          {sub.peso.toFixed(1)}{" "}
+                                          <span className="text-[9px] text-zinc-500 font-normal">kg</span>
+                                        </td>
+                                        <td className="py-1.5 px-2 text-indigo-300">
+                                          {(sub.bmi || calculateBmi(sub.peso)).toFixed(1)}
+                                        </td>
+                                        <td className="py-1.5 px-2 text-cyan-400 font-semibold">
+                                          {typeof sub.grasaPct === "number" ? `${sub.grasaPct.toFixed(1)}%` : "—"}
+                                        </td>
+                                        <td className="py-1.5 px-2 text-emerald-400">
+                                          {typeof sub.masaMagraKg === "number" ? `${sub.masaMagraKg.toFixed(1)} kg` : "—"}
+                                        </td>
+                                        <td className="py-1.5 px-2 text-rose-400">
+                                          {typeof sub.masaGrasaKg === "number" ? `${sub.masaGrasaKg.toFixed(1)} kg` : "—"}
+                                        </td>
+                                        <td className="py-1.5 px-2 text-amber-300">
+                                          {typeof sub.impedancia === "number" ? `${Math.round(sub.impedancia)} Ω` : "—"}
+                                        </td>
+                                        <td className="py-1.5 px-2 text-zinc-500 text-[10px] font-sans">
+                                          {sub.source || "zepp_life"}
+                                        </td>
+                                        <td className="py-1.5 px-2 text-right font-sans">
+                                          <div className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                            <button
+                                              onClick={() => handleOpenEdit(sub)}
+                                              className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+                                              title="Modificar esta toma"
+                                            >
+                                              <EditIcon className="w-3 h-3" />
+                                            </button>
+                                            <button
+                                              onClick={(e) => handleDeleteRecord(sub.id, e)}
+                                              className="p-1 rounded hover:bg-rose-500/20 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                              title="Eliminar esta toma"
+                                            >
+                                              <TrashIcon className="w-3 h-3" />
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan={10} className="py-8 text-center text-zinc-500 font-sans">
@@ -1804,7 +2200,7 @@ export function WeightTab() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between pt-3 border-t border-zinc-800 text-xs text-zinc-400">
             <span>
-              Página {tablePage} de {totalPages} ({tableRecords.length} pesajes)
+              Página {tablePage} de {totalPages} ({tableRecords.length} {tableGroupByDay ? "días" : "pesajes"})
             </span>
             <div className="flex items-center gap-1">
               <button
@@ -2300,6 +2696,172 @@ export function WeightTab() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 8. MODAL: Detalle de Medidas del Día (cuando hay varias tomas) */}
+      {selectedDayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-2xl bg-zinc-900 border border-zinc-700/80 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-cyan-400">
+                  <CalendarIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
+                    <span>Medidas del {selectedDayModal.fecha}</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                      {selectedDayModal.measurements?.length || 1} tomas
+                    </span>
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    En la gráfica general se muestra la media diaria de este conjunto de medidas.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedDayModal(null)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-200 cursor-pointer"
+              >
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Tarjetas resumen de la media diaria */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 text-center font-mono">
+              <div className="p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/60">
+                <span className="text-[10px] text-zinc-400 block font-sans">Peso Medio</span>
+                <span className="text-base font-extrabold text-zinc-100">{selectedDayModal.peso.toFixed(1)} kg</span>
+              </div>
+              <div className="p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/60">
+                <span className="text-[10px] text-zinc-400 block font-sans">Grasa Media</span>
+                <span className="text-base font-extrabold text-cyan-400">
+                  {typeof selectedDayModal.grasaPct === "number" ? `${selectedDayModal.grasaPct.toFixed(1)}%` : "—"}
+                </span>
+              </div>
+              <div className="p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/60">
+                <span className="text-[10px] text-zinc-400 block font-sans">Masa Magra</span>
+                <span className="text-base font-extrabold text-emerald-400">
+                  {typeof selectedDayModal.masaMagraKg === "number" ? `${selectedDayModal.masaMagraKg.toFixed(1)} kg` : "—"}
+                </span>
+              </div>
+              <div className="p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/60">
+                <span className="text-[10px] text-zinc-400 block font-sans">Rango Peso</span>
+                <span className="text-xs font-semibold text-zinc-300">
+                  {selectedDayModal.minPeso?.toFixed(1)} - {selectedDayModal.maxPeso?.toFixed(1)} kg
+                </span>
+              </div>
+            </div>
+
+            {/* Listado de todas las tomas individuales */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center justify-between">
+                <span>Desglose de tomas registradas ({selectedDayModal.measurements?.length || 1})</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewDate(selectedDayModal.fecha);
+                    setManualEntryModalOpen(true);
+                  }}
+                  className="text-[11px] text-cyan-400 hover:underline flex items-center gap-1 font-sans cursor-pointer normal-case font-medium"
+                >
+                  <PlusIcon className="w-3 h-3" />
+                  <span>Añadir otra toma</span>
+                </button>
+              </h4>
+
+              <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+                {selectedDayModal.measurements?.map((m, idx) => (
+                  <div
+                    key={m.id}
+                    className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80 hover:border-zinc-700 transition-colors flex items-center justify-between gap-3 text-xs"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="w-6 h-6 rounded-full bg-zinc-800 text-zinc-300 flex items-center justify-center font-bold text-[11px] shrink-0 font-mono">
+                        {idx + 1}
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-zinc-100 text-sm font-mono">{m.peso.toFixed(1)} kg</span>
+                          <span className="text-zinc-500 font-mono text-[11px] flex items-center gap-1">
+                            <ClockIcon className="w-3 h-3" />
+                            {m.hora}
+                          </span>
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 font-sans">
+                            {m.source || "zepp_life"}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px] text-zinc-400 font-mono">
+                          {typeof m.grasaPct === "number" && (
+                            <span className="text-cyan-400">Grasa: {m.grasaPct.toFixed(1)}%</span>
+                          )}
+                          {typeof m.masaMagraKg === "number" && (
+                            <span className="text-emerald-400">Magra: {m.masaMagraKg.toFixed(1)} kg</span>
+                          )}
+                          {typeof m.masaGrasaKg === "number" && (
+                            <span className="text-rose-400">M. Grasa: {m.masaGrasaKg.toFixed(1)} kg</span>
+                          )}
+                          {typeof m.impedancia === "number" && (
+                            <span className="text-amber-300">Z: {Math.round(m.impedancia)} Ω</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => handleOpenEdit(m)}
+                        className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white cursor-pointer transition-colors"
+                        title="Modificar esta toma"
+                      >
+                        <EditIcon className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={async (e) => {
+                          await handleDeleteRecord(m.id, e);
+                          const remaining = (selectedDayModal.measurements || []).filter((sub) => sub.id !== m.id);
+                          if (remaining.length === 0) {
+                            setSelectedDayModal(null);
+                          } else {
+                            const updatedDay = aggregateRecordsByDay(remaining, profile)[0];
+                            setSelectedDayModal(updatedDay || null);
+                          }
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-rose-500/20 text-zinc-500 hover:text-rose-400 cursor-pointer transition-colors"
+                        title="Eliminar esta toma"
+                      >
+                        <TrashIcon className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setNewDate(selectedDayModal.fecha);
+                  setManualEntryModalOpen(true);
+                  setSelectedDayModal(null);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-accent hover:bg-accent-hover text-zinc-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <PlusIcon className="w-3.5 h-3.5" />
+                <span>Añadir otra toma a este día</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedDayModal(null)}
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold cursor-pointer transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}

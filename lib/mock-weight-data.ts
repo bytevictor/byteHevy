@@ -40,6 +40,11 @@ export interface WeightRecord {
   ma7Peso?: number;      // Media móvil de 7 días de peso
   ma7Grasa?: number;     // Media móvil de 7 días de % graso
   esValido?: boolean;
+  measurementsCount?: number;   // Cantidad de medidas realizadas ese día
+  measurements?: WeightRecord[]; // Lista de pesajes individuales de ese día
+  isDailyAverage?: boolean;     // True si el punto representa la media diaria
+  minPeso?: number;             // Peso mínimo de ese día
+  maxPeso?: number;             // Peso máximo de ese día
 }
 
 /**
@@ -150,6 +155,194 @@ export function enrichWithMovingAverages(records: WeightRecord[], windowDays = 7
   }
 
   return sorted;
+}
+
+/**
+ * Agrupa pesajes por día (fecha YYYY-MM-DD).
+ * Si un día tiene múltiples pesajes:
+ * - Calcula la media aritmética de peso, grasa, masa magra, agua, impedancia, etc.
+ * - Guarda la lista completa de medidas de ese día en `measurements`.
+ * - Marca `isDailyAverage: true` y `measurementsCount: records.length`.
+ * Si el día tiene 1 sola toma:
+ * - Se mantiene la toma intacta con `measurementsCount: 1` y `measurements: [record]`.
+ */
+export function aggregateRecordsByDay(
+  records: WeightRecord[],
+  profile: UserBiometricProfile = DEFAULT_USER_PROFILE
+): WeightRecord[] {
+  if (records.length === 0) return [];
+
+  // Agrupar por fecha preservando orden cronológico
+  const groupsByDate = new Map<string, WeightRecord[]>();
+  for (const r of records) {
+    const list = groupsByDate.get(r.fecha) || [];
+    list.push(r);
+    groupsByDate.set(r.fecha, list);
+  }
+
+  const result: WeightRecord[] = [];
+
+  for (const [fecha, dayRecords] of groupsByDate.entries()) {
+    // Ordenar las tomas del día por timestamp/hora
+    dayRecords.sort((a, b) => a.timestamp - b.timestamp);
+
+    if (dayRecords.length === 1) {
+      const single = dayRecords[0];
+      result.push({
+        ...single,
+        measurementsCount: 1,
+        measurements: [single],
+        isDailyAverage: false,
+        minPeso: single.peso,
+        maxPeso: single.peso,
+      });
+      continue;
+    }
+
+    // Múltiples tomas en el mismo día: calcular la media aritmética
+    const count = dayRecords.length;
+    const avgPeso = Math.round((dayRecords.reduce((sum, r) => sum + r.peso, 0) / count) * 10) / 10;
+    const weights = dayRecords.map((r) => r.peso);
+    const minPeso = Math.min(...weights);
+    const maxPeso = Math.max(...weights);
+
+    const validFats = dayRecords.filter(
+      (r) => typeof r.grasaPct === "number" && !isNaN(r.grasaPct)
+    );
+    const avgFat =
+      validFats.length > 0
+        ? Math.round(
+            (validFats.reduce((sum, r) => sum + (r.grasaPct || 0), 0) / validFats.length) * 10
+          ) / 10
+        : null;
+
+    const validLeans = dayRecords.filter(
+      (r) => typeof r.masaMagraKg === "number" && !isNaN(r.masaMagraKg)
+    );
+    const avgLean =
+      validLeans.length > 0
+        ? Math.round(
+            (validLeans.reduce((sum, r) => sum + (r.masaMagraKg || 0), 0) / validLeans.length) * 10
+          ) / 10
+        : null;
+
+    const validFatKgs = dayRecords.filter(
+      (r) => typeof r.masaGrasaKg === "number" && !isNaN(r.masaGrasaKg)
+    );
+    const avgFatKg =
+      validFatKgs.length > 0
+        ? Math.round(
+            (validFatKgs.reduce((sum, r) => sum + (r.masaGrasaKg || 0), 0) / validFatKgs.length) * 10
+          ) / 10
+        : null;
+
+    const validWaters = dayRecords.filter(
+      (r) => typeof r.aguaPct === "number" && !isNaN(r.aguaPct)
+    );
+    const avgWater =
+      validWaters.length > 0
+        ? Math.round(
+            (validWaters.reduce((sum, r) => sum + (r.aguaPct || 0), 0) / validWaters.length) * 10
+          ) / 10
+        : null;
+
+    const validImps = dayRecords.filter(
+      (r) => typeof r.impedancia === "number" && !isNaN(r.impedancia)
+    );
+    const avgImp =
+      validImps.length > 0
+        ? Math.round(validImps.reduce((sum, r) => sum + (r.impedancia || 0), 0) / validImps.length)
+        : null;
+
+    const validImpLows = dayRecords.filter(
+      (r) => typeof r.impedanciaLow === "number" && !isNaN(r.impedanciaLow)
+    );
+    const avgImpLow =
+      validImpLows.length > 0
+        ? Math.round(
+            validImpLows.reduce((sum, r) => sum + (r.impedanciaLow || 0), 0) / validImpLows.length
+          )
+        : null;
+
+    const validBone = dayRecords.filter(
+      (r) => typeof r.boneMass === "number" && !isNaN(r.boneMass)
+    );
+    const avgBone =
+      validBone.length > 0
+        ? Math.round(
+            (validBone.reduce((sum, r) => sum + (r.boneMass || 0), 0) / validBone.length) * 100
+          ) / 100
+        : null;
+
+    const validMetab = dayRecords.filter(
+      (r) => typeof r.metabolism === "number" && !isNaN(r.metabolism)
+    );
+    const avgMetab =
+      validMetab.length > 0
+        ? Math.round(validMetab.reduce((sum, r) => sum + (r.metabolism || 0), 0) / validMetab.length)
+        : null;
+
+    const validMuscle = dayRecords.filter(
+      (r) => typeof r.muscleRate === "number" && !isNaN(r.muscleRate)
+    );
+    const avgMuscle =
+      validMuscle.length > 0
+        ? Math.round(
+            (validMuscle.reduce((sum, r) => sum + (r.muscleRate || 0), 0) / validMuscle.length) * 100
+          ) / 100
+        : null;
+
+    const validVisc = dayRecords.filter(
+      (r) => typeof r.visceralFat === "number" && !isNaN(r.visceralFat)
+    );
+    const avgVisc =
+      validVisc.length > 0
+        ? Math.round(
+            (validVisc.reduce((sum, r) => sum + (r.visceralFat || 0), 0) / validVisc.length) * 10
+          ) / 10
+        : null;
+
+    const h = profile.alturaCm > 0 ? profile.alturaCm : 178;
+    const bmi = calculateBmi(avgPeso, h);
+    const ffmiData = avgLean && h > 0 ? calculateFfmi(avgLean, h) : null;
+
+    // Timestamp central para la gráfica: tomamos el promedio
+    const avgTimestamp = Math.round(
+      dayRecords.reduce((sum, r) => sum + r.timestamp, 0) / count
+    );
+
+    result.push({
+      id: `day-${fecha}`,
+      fecha,
+      hora: `Media (${count})`,
+      timestamp: avgTimestamp,
+      peso: avgPeso,
+      impedancia: avgImp,
+      impedanciaLow: avgImpLow,
+      grasaPct: avgFat,
+      masaMagraKg: avgLean,
+      masaGrasaKg: avgFatKg,
+      aguaPct: avgWater,
+      bmi,
+      ffmi: ffmiData ? ffmiData.ffmi : null,
+      boneMass: avgBone,
+      metabolism: avgMetab,
+      muscleRate: avgMuscle,
+      visceralFat: avgVisc,
+      altura: h,
+      source: "media_diaria",
+      measurementsCount: count,
+      measurements: dayRecords,
+      isDailyAverage: true,
+      minPeso,
+      maxPeso,
+      esValido: true,
+    });
+  }
+
+  // Ordenar cronológicamente
+  result.sort((a, b) => a.timestamp - b.timestamp);
+  return result;
 }
 
 /**
