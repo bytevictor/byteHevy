@@ -701,67 +701,10 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                         {isWeightMetric ? (
                           <div className="flex flex-col divide-y divide-zinc-800/70 pt-1">
                             {/* Row 1: Mayor Peso Season */}
-                            <div className="py-2 flex items-center justify-between gap-3">
-                              <div className="flex flex-col min-w-0">
-                                <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold flex items-center gap-1.5">
-                                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: seasonColor }} />
-                                  <span>Mayor Peso</span>
-                                </span>
-                                <div
-                                  className="text-base sm:text-lg font-mono tabular-nums font-bold mt-0.5"
-                                  style={{ color: seasonColor }}
-                                >
-                                  {detailData.exercise.seasonBest?.label || "Sin registros"}
-                                </div>
-                              </div>
-                              <div className="text-[11px] font-mono text-zinc-400 shrink-0 text-right">
-                                {detailData.exercise.seasonBest?.date || "—"}
-                              </div>
-                            </div>
-
-                            {/* Row 2: Top Set 1RM Season */}
-                            <div className="pt-2 flex items-center justify-between gap-3">
-                              <div className="flex flex-col min-w-0">
-                                <span
-                                  className="text-[10px] uppercase tracking-wider font-semibold flex items-center gap-1.5"
-                                  style={{ color: seasonColor }}
-                                >
-                                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: seasonColor }} />
-                                  <span>Top Set 1RM</span>
-                                </span>
-                                <div
-                                  className="text-base sm:text-lg font-mono tabular-nums font-bold mt-0.5 flex items-baseline gap-2 flex-wrap"
-                                  style={{ color: seasonColor }}
-                                >
-                                  <span>
-                                    {detailData.exercise.seasonMax1RM?.label ||
-                                      (detailData.exercise.estimated1RM
-                                        ? `${detailData.exercise.estimated1RM} kg 1RM`
-                                        : "—")}
-                                  </span>
-                                  {detailData.exercise.seasonMax1RM?.setLabel && (
-                                    <span className="text-xs font-normal text-zinc-400 font-sans">
-                                      ({detailData.exercise.seasonMax1RM.setLabel})
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="text-[11px] font-mono text-zinc-400 shrink-0 text-right">
-                                {detailData.exercise.seasonMax1RM?.date ||
-                                  detailData.exercise.seasonBest?.date ||
-                                  "—"}
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="py-2.5 flex items-center justify-between gap-3">
-                            <div className="flex flex-col">
-                              <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
-                                {detailData.exercise.metricType === "bodyweight_reps"
-                                  ? "Récord Repeticiones"
-                                  : detailData.exercise.metricType === "seconds"
-                                  ? "Récord Duración"
-                                  : "Récord Distancia"}
+                            <div className="py-2 flex flex-col">
+                              <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: seasonColor }} />
+                                <span>Mayor Peso</span>
                               </span>
                               <div
                                 className="text-base sm:text-lg font-mono tabular-nums font-bold mt-0.5"
@@ -769,8 +712,59 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                               >
                                 {detailData.exercise.seasonBest?.label || "Sin registros"}
                               </div>
+                              <span className="text-[10px] font-mono text-zinc-400 mt-0.5">
+                                {detailData.exercise.seasonBest?.date || "—"}
+                              </span>
                             </div>
-                            <span className="text-[11px] font-mono text-zinc-400">
+
+                            {/* Row 2: Top Set 1RM Season */}
+                            <div className="pt-2 flex flex-col">
+                              <span
+                                className="text-[10px] uppercase tracking-wider font-semibold flex items-center gap-1.5"
+                                style={{ color: seasonColor }}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: seasonColor }} />
+                                <span>Top Set 1RM</span>
+                              </span>
+                              <div
+                                className="text-base sm:text-lg font-mono tabular-nums font-bold mt-0.5 flex items-baseline gap-1.5 flex-wrap"
+                                style={{ color: seasonColor }}
+                              >
+                                <span>
+                                  {detailData.exercise.seasonMax1RM?.label ||
+                                    (detailData.exercise.estimated1RM
+                                      ? `${detailData.exercise.estimated1RM} kg 1RM`
+                                      : "—")}
+                                </span>
+                                {detailData.exercise.seasonMax1RM?.setLabel && (
+                                  <span className="text-xs font-normal text-zinc-400 font-sans">
+                                    ({detailData.exercise.seasonMax1RM.setLabel})
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] font-mono text-zinc-400 mt-0.5">
+                                {detailData.exercise.seasonMax1RM?.date ||
+                                  detailData.exercise.seasonBest?.date ||
+                                  "—"}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="pt-2 flex flex-col">
+                            <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
+                              {detailData.exercise.metricType === "bodyweight_reps"
+                                ? "Récord Repeticiones"
+                                : detailData.exercise.metricType === "seconds"
+                                ? "Récord Duración"
+                                : "Récord Distancia"}
+                            </span>
+                            <div
+                              className="text-base sm:text-lg font-mono tabular-nums font-bold mt-0.5"
+                              style={{ color: seasonColor }}
+                            >
+                              {detailData.exercise.seasonBest?.label || "Sin registros"}
+                            </div>
+                            <span className="text-[10px] font-mono text-zinc-400 mt-0.5">
                               {detailData.exercise.seasonBest?.date || "—"}
                             </span>
                           </div>
@@ -792,64 +786,58 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                         {isWeightMetric ? (
                           <div className="flex flex-col divide-y divide-zinc-800/70 pt-1">
                             {/* Row 1: Mayor Peso Histórico */}
-                            <div className="py-2 flex items-center justify-between gap-3">
-                              <div className="flex flex-col min-w-0">
-                                <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold flex items-center gap-1.5">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400/80 shrink-0" />
-                                  <span>Mayor Peso</span>
-                                </span>
-                                <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-100 mt-0.5">
-                                  {detailData.exercise.allTimeBest?.label || "—"}
-                                </div>
+                            <div className="py-2 flex flex-col">
+                              <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400/80 shrink-0" />
+                                <span>Mayor Peso</span>
+                              </span>
+                              <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-100 mt-0.5">
+                                {detailData.exercise.allTimeBest?.label || "—"}
                               </div>
-                              <div className="text-[11px] font-mono text-zinc-400 shrink-0 text-right">
+                              <span className="text-[10px] font-mono text-zinc-400 mt-0.5">
                                 {detailData.exercise.allTimeBest?.date || "Sin registro"}
-                              </div>
+                              </span>
                             </div>
 
                             {/* Row 2: Top Set 1RM Histórico */}
-                            <div className="pt-2 flex items-center justify-between gap-3">
-                              <div className="flex flex-col min-w-0">
-                                <span className="text-[10px] uppercase tracking-wider text-yellow-400 font-semibold flex items-center gap-1.5">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                                  <span>Top Set 1RM</span>
+                            <div className="pt-2 flex flex-col">
+                              <span className="text-[10px] uppercase tracking-wider text-yellow-400 font-semibold flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                                <span>Top Set 1RM</span>
+                              </span>
+                              <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-300 mt-0.5 flex items-baseline gap-1.5 flex-wrap">
+                                <span>
+                                  {detailData.exercise.allTimeMax1RM?.label ||
+                                    (detailData.exercise.allTimeEstimated1RM
+                                      ? `${detailData.exercise.allTimeEstimated1RM} kg 1RM`
+                                      : "—")}
                                 </span>
-                                <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-300 mt-0.5 flex items-baseline gap-2 flex-wrap">
-                                  <span>
-                                    {detailData.exercise.allTimeMax1RM?.label ||
-                                      (detailData.exercise.allTimeEstimated1RM
-                                        ? `${detailData.exercise.allTimeEstimated1RM} kg 1RM`
-                                        : "—")}
+                                {detailData.exercise.allTimeMax1RM?.setLabel && (
+                                  <span className="text-xs font-normal text-zinc-400 font-sans">
+                                    ({detailData.exercise.allTimeMax1RM.setLabel})
                                   </span>
-                                  {detailData.exercise.allTimeMax1RM?.setLabel && (
-                                    <span className="text-xs font-normal text-zinc-400 font-sans">
-                                      ({detailData.exercise.allTimeMax1RM.setLabel})
-                                    </span>
-                                  )}
-                                </div>
+                                )}
                               </div>
-                              <div className="text-[11px] font-mono text-zinc-400 shrink-0 text-right">
+                              <span className="text-[10px] font-mono text-zinc-400 mt-0.5">
                                 {detailData.exercise.allTimeMax1RM?.date ||
                                   detailData.exercise.allTimeBest?.date ||
                                   "Sin registro"}
-                              </div>
+                              </span>
                             </div>
                           </div>
                         ) : (
-                          <div className="py-2.5 flex items-center justify-between gap-3">
-                            <div className="flex flex-col">
-                              <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
-                                {detailData.exercise.metricType === "bodyweight_reps"
-                                  ? "Récord Repeticiones"
-                                  : detailData.exercise.metricType === "seconds"
-                                  ? "Récord Duración"
-                                  : "Récord Distancia"}
-                              </span>
-                              <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-200 mt-0.5">
-                                {detailData.exercise.allTimeBest?.label || "—"}
-                              </div>
+                          <div className="pt-2 flex flex-col">
+                            <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
+                              {detailData.exercise.metricType === "bodyweight_reps"
+                                ? "Récord Repeticiones"
+                                : detailData.exercise.metricType === "seconds"
+                                ? "Récord Duración"
+                                : "Récord Distancia"}
+                            </span>
+                            <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-200 mt-0.5">
+                              {detailData.exercise.allTimeBest?.label || "—"}
                             </div>
-                            <span className="text-[11px] font-mono text-zinc-400">
+                            <span className="text-[10px] font-mono text-zinc-400 mt-0.5">
                               {detailData.exercise.allTimeBest?.date || "Sin registro"}
                             </span>
                           </div>
@@ -873,64 +861,58 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                         {isWeightMetric ? (
                           <div className="flex flex-col divide-y divide-zinc-800/70 pt-1">
                             {/* Row 1: Mayor Peso Histórico */}
-                            <div className="py-2 flex items-center justify-between gap-3">
-                              <div className="flex flex-col min-w-0">
-                                <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold flex items-center gap-1.5">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400/80 shrink-0" />
-                                  <span>Mayor Peso</span>
-                                </span>
-                                <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-100 mt-0.5">
-                                  {detailData.exercise.allTimeBest?.label || "—"}
-                                </div>
+                            <div className="py-2 flex flex-col">
+                              <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400/80 shrink-0" />
+                                <span>Mayor Peso</span>
+                              </span>
+                              <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-100 mt-0.5">
+                                {detailData.exercise.allTimeBest?.label || "—"}
                               </div>
-                              <div className="text-[11px] font-mono text-zinc-400 shrink-0 text-right">
+                              <span className="text-[10px] font-mono text-zinc-400 mt-0.5">
                                 {detailData.exercise.allTimeBest?.date || "Sin registro"}
-                              </div>
+                              </span>
                             </div>
 
                             {/* Row 2: Top Set 1RM Histórico */}
-                            <div className="pt-2 flex items-center justify-between gap-3">
-                              <div className="flex flex-col min-w-0">
-                                <span className="text-[10px] uppercase tracking-wider text-yellow-400 font-semibold flex items-center gap-1.5">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                                  <span>Top Set 1RM</span>
+                            <div className="pt-2 flex flex-col">
+                              <span className="text-[10px] uppercase tracking-wider text-yellow-400 font-semibold flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                                <span>Top Set 1RM</span>
+                              </span>
+                              <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-300 mt-0.5 flex items-baseline gap-1.5 flex-wrap">
+                                <span>
+                                  {detailData.exercise.allTimeMax1RM?.label ||
+                                    (detailData.exercise.allTimeEstimated1RM
+                                      ? `${detailData.exercise.allTimeEstimated1RM} kg 1RM`
+                                      : "—")}
                                 </span>
-                                <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-300 mt-0.5 flex items-baseline gap-2 flex-wrap">
-                                  <span>
-                                    {detailData.exercise.allTimeMax1RM?.label ||
-                                      (detailData.exercise.allTimeEstimated1RM
-                                        ? `${detailData.exercise.allTimeEstimated1RM} kg 1RM`
-                                        : "—")}
+                                {detailData.exercise.allTimeMax1RM?.setLabel && (
+                                  <span className="text-xs font-normal text-zinc-400 font-sans">
+                                    ({detailData.exercise.allTimeMax1RM.setLabel})
                                   </span>
-                                  {detailData.exercise.allTimeMax1RM?.setLabel && (
-                                    <span className="text-xs font-normal text-zinc-400 font-sans">
-                                      ({detailData.exercise.allTimeMax1RM.setLabel})
-                                    </span>
-                                  )}
-                                </div>
+                                )}
                               </div>
-                              <div className="text-[11px] font-mono text-zinc-400 shrink-0 text-right">
+                              <span className="text-[10px] font-mono text-zinc-400 mt-0.5">
                                 {detailData.exercise.allTimeMax1RM?.date ||
                                   detailData.exercise.allTimeBest?.date ||
                                   "Sin registro"}
-                              </div>
+                              </span>
                             </div>
                           </div>
                         ) : (
-                          <div className="py-2.5 flex items-center justify-between gap-3">
-                            <div className="flex flex-col">
-                              <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
-                                {detailData.exercise.metricType === "bodyweight_reps"
-                                  ? "Récord Repeticiones"
-                                  : detailData.exercise.metricType === "seconds"
-                                  ? "Récord Duración"
-                                  : "Récord Distancia"}
-                              </span>
-                              <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-200 mt-0.5">
-                                {detailData.exercise.allTimeBest?.label || "—"}
-                              </div>
+                          <div className="pt-2 flex flex-col">
+                            <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
+                              {detailData.exercise.metricType === "bodyweight_reps"
+                                ? "Récord Repeticiones"
+                                : detailData.exercise.metricType === "seconds"
+                                ? "Récord Duración"
+                                : "Récord Distancia"}
+                            </span>
+                            <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-200 mt-0.5">
+                              {detailData.exercise.allTimeBest?.label || "—"}
                             </div>
-                            <span className="text-[11px] font-mono text-zinc-400">
+                            <span className="text-[10px] font-mono text-zinc-400 mt-0.5">
                               {detailData.exercise.allTimeBest?.date || "Sin registro"}
                             </span>
                           </div>
