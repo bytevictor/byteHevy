@@ -673,20 +673,70 @@ export function BmiMapModal({ isOpen, onClose, weight: propWeight }: BmiMapModal
                 {activeHeight}
               </text>
 
-              {/* EL PUNTO EN EL MAPA (Punto del usuario) */}
+              {/* EL PUNTO EN EL MAPA (Punto del usuario con animación blip/radar suave) */}
               <g className="cursor-pointer">
-                {/* Pulso exterior animado */}
+                {/* Onda 1 de radar / blip animada */}
                 <circle
                   cx={userPointX}
                   cy={userPointY}
-                  r="14"
+                  r="6.5"
                   fill="none"
                   stroke="#3b82f6"
+                  strokeWidth="2.5"
+                >
+                  <animate
+                    attributeName="r"
+                    values="6.5;24"
+                    dur="1.8s"
+                    repeatCount="indefinite"
+                  />
+                  <animate
+                    attributeName="opacity"
+                    values="0.9;0"
+                    dur="1.8s"
+                    repeatCount="indefinite"
+                  />
+                  <animate
+                    attributeName="stroke-width"
+                    values="2.5;0.5"
+                    dur="1.8s"
+                    repeatCount="indefinite"
+                  />
+                </circle>
+
+                {/* Onda 2 de radar desfasada (pulso continuo) */}
+                <circle
+                  cx={userPointX}
+                  cy={userPointY}
+                  r="6.5"
+                  fill="none"
+                  stroke="#60a5fa"
                   strokeWidth="2"
-                  opacity="0.75"
-                  className="animate-ping"
-                />
-                {/* Halo exterior */}
+                >
+                  <animate
+                    attributeName="r"
+                    values="6.5;24"
+                    dur="1.8s"
+                    begin="0.9s"
+                    repeatCount="indefinite"
+                  />
+                  <animate
+                    attributeName="opacity"
+                    values="0.8;0"
+                    dur="1.8s"
+                    begin="0.9s"
+                    repeatCount="indefinite"
+                  />
+                  <animate
+                    attributeName="stroke-width"
+                    values="2;0.5"
+                    dur="1.8s"
+                    begin="0.9s"
+                    repeatCount="indefinite"
+                  />
+                </circle>
+
+                {/* Halo exterior permanente */}
                 <circle
                   cx={userPointX}
                   cy={userPointY}
@@ -696,6 +746,7 @@ export function BmiMapModal({ isOpen, onClose, weight: propWeight }: BmiMapModal
                   stroke="#3b82f6"
                   strokeWidth="1.5"
                 />
+
                 {/* Núcleo central del punto */}
                 <circle
                   cx={userPointX}
@@ -746,13 +797,41 @@ export function BmiMapModal({ isOpen, onClose, weight: propWeight }: BmiMapModal
               {/* Punto simulado si el usuario hizo clic en otra parte */}
               {simulatedPoint && simPointX !== null && simPointY !== null && (
                 <g>
+                  {/* Radar animado para el punto simulado */}
+                  <circle
+                    cx={simPointX}
+                    cy={simPointY}
+                    r="8"
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeWidth="2"
+                  >
+                    <animate
+                      attributeName="r"
+                      values="8;22"
+                      dur="1.8s"
+                      repeatCount="indefinite"
+                    />
+                    <animate
+                      attributeName="opacity"
+                      values="0.9;0"
+                      dur="1.8s"
+                      repeatCount="indefinite"
+                    />
+                    <animate
+                      attributeName="stroke-width"
+                      values="2;0.5"
+                      dur="1.8s"
+                      repeatCount="indefinite"
+                    />
+                  </circle>
                   <circle
                     cx={simPointX}
                     cy={simPointY}
                     r="8"
                     fill="#f59e0b"
                     stroke="#ffffff"
-                    strokeWidth="2"
+                    strokeWidth="2.5"
                   />
                   <line
                     x1={simPointX}
