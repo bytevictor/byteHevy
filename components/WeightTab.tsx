@@ -26,9 +26,11 @@ import {
   LinearLineIcon,
   SmoothLineIcon,
   FlowLineIcon,
+  UserIcon,
 } from "./Icons";
 import { useSeason } from "@/lib/season-context";
 import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
+import { useUserProfile, getBmiCategory } from "@/lib/user-profile-context";
 import {
   WeightRecord,
   generateMockWeightRecords,
@@ -141,9 +143,30 @@ function buildPath(
 export function WeightTab() {
   const { activeSeason, activeSeasonId } = useSeason();
   const seasonColor = getSeasonColor(activeSeason);
+  const { profile, calculateBmi, getBmiCategory, calculateFfmi, getIdealWeightRange } = useUserProfile();
 
-  // Estado de registros de peso (iniciado con mock data)
-  const [records, setRecords] = useState<WeightRecord[]>(() => generateMockWeightRecords());
+  // Estado de registros de peso (iniciado con mock data usando el perfil del usuario)
+  const [records, setRecords] = useState<WeightRecord[]>(() => generateMockWeightRecords(profile));
+
+  // Recalcular BMI y composición cuando cambie el perfil de altura/edad en Configuración
+  useEffect(() => {
+    setRecords((prev) =>
+      enrichWithMovingAverages(
+        prev.map((r) => {
+          const comp = estimateBodyComposition(r.peso, r.impedancia, r.impedanciaLow, profile);
+          return {
+            ...r,
+            grasaPct: comp.grasaPct,
+            masaMagraKg: comp.masaMagraKg,
+            masaGrasaKg: comp.masaGrasaKg,
+            aguaPct: comp.aguaPct,
+            bmi: comp.bmi,
+            ffmi: comp.ffmi,
+          };
+        })
+      )
+    );
+  }, [profile.alturaCm, profile.edad, profile.sexo]);
 
   // Filtros y vistas
   const [chartMode, setChartMode] = useState<WeightChartMode>("combined");
@@ -216,7 +239,7 @@ export function WeightTab() {
     const [hh, mm] = editTime.split(":").map(Number);
     const ts = new Date(y, m - 1, d, hh, mm).getTime();
 
-    const comp = estimateBodyComposition(p, imp, impLow);
+    const comp = estimateBodyComposition(p, imp, impLow, profile);
 
     const updatedRecord: WeightRecord = {
       ...editingRecord,
@@ -230,6 +253,8 @@ export function WeightTab() {
       masaMagraKg: comp.masaMagraKg,
       masaGrasaKg: comp.masaGrasaKg,
       aguaPct: comp.aguaPct,
+      bmi: comp.bmi,
+      ffmi: comp.ffmi,
     };
 
     const updatedList = records.map((r) => (r.id === editingRecord.id ? updatedRecord : r));
@@ -378,7 +403,7 @@ export function WeightTab() {
       setCsvPreview(null);
       return;
     }
-    const res = parseWeightCsv(text);
+    const res = parseWeightCsv(text, profile);
     setCsvPreview({
       records: res.records,
       errors: res.errors,
@@ -415,7 +440,7 @@ export function WeightTab() {
     const [hh, mm] = newTime.split(":").map(Number);
     const ts = new Date(y, m - 1, d, hh, mm).getTime();
 
-    const comp = estimateBodyComposition(p, imp, impLow);
+    const comp = estimateBodyComposition(p, imp, impLow, profile);
 
     const newRecord: WeightRecord = {
       id: `manual-${Date.now()}`,
@@ -429,6 +454,8 @@ export function WeightTab() {
       masaMagraKg: comp.masaMagraKg,
       masaGrasaKg: comp.masaGrasaKg,
       aguaPct: comp.aguaPct,
+      bmi: comp.bmi,
+      ffmi: comp.ffmi,
       esValido: true,
     };
 
@@ -440,7 +467,7 @@ export function WeightTab() {
 
   const handleResetMockup = () => {
     if (confirm("¿Deseas restaurar el dataset mockup de simulación original?")) {
-      setRecords(generateMockWeightRecords());
+      setRecords(generateMockWeightRecords(profile));
     }
   };
 
@@ -599,8 +626,18 @@ export function WeightTab() {
     const imp = parseFloat(editImp) || 520;
     const impLow = parseFloat(editImpLow) || 565;
     if (isNaN(p) || p <= 0) return null;
-    return estimateBodyComposition(p, imp, impLow);
-  }, [editingRecord, editWeight, editImp, editImpLow]);
+    return estimateBodyComposition(p, imp, impLow, profile);
+  }, [editingRecord, editWeight, editImp, editImpLow, profile]);
+
+  // Cálculo en vivo para el modal de nuevo registro
+  const liveNewPreview = useMemo(() => {
+    if (!manualEntryModalOpen) return null;
+    const p = parseFloat(newWeight.replace(",", "."));
+    const imp = parseFloat(newImp) || 520;
+    const impLow = parseFloat(newImpLow) || 565;
+    if (isNaN(p) || p <= 0) return null;
+    return estimateBodyComposition(p, imp, impLow, profile);
+  }, [manualEntryModalOpen, newWeight, newImp, newImpLow, profile]);
 
   return (
     <div className="py-6 space-y-6">
@@ -684,8 +721,8 @@ export function WeightTab() {
         </button>
       </div>
 
-      {/* 3. Panel de Métricas / KPI Cards (5 Cards) */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
+      {/* 3. Panel de Métricas / KPI Cards (6 Cards) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
         {/* KPI 1: Peso Actual */}
         <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
@@ -762,7 +799,53 @@ export function WeightTab() {
           </div>
         </div>
 
-        {/* KPI 3: Masa Magra (FFM) */}
+        {/* KPI 3: BMI / IMC (Nuevo basado en Altura & Edad) */}
+        {(() => {
+          const currentBmi = stats.latestWeight > 0 ? calculateBmi(stats.latestWeight) : 0;
+          const bmiCat = getBmiCategory(currentBmi);
+          const currentFfmi = stats.latestLean > 0 ? calculateFfmi(stats.latestLean) : { ffmi: 0, ffmiNormalized: 0, category: "-" };
+          const idealRange = getIdealWeightRange();
+
+          return (
+            <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
+              <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
+                <span className="flex items-center gap-1.5">
+                  <UserIcon className="w-3.5 h-3.5 text-indigo-400" />
+                  BMI / IMC
+                </span>
+                <span
+                  className={`px-1.5 py-0.2 rounded text-[9px] font-semibold border ${bmiCat.bgColor} ${bmiCat.color} ${bmiCat.borderColor}`}
+                >
+                  {bmiCat.label.split(" ")[0]}
+                </span>
+              </div>
+
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl sm:text-3xl font-extrabold text-indigo-300 tracking-tight font-mono">
+                  {currentBmi > 0 ? currentBmi.toFixed(1) : "--"}
+                </span>
+                <span className="text-xs text-indigo-400/80 font-normal">kg/m²</span>
+              </div>
+
+              <div className="mt-2.5 flex items-center justify-between text-[11px]">
+                <span
+                  className="text-zinc-400 truncate"
+                  title={`Altura configurada: ${profile.alturaCm} cm · Edad: ${profile.edad} años`}
+                >
+                  {profile.alturaCm} cm · {profile.edad}a
+                </span>
+                <span
+                  className="text-[10px] text-zinc-500 font-mono"
+                  title={`Rango saludable: ${idealRange.min} - ${idealRange.max} kg | FFMI: ${currentFfmi.ffmi}`}
+                >
+                  FFMI: {currentFfmi.ffmi}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* KPI 4: Masa Magra (FFM) */}
         <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
             <span className="flex items-center gap-1.5">
@@ -787,7 +870,7 @@ export function WeightTab() {
           </div>
         </div>
 
-        {/* KPI 4: Masa Grasa */}
+        {/* KPI 5: Masa Grasa */}
         <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
             <span className="flex items-center gap-1.5">
@@ -812,8 +895,8 @@ export function WeightTab() {
           </div>
         </div>
 
-        {/* KPI 5: Impedancia Dual */}
-        <div className="col-span-2 md:col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
+        {/* KPI 6: Impedancia Dual */}
+        <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
             <span className="flex items-center gap-1.5">
               <ZapIcon className="w-3.5 h-3.5 text-amber-400" />
@@ -1276,7 +1359,7 @@ export function WeightTab() {
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-0.5">
+              <div className="grid grid-cols-3 gap-2 pt-0.5">
                 <div>
                   <span className="text-[10px] text-zinc-400 block">Peso</span>
                   <span className="font-extrabold text-sm text-zinc-100 font-mono">
@@ -1303,9 +1386,16 @@ export function WeightTab() {
                     {hoveredPoint.grasaPct.toFixed(1)}%
                   </span>
                 </div>
+
+                <div>
+                  <span className="text-[10px] text-zinc-400 block">BMI / IMC</span>
+                  <span className="font-extrabold text-sm text-indigo-300 font-mono">
+                    {(hoveredPoint.bmi || calculateBmi(hoveredPoint.peso)).toFixed(1)}
+                  </span>
+                </div>
               </div>
 
-              <div className="pt-1 border-t border-zinc-800/80 grid grid-cols-2 gap-2 text-[10px]">
+              <div className="pt-1 border-t border-zinc-800/80 grid grid-cols-3 gap-2 text-[10px]">
                 <div>
                   <span className="text-zinc-500 block">Masa Magra:</span>
                   <span className="font-semibold text-emerald-400 font-mono">
@@ -1317,6 +1407,18 @@ export function WeightTab() {
                   <span className="font-semibold text-rose-400 font-mono">
                     {hoveredPoint.masaGrasaKg.toFixed(1)} kg
                   </span>
+                </div>
+                <div>
+                  <span className="text-zinc-500 block">Estado:</span>
+                  {(() => {
+                    const bVal = hoveredPoint.bmi || calculateBmi(hoveredPoint.peso);
+                    const cat = getBmiCategory(bVal);
+                    return (
+                      <span className={`font-semibold font-mono ${cat.color}`}>
+                        {cat.label.split(" ")[0]}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -1413,6 +1515,7 @@ export function WeightTab() {
                 <th className="py-2.5 px-3">Fecha y Hora</th>
                 <th className="py-2.5 px-3">Peso</th>
                 <th className="py-2.5 px-3">Δ Diario</th>
+                <th className="py-2.5 px-3">BMI / IMC</th>
                 <th className="py-2.5 px-3">% Graso</th>
                 <th className="py-2.5 px-3">Masa Magra</th>
                 <th className="py-2.5 px-3">Masa Grasa</th>
@@ -1457,6 +1560,24 @@ export function WeightTab() {
                       )}
                     </td>
 
+                    <td className="py-3 px-3">
+                      {(() => {
+                        const bVal = r.bmi || calculateBmi(r.peso);
+                        const cat = getBmiCategory(bVal);
+                        return (
+                          <div className="flex items-center gap-1.5 font-mono">
+                            <span className="font-bold text-zinc-100">{bVal.toFixed(1)}</span>
+                            <span
+                              className={`px-1.5 py-0.2 rounded text-[9px] font-semibold border ${cat.bgColor} ${cat.color} ${cat.borderColor}`}
+                              title={cat.description}
+                            >
+                              {cat.label.split(" ")[0]}
+                            </span>
+                          </div>
+                        );
+                      })()}
+                    </td>
+
                     <td className="py-3 px-3 font-semibold text-cyan-400">
                       {r.grasaPct.toFixed(1)}%
                     </td>
@@ -1498,7 +1619,7 @@ export function WeightTab() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-zinc-500 font-sans">
+                  <td colSpan={10} className="py-8 text-center text-zinc-500 font-sans">
                     No se encontraron registros de pesaje.
                   </td>
                 </tr>
@@ -1637,7 +1758,13 @@ export function WeightTab() {
                   <span className="text-[11px] font-semibold text-zinc-300 block">
                     Recálculo biométrico instantáneo:
                   </span>
-                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                    <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                      <span className="text-[10px] text-zinc-400 block">BMI / IMC</span>
+                      <span className="font-extrabold text-indigo-400 font-mono text-sm">
+                        {liveEditPreview.bmi}
+                      </span>
+                    </div>
                     <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
                       <span className="text-[10px] text-zinc-400 block">% Graso</span>
                       <span className="font-extrabold text-cyan-400 font-mono text-sm">
@@ -1946,8 +2073,42 @@ export function WeightTab() {
               </div>
 
               <p className="text-[11px] text-zinc-500 italic">
-                El % graso, masa magra y agua se estimarán automáticamente según el índice de bioimpedancia.
+                El % graso, masa magra y agua se estimarán automáticamente según el índice de bioimpedancia y tu perfil biométrico.
               </p>
+
+              {liveNewPreview && (
+                <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-1.5">
+                  <span className="text-[11px] font-semibold text-zinc-300 block">
+                    Recálculo biométrico instantáneo:
+                  </span>
+                  <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                    <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                      <span className="text-[10px] text-zinc-400 block">BMI / IMC</span>
+                      <span className="font-extrabold text-indigo-400 font-mono text-sm">
+                        {liveNewPreview.bmi}
+                      </span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                      <span className="text-[10px] text-zinc-400 block">% Graso</span>
+                      <span className="font-extrabold text-cyan-400 font-mono text-sm">
+                        {liveNewPreview.grasaPct}%
+                      </span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                      <span className="text-[10px] text-zinc-400 block">Masa Magra</span>
+                      <span className="font-extrabold text-emerald-400 font-mono text-sm">
+                        {liveNewPreview.masaMagraKg} kg
+                      </span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                      <span className="text-[10px] text-zinc-400 block">Masa Grasa</span>
+                      <span className="font-extrabold text-rose-400 font-mono text-sm">
+                        {liveNewPreview.masaGrasaKg} kg
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-zinc-800">
                 <button

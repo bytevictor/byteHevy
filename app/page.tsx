@@ -9,6 +9,7 @@ import { JournalTab } from "@/components/JournalTab";
 import { SettingsTab } from "@/components/SettingsTab";
 import { ExerciseSummary } from "@/lib/actions";
 import { SeasonProvider, useSeason } from "@/lib/season-context";
+import { UserProfileProvider } from "@/lib/user-profile-context";
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<TabId>("explorer");
@@ -92,8 +93,10 @@ function AppContent() {
 
 export default function Home() {
   return (
-    <SeasonProvider>
-      <AppContent />
-    </SeasonProvider>
+    <UserProfileProvider>
+      <SeasonProvider>
+        <AppContent />
+      </SeasonProvider>
+    </UserProfileProvider>
   );
 }

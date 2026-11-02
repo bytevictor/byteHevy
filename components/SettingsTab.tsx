@@ -19,9 +19,11 @@ import {
   CheckCircleIcon,
   AlertTriangleIcon,
   PhotoIcon,
+  UserIcon,
 } from "./Icons";
 import { ThemeCustomizer } from "./ThemeCustomizer";
 import { ExerciseMediaManager } from "./ExerciseMediaManager";
+import { BiometricProfileSettings } from "./BiometricProfileSettings";
 import { useSeason } from "@/lib/season-context";
 import { Season } from "@/lib/actions";
 import {
@@ -70,6 +72,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [showBiometrics, setShowBiometrics] = useState(true);
   const [showAppearance, setShowAppearance] = useState(false);
   const [showMediaManager, setShowMediaManager] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -494,6 +497,23 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
 
         <div className="flex items-center gap-2 flex-wrap self-start sm:self-center shrink-0">
           <button
+            onClick={() => setShowBiometrics((prev) => !prev)}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-sm ${
+              showBiometrics
+                ? "bg-accent/15 border-accent/40 text-accent-light ring-1 ring-accent/20"
+                : "bg-zinc-900 border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+            }`}
+            title="Definir altura y edad para cálculos de BMI y bioimpedancia"
+          >
+            <UserIcon
+              className={`w-4 h-4 transition-transform duration-300 ${
+                showBiometrics ? "scale-110 text-accent-light" : "text-zinc-400"
+              }`}
+            />
+            <span>{showBiometrics ? "Ocultar Perfil Biométrico" : "Perfil Biométrico"}</span>
+          </button>
+
+          <button
             onClick={() => setShowMediaManager((prev) => !prev)}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-sm ${
               showMediaManager
@@ -528,6 +548,9 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
           </button>
         </div>
       </div>
+
+      {/* Biometric Profile (Altura, Edad & BMI) */}
+      {showBiometrics && <BiometricProfileSettings />}
 
       {/* Exercise Cover Art & 3D Media Manager */}
       {showMediaManager && <ExerciseMediaManager />}

@@ -4,6 +4,16 @@
  * Schema esperado: Fecha, hora, Impedancia, Impedancia Low, Peso
  */
 
+import {
+  UserBiometricProfile,
+  DEFAULT_USER_PROFILE,
+  calculateBmi,
+  calculateFfmi,
+} from "./user-profile-context";
+
+export type { UserBiometricProfile };
+export { DEFAULT_USER_PROFILE };
+
 export interface WeightRecord {
   id: string;
   fecha: string;         // YYYY-MM-DD (ej: "2026-10-31")
@@ -16,24 +26,14 @@ export interface WeightRecord {
   masaMagraKg: number;   // kg masa libre de grasa (FFM)
   masaGrasaKg: number;   // kg masa grasa
   aguaPct: number;       // % agua corporal total estimada
+  bmi?: number;          // Índice de masa corporal (kg/m²)
+  ffmi?: number;         // Fat-Free Mass Index
   deltaPeso?: number;    // Diferencia con respecto al registro anterior
   deltaGrasa?: number;   // Diferencia de % graso con el registro anterior
   ma7Peso?: number;      // Media móvil de 7 días de peso
   ma7Grasa?: number;     // Media móvil de 7 días de % graso
   esValido?: boolean;
 }
-
-export interface UserBiometricProfile {
-  alturaCm: number;      // Altura en cm (default 176)
-  edad: number;          // Años (default 26)
-  sexo: "male" | "female";
-}
-
-export const DEFAULT_USER_PROFILE: UserBiometricProfile = {
-  alturaCm: 176,
-  edad: 26,
-  sexo: "male",
-};
 
 /**
  * Estima los parámetros de composición corporal basados en Peso y Bioimpedancia (BIA)
@@ -44,26 +44,32 @@ export function estimateBodyComposition(
   impedancia: number,
   impedanciaLow: number,
   profile: UserBiometricProfile = DEFAULT_USER_PROFILE
-): { grasaPct: number; masaMagraKg: number; masaGrasaKg: number; aguaPct: number } {
-  const h = profile.alturaCm;
+): {
+  grasaPct: number;
+  masaMagraKg: number;
+  masaGrasaKg: number;
+  aguaPct: number;
+  bmi: number;
+  ffmi: number;
+} {
+  const h = profile.alturaCm > 0 ? profile.alturaCm : 178;
   const isMale = profile.sexo === "male";
 
   // Índice de impedancia: H² / R (cm² / Ω)
   const impedanceIndex = (h * h) / (impedancia > 0 ? impedancia : 500);
 
-  // Estimación de Agua Corporal Total (TBW en Litros)
-  // Fórmula validada de Sun / Lukaski para BIA multifrecuencia
+  // Estimación de Agua Corporal Total (TBW en Litros) con factor de edad
+  const ageFactor = ((profile.edad || 26) - 25) * 0.035;
   let tbwLitres: number;
   if (isMale) {
-    tbwLitres = 0.386 * impedanceIndex + 0.12 * peso + 4.5;
+    tbwLitres = 0.386 * impedanceIndex + 0.12 * peso + 4.5 - ageFactor;
   } else {
-    tbwLitres = 0.345 * impedanceIndex + 0.13 * peso + 3.2;
+    tbwLitres = 0.345 * impedanceIndex + 0.13 * peso + 3.2 - ageFactor;
   }
 
   // Factor de hidratación según ratio de impedancia (ImpedanciaLow / Impedancia)
-  // Normalmente Z_low / Z_high oscila entre 1.06 y 1.12
   const ratio = impedanciaLow > 0 && impedancia > 0 ? impedanciaLow / impedancia : 1.08;
-  const hydrationModifier = (1.08 / Math.max(1.0, ratio));
+  const hydrationModifier = 1.08 / Math.max(1.0, ratio);
   tbwLitres *= hydrationModifier;
 
   // Masa libre de grasa (FFM / Masa Magra en kg): el tejido magro es aproximadamente 73.2% agua
@@ -76,11 +82,16 @@ export function estimateBodyComposition(
   const grasaPct = (masaGrasaKg / peso) * 100;
   const aguaPct = (tbwLitres / peso) * 100;
 
+  const bmi = calculateBmi(peso, h);
+  const ffmiData = calculateFfmi(masaMagraKg, h);
+
   return {
     grasaPct: Math.round(grasaPct * 10) / 10,
     masaMagraKg: Math.round(masaMagraKg * 10) / 10,
     masaGrasaKg: Math.round(masaGrasaKg * 10) / 10,
     aguaPct: Math.round(aguaPct * 10) / 10,
+    bmi,
+    ffmi: ffmiData.ffmi,
   };
 }
 
@@ -127,7 +138,9 @@ export function enrichWithMovingAverages(records: WeightRecord[], windowDays = 7
  * Simula una fase de definición / recomposición corporal de ~5 meses (Junio a Noviembre 2026)
  * con fluctuaciones naturales de retención de agua, fines de semana y preservación muscular.
  */
-export function generateMockWeightRecords(): WeightRecord[] {
+export function generateMockWeightRecords(
+  profile: UserBiometricProfile = DEFAULT_USER_PROFILE
+): WeightRecord[] {
   const records: WeightRecord[] = [];
   const startDate = new Date(2026, 4, 15); // 15 de Mayo 2026
   const endDate = new Date(2026, 10, 2);   // 2 de Noviembre 2026
@@ -181,7 +194,7 @@ export function generateMockWeightRecords(): WeightRecord[] {
 
       const ts = new Date(year, currentDate.getMonth(), currentDate.getDate(), hours, minutes).getTime();
 
-      const comp = estimateBodyComposition(dailyWeight, impedancia, impedanciaLow);
+      const comp = estimateBodyComposition(dailyWeight, impedancia, impedanciaLow, profile);
 
       records.push({
         id: `w-${idCounter++}`,
@@ -195,6 +208,8 @@ export function generateMockWeightRecords(): WeightRecord[] {
         masaMagraKg: comp.masaMagraKg,
         masaGrasaKg: comp.masaGrasaKg,
         aguaPct: comp.aguaPct,
+        bmi: comp.bmi,
+        ffmi: comp.ffmi,
         esValido: true,
       });
     }
@@ -301,6 +316,8 @@ export function parseWeightCsv(
         masaMagraKg: comp.masaMagraKg,
         masaGrasaKg: comp.masaGrasaKg,
         aguaPct: comp.aguaPct,
+        bmi: comp.bmi,
+        ffmi: comp.ffmi,
         esValido: true,
       });
     } catch (e: any) {
