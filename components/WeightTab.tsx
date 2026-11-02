@@ -33,6 +33,7 @@ import {
 import { useSeason } from "@/lib/season-context";
 import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
 import { useUserProfile, getBmiCategory } from "@/lib/user-profile-context";
+import { BmiMapModal } from "./BmiMapModal";
 import {
   WeightRecord,
   generateMockWeightRecords,
@@ -220,6 +221,8 @@ export function WeightTab() {
   // Modales
   const [csvModalOpen, setCsvModalOpen] = useState(false);
   const [manualEntryModalOpen, setManualEntryModalOpen] = useState(false);
+  const [bmiModalOpen, setBmiModalOpen] = useState(false);
+  const [bmiModalWeight, setBmiModalWeight] = useState<number | undefined>(undefined);
   const [csvText, setCsvText] = useState("");
   const [csvPreview, setCsvPreview] = useState<{
     records: WeightRecord[];
@@ -1028,7 +1031,7 @@ export function WeightTab() {
           </div>
         </div>
 
-        {/* KPI 3: BMI / IMC (Color actual: Indigo) */}
+        {/* KPI 3: BMI / IMC (Color actual: Indigo) - Clic abre mapa interactivo */}
         {(() => {
           const currentBmi = stats.latestWeight > 0 ? calculateBmi(stats.latestWeight) : 0;
           const bmiCat = getBmiCategory(currentBmi);
@@ -1036,11 +1039,18 @@ export function WeightTab() {
           const idealRange = getIdealWeightRange();
 
           return (
-            <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
+            <div
+              onClick={() => {
+                setBmiModalWeight(stats.latestWeight);
+                setBmiModalOpen(true);
+              }}
+              className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden cursor-pointer hover:border-indigo-500/50 hover:bg-zinc-850/80 transition-all group"
+              title="Haz clic para ver el mapa de tipos de peso e IMC"
+            >
               <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
                 <span className="flex items-center gap-1.5">
-                  <UserIcon className="w-3.5 h-3.5 text-indigo-400" />
-                  <span className="text-zinc-300 font-semibold">BMI / IMC</span>
+                  <UserIcon className="w-3.5 h-3.5 text-indigo-400 group-hover:scale-110 transition-transform" />
+                  <span className="text-zinc-300 font-semibold group-hover:text-white transition-colors">BMI / IMC</span>
                 </span>
                 <span
                   className={`px-1.5 py-0.2 rounded text-[9px] font-semibold border ${bmiCat.bgColor} ${bmiCat.color} ${bmiCat.borderColor}`}
@@ -1049,11 +1059,16 @@ export function WeightTab() {
                 </span>
               </div>
 
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl sm:text-3xl font-extrabold text-indigo-300 tracking-tight font-mono">
-                  {currentBmi > 0 ? currentBmi.toFixed(1) : "--"}
+              <div className="flex items-baseline justify-between">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl sm:text-3xl font-extrabold text-indigo-300 tracking-tight font-mono group-hover:text-indigo-200 transition-colors">
+                    {currentBmi > 0 ? currentBmi.toFixed(1) : "--"}
+                  </span>
+                  <span className="text-xs text-indigo-400/80 font-normal">kg/m²</span>
+                </div>
+                <span className="text-[10px] text-indigo-400 opacity-80 group-hover:opacity-100 group-hover:underline flex items-center font-sans font-medium">
+                  Ver mapa ↗
                 </span>
-                <span className="text-xs text-indigo-400/80 font-normal">kg/m²</span>
               </div>
 
               <div className="mt-2.5 flex items-center justify-between text-[11px]">
@@ -1067,7 +1082,7 @@ export function WeightTab() {
                   className="text-[10px] text-zinc-500 font-mono"
                   title={`Rango saludable: ${idealRange.min} - ${idealRange.max} kg | FFMI: ${currentFfmi.ffmi}`}
                 >
-                  FFMI: {currentFfmi.ffmi}
+                  Normo: {idealRange.min}-{idealRange.max}kg
                 </span>
               </div>
             </div>
@@ -1669,9 +1684,20 @@ export function WeightTab() {
                   </span>
                 </div>
 
-                <div>
-                  <span className="text-[10px] text-zinc-400 block">BMI / IMC</span>
-                  <span className="font-extrabold text-sm text-indigo-300 font-mono">
+                <div
+                  className="cursor-pointer group/bmi hover:bg-zinc-800/60 p-1 -m-1 rounded-lg transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setBmiModalWeight(hoveredPoint.peso);
+                    setBmiModalOpen(true);
+                  }}
+                  title="Haz clic para ver el mapa de IMC para este pesaje"
+                >
+                  <span className="text-[10px] text-zinc-400 block flex items-center justify-between">
+                    <span>BMI / IMC</span>
+                    <span className="text-[9px] text-indigo-400 font-sans group-hover/bmi:underline">↗ mapa</span>
+                  </span>
+                  <span className="font-extrabold text-sm text-indigo-300 font-mono group-hover/bmi:text-indigo-200">
                     {(hoveredPoint.bmi || calculateBmi(hoveredPoint.peso)).toFixed(1)}
                   </span>
                 </div>
@@ -1952,15 +1978,23 @@ export function WeightTab() {
                           )}
                         </td>
 
-                        <td className="py-3 px-3">
+                        <td
+                          className="py-3 px-3 cursor-pointer group/bmi hover:bg-zinc-800/40 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setBmiModalWeight(r.peso);
+                            setBmiModalOpen(true);
+                          }}
+                          title="Haz clic para ver el mapa de IMC para este pesaje"
+                        >
                           {(() => {
                             const bVal = r.bmi || calculateBmi(r.peso);
                             const cat = getBmiCategory(bVal);
                             return (
                               <div className="flex items-center gap-1.5 font-mono">
-                                <span className="font-bold text-zinc-100">{bVal.toFixed(1)}</span>
+                                <span className="font-bold text-zinc-100 group-hover/bmi:text-indigo-300 transition-colors">{bVal.toFixed(1)}</span>
                                 <span
-                                  className={`px-1.5 py-0.2 rounded text-[9px] font-semibold border ${cat.bgColor} ${cat.color} ${cat.borderColor}`}
+                                  className={`px-1.5 py-0.2 rounded text-[9px] font-semibold border ${cat.bgColor} ${cat.color} ${cat.borderColor} group-hover/bmi:scale-105 transition-transform`}
                                   title={cat.description}
                                 >
                                   {cat.label.split(" ")[0]}
@@ -2101,7 +2135,15 @@ export function WeightTab() {
                                           {sub.peso.toFixed(1)}{" "}
                                           <span className="text-[9px] text-zinc-500 font-normal">kg</span>
                                         </td>
-                                        <td className="py-1.5 px-2 text-indigo-300">
+                                        <td
+                                          className="py-1.5 px-2 text-indigo-300 cursor-pointer hover:underline"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setBmiModalWeight(sub.peso);
+                                            setBmiModalOpen(true);
+                                          }}
+                                          title="Haz clic para ver este pesaje en el mapa de IMC"
+                                        >
                                           {(sub.bmi || calculateBmi(sub.peso)).toFixed(1)}
                                         </td>
                                         <td className="py-1.5 px-2 text-yellow-400 font-semibold">
@@ -2775,6 +2817,13 @@ export function WeightTab() {
           </div>
         </div>
       )}
+
+      {/* 9. MODAL: Mapa de Tipos de Peso e IMC (OMS) */}
+      <BmiMapModal
+        isOpen={bmiModalOpen}
+        onClose={() => setBmiModalOpen(false)}
+        weight={bmiModalWeight ?? (stats.latestWeight > 0 ? stats.latestWeight : undefined)}
+      />
     </div>
   );
 }
