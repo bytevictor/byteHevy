@@ -61,6 +61,8 @@ export interface ExerciseSessionHistory {
     isSeasonPR?: boolean;
     isAllTimePR?: boolean;
   };
+  avg1RM?: number;
+  avgReps?: number;
 }
 
 export interface ChartPoint {
@@ -96,6 +98,18 @@ export interface ExerciseDetailData {
       workoutId?: string;
     } | null;
     seasonBest?: {
+      value: number;
+      label: string;
+      date: string;
+      workoutId?: string;
+    } | null;
+    allTimeBestAvg1RM?: {
+      value: number;
+      label: string;
+      date: string;
+      workoutId?: string;
+    } | null;
+    seasonBestAvg1RM?: {
       value: number;
       label: string;
       date: string;
@@ -608,6 +622,7 @@ export async function getExerciseDetail(
   let allTimeBestScore = -999999;
   let allTimeMaxEst1RM = 0;
   let allTimeMaxAvg1RM = 0;
+  let allTimeBestAvg1RMRecord: { value: number; label: string; date: string; workoutId: string } | null = null;
 
   for (const w of chronologicalWorkouts) {
     let topVal = 0;
@@ -687,7 +702,33 @@ export async function getExerciseDetail(
       ? Number((set1RMs.reduce((sum, val) => sum + val, 0) / set1RMs.length).toFixed(1))
       : (est1RM ? Number(est1RM.toFixed(1)) : undefined);
 
-    if (avg1RM && avg1RM > allTimeMaxAvg1RM) {
+    const setsWithReps = w.sets.filter((s) => s.reps !== null && s.reps !== undefined && Number(s.reps) > 0);
+    const totalReps = setsWithReps.reduce((sum, s) => sum + Number(s.reps), 0);
+    const avgReps = setsWithReps.length > 0 ? Number((totalReps / setsWithReps.length).toFixed(1)) : undefined;
+
+    let avgMetricVal = 0;
+    let avgMetricLabel = "";
+    if (metricType === "bodyweight_reps") {
+      if (avgReps && avgReps > 0) {
+        avgMetricVal = avgReps;
+        avgMetricLabel = `${avgReps} reps/serie`;
+      }
+    } else {
+      if (avg1RM && avg1RM > 0) {
+        avgMetricVal = avg1RM;
+        avgMetricLabel = `${avg1RM} kg 1RM`;
+      }
+    }
+
+    if (avgMetricVal > 0 && avgMetricVal > allTimeMaxAvg1RM) {
+      allTimeMaxAvg1RM = avgMetricVal;
+      allTimeBestAvg1RMRecord = {
+        value: avgMetricVal,
+        label: avgMetricLabel,
+        date: w.startTime,
+        workoutId: w.workoutId,
+      };
+    } else if (avg1RM && avg1RM > allTimeMaxAvg1RM) {
       allTimeMaxAvg1RM = avg1RM;
     }
 
@@ -722,6 +763,8 @@ export async function getExerciseDetail(
   let seasonRunningBestScore = -999999;
   let seasonBestRecord: { value: number; label: string; date: string; workoutId: string } | null = null;
   let seasonMaxEst1RM = 0;
+  let seasonMaxAvg1RM = 0;
+  let seasonBestAvg1RMRecord: { value: number; label: string; date: string; workoutId: string } | null = null;
 
   for (const w of activeWorkouts) {
     let topVal = 0;
@@ -826,6 +869,30 @@ export async function getExerciseDetail(
       ? Number((set1RMs.reduce((sum, val) => sum + val, 0) / set1RMs.length).toFixed(1))
       : (est1RM ? Number(est1RM.toFixed(1)) : undefined);
 
+    let seasonAvgMetricVal = 0;
+    let seasonAvgMetricLabel = "";
+    if (metricType === "bodyweight_reps") {
+      if (avgReps && avgReps > 0) {
+        seasonAvgMetricVal = avgReps;
+        seasonAvgMetricLabel = `${avgReps} reps/serie`;
+      }
+    } else {
+      if (avg1RM && avg1RM > 0) {
+        seasonAvgMetricVal = avg1RM;
+        seasonAvgMetricLabel = `${avg1RM} kg 1RM`;
+      }
+    }
+
+    if (seasonAvgMetricVal > 0 && seasonAvgMetricVal > seasonMaxAvg1RM) {
+      seasonMaxAvg1RM = seasonAvgMetricVal;
+      seasonBestAvg1RMRecord = {
+        value: seasonAvgMetricVal,
+        label: seasonAvgMetricLabel,
+        date: w.startTime,
+        workoutId: w.workoutId,
+      };
+    }
+
     let totalVol = 0;
     for (const s of w.sets) {
       const wt = Number(s.weightKg) || 0;
@@ -890,6 +957,8 @@ export async function getExerciseDetail(
         isPR,
         isAllTimePR,
       },
+      avg1RM,
+      avgReps,
     });
   }
 
@@ -970,6 +1039,8 @@ export async function getExerciseDetail(
       media: exerciseMedia,
       allTimeBest: allTimeBestRecord,
       seasonBest: season ? seasonBestRecord : allTimeBestRecord,
+      allTimeBestAvg1RM: allTimeBestAvg1RMRecord,
+      seasonBestAvg1RM: season ? seasonBestAvg1RMRecord : allTimeBestAvg1RMRecord,
       estimated1RM: season ? (seasonMaxEst1RM > 0 ? seasonMaxEst1RM : null) : (allTimeMaxEst1RM > 0 ? allTimeMaxEst1RM : null),
       allTimeEstimated1RM: allTimeMaxEst1RM > 0 ? allTimeMaxEst1RM : null,
       allTimeMaxAvg1RM: allTimeMaxAvg1RM > 0 ? allTimeMaxAvg1RM : null,

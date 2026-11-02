@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { ExerciseSummary, ExerciseDetailData, ExerciseSessionHistory, JournalWorkout } from "@/lib/actions";
-import { ProgressionChart } from "./charts/ProgressionChart";
+import { ProgressionChart, type ChartMetricView } from "./charts/ProgressionChart";
 import { ExerciseAnimationView } from "./ExerciseAnimationView";
 import { WorkoutSessionModal } from "./WorkoutSessionModal";
 import { getExerciseMedia, MUSCLE_LABELS } from "@/lib/exercise-media";
@@ -62,6 +62,92 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
   const [loadingFullWorkout, setLoadingFullWorkout] = useState<boolean>(false);
   const [currentMedia, setCurrentMedia] = useState<ExerciseMedia | null>(null);
   const [mediaCache, setMediaCache] = useState<Record<string, ExerciseMedia>>({});
+  const [chartMetric, setChartMetric] = useState<ChartMetricView>("top_set");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("bytehevy_chart_metric");
+      if (saved === "top_set" || saved === "avg_1rm") {
+        setChartMetric(saved as ChartMetricView);
+      }
+    } catch {}
+  }, []);
+
+  const isWeightMetric =
+    detailData?.exercise.metricType === "weight_reps" ||
+    detailData?.exercise.metricType === "weighted_bodyweight";
+  const isRepsMetric = detailData?.exercise.metricType === "bodyweight_reps";
+  const isAvgMetricApplicable = isWeightMetric || isRepsMetric;
+  const isAvg1RMMetric = isAvgMetricApplicable && chartMetric === "avg_1rm";
+
+  // Pre-calculate per-session metrics and PR badges matching active metric
+  const sessionDisplayMap = useMemo(() => {
+    if (!detailData) return new Map();
+
+    const map = new Map<
+      string,
+      {
+        badge: "all_time" | "season" | "pr" | null;
+        primaryLabel: string;
+        secondaryLabel?: string;
+      }
+    >();
+
+    if (isAvg1RMMetric) {
+      const chronological = [...detailData.sessions].sort(
+        (a, b) => a.startTimestamp - b.startTimestamp
+      );
+
+      const allTimeBestVal =
+        detailData.exercise.allTimeBestAvg1RM?.value ??
+        (detailData.exercise.allTimeMaxAvg1RM ?? 0);
+      const seasonBestVal = detailData.exercise.seasonBestAvg1RM?.value ?? 0;
+      let runningBest = 0;
+
+      for (const sess of chronological) {
+        const val = isRepsMetric
+          ? (sess.avgReps ?? sess.topSet.primaryValue)
+          : (sess.avg1RM ?? sess.topSet.secondaryValue ?? sess.topSet.primaryValue);
+
+        let badge: "all_time" | "season" | "pr" | null = null;
+        if (allTimeBestVal > 0 && val >= allTimeBestVal) {
+          badge = "all_time";
+        } else if (activeSeason && seasonBestVal > 0 && val >= seasonBestVal) {
+          badge = "season";
+        } else if (val > runningBest && val > 0) {
+          badge = "pr";
+        }
+
+        if (val > runningBest && val > 0) {
+          runningBest = val;
+        }
+
+        const primaryLabel = isRepsMetric
+          ? `${val} reps/serie`
+          : `${val} kg 1RM`;
+        const secondaryLabel = `Top: ${sess.topSet.label}`;
+
+        map.set(sess.workoutId, { badge, primaryLabel, secondaryLabel });
+      }
+    } else {
+      for (const sess of detailData.sessions) {
+        const badge = sess.topSet.isAllTimePR
+          ? "all_time"
+          : sess.topSet.isSeasonPR
+          ? "season"
+          : sess.topSet.isPR
+          ? "pr"
+          : null;
+        const primaryLabel = sess.topSet.label;
+        const secondaryLabel = sess.topSet.secondaryValue
+          ? `1RM: ${sess.topSet.secondaryValue} kg`
+          : undefined;
+        map.set(sess.workoutId, { badge, primaryLabel, secondaryLabel });
+      }
+    }
+
+    return map;
+  }, [detailData, isAvg1RMMetric, isRepsMetric, activeSeason]);
 
   const handleOpenWorkout = async (workoutId: string) => {
     if (!workoutId) return;
@@ -594,7 +680,11 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                             className="text-[10px] uppercase tracking-wider font-bold truncate"
                             style={{ color: seasonColor }}
                           >
-                            PR Season
+                            {isAvg1RMMetric
+                              ? isRepsMetric
+                                ? "PR Season (Reps Medias)"
+                                : "PR Season (1RM Medio)"
+                              : "PR Season"}
                           </span>
                           <FlameIcon className="w-3.5 h-3.5" style={{ color: seasonColor }} />
                         </div>
@@ -602,14 +692,28 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                           className="text-base sm:text-lg font-mono tabular-nums font-bold mt-0.5"
                           style={{ color: seasonColor }}
                         >
-                          {detailData.exercise.seasonBest?.label || "Sin registros"}
+                          {isAvg1RMMetric
+                            ? detailData.exercise.seasonBestAvg1RM?.label || "Sin registros"
+                            : detailData.exercise.seasonBest?.label || "Sin registros"}
                         </div>
                         <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between mt-0.5">
-                          <span>{detailData.exercise.seasonBest?.date || "—"}</span>
-                          {detailData.exercise.estimated1RM && (
-                            <span className="font-sans font-medium" style={{ color: seasonColor }}>
-                              1RM: {detailData.exercise.estimated1RM} kg
-                            </span>
+                          <span>
+                            {isAvg1RMMetric
+                              ? detailData.exercise.seasonBestAvg1RM?.date || "—"
+                              : detailData.exercise.seasonBest?.date || "—"}
+                          </span>
+                          {isAvg1RMMetric ? (
+                            detailData.exercise.seasonBest?.label && (
+                              <span className="font-sans font-medium text-zinc-400">
+                                Top Set: {detailData.exercise.seasonBest.label}
+                              </span>
+                            )
+                          ) : (
+                            detailData.exercise.estimated1RM && (
+                              <span className="font-sans font-medium" style={{ color: seasonColor }}>
+                                1RM: {detailData.exercise.estimated1RM} kg
+                              </span>
+                            )
                           )}
                         </div>
                       </div>
@@ -618,19 +722,38 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       <div className="p-3 rounded-xl bg-gradient-to-br from-yellow-500/10 via-zinc-900 to-zinc-900 border border-yellow-500/30 flex flex-col justify-between shadow-xs">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] uppercase tracking-wider text-yellow-400 font-bold">
-                            ALL-TIME PR
+                            {isAvg1RMMetric
+                              ? isRepsMetric
+                                ? "ALL-TIME PR (Reps Medias)"
+                                : "ALL-TIME PR (1RM Medio)"
+                              : "ALL-TIME PR"}
                           </span>
                           <CrownIcon className="w-3.5 h-3.5 text-yellow-400" />
                         </div>
                         <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-200 mt-0.5">
-                          {detailData.exercise.allTimeBest?.label || "—"}
+                          {isAvg1RMMetric
+                            ? (detailData.exercise.allTimeBestAvg1RM?.label ||
+                               (detailData.exercise.allTimeMaxAvg1RM ? `${detailData.exercise.allTimeMaxAvg1RM} kg 1RM` : "—"))
+                            : detailData.exercise.allTimeBest?.label || "—"}
                         </div>
                         <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between mt-0.5">
-                          <span>{detailData.exercise.allTimeBest?.date || "Sin registro"}</span>
-                          {detailData.exercise.allTimeEstimated1RM && (
-                            <span className="text-yellow-400/90 font-sans">
-                              1RM: {detailData.exercise.allTimeEstimated1RM} kg
-                            </span>
+                          <span>
+                            {isAvg1RMMetric
+                              ? detailData.exercise.allTimeBestAvg1RM?.date || "Sin registro"
+                              : detailData.exercise.allTimeBest?.date || "Sin registro"}
+                          </span>
+                          {isAvg1RMMetric ? (
+                            detailData.exercise.allTimeBest?.label && (
+                              <span className="text-yellow-400/90 font-sans">
+                                Top Set: {detailData.exercise.allTimeBest.label}
+                              </span>
+                            )
+                          ) : (
+                            detailData.exercise.allTimeEstimated1RM && (
+                              <span className="text-yellow-400/90 font-sans">
+                                1RM: {detailData.exercise.allTimeEstimated1RM} kg
+                              </span>
+                            )
                           )}
                         </div>
                       </div>
@@ -641,15 +764,24 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       <div className="p-3 rounded-xl bg-gradient-to-br from-accent/15 via-zinc-900 to-zinc-900 border border-accent/30 flex flex-col justify-between shadow-xs">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] uppercase tracking-wider text-accent-light font-bold">
-                            Récord Personal (PR)
+                            {isAvg1RMMetric
+                              ? isRepsMetric
+                                ? "Récord Personal (Reps Medias)"
+                                : "Récord Personal (1RM Medio)"
+                              : "Récord Personal (PR)"}
                           </span>
                           <TrophyIcon className="w-3.5 h-3.5 text-accent-light" />
                         </div>
                         <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-accent-lighter mt-0.5">
-                          {detailData.exercise.allTimeBest?.label || "—"}
+                          {isAvg1RMMetric
+                            ? (detailData.exercise.allTimeBestAvg1RM?.label ||
+                               (detailData.exercise.allTimeMaxAvg1RM ? `${detailData.exercise.allTimeMaxAvg1RM} kg 1RM` : "—"))
+                            : detailData.exercise.allTimeBest?.label || "—"}
                         </div>
                         <span className="text-[10px] font-mono text-zinc-500 mt-0.5">
-                          {detailData.exercise.allTimeBest?.date || "Sin registro"}
+                          {isAvg1RMMetric
+                            ? detailData.exercise.allTimeBestAvg1RM?.date || "Sin registro"
+                            : detailData.exercise.allTimeBest?.date || "Sin registro"}
                         </span>
                       </div>
 
@@ -657,17 +789,25 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between shadow-xs">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
-                            1RM Estimado
+                            {isAvg1RMMetric
+                              ? isRepsMetric
+                                ? "Reps Máx (Top Set)"
+                                : "Top Set Máximo"
+                              : "1RM Estimado"}
                           </span>
                           <FlameIcon className="w-3.5 h-3.5 text-zinc-500" />
                         </div>
                         <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-zinc-200 mt-0.5">
-                          {detailData.exercise.estimated1RM
-                            ? `${detailData.exercise.estimated1RM} ${getUnit(detailData.exercise.metricType)}`
-                            : "—"}
+                          {isAvg1RMMetric
+                            ? detailData.exercise.allTimeBest?.label || "—"
+                            : (detailData.exercise.estimated1RM
+                                ? `${detailData.exercise.estimated1RM} ${getUnit(detailData.exercise.metricType)}`
+                                : "—")}
                         </div>
                         <span className="text-[10px] text-zinc-500 mt-0.5">
-                          Fórmula Brzycki
+                          {isAvg1RMMetric
+                            ? (detailData.exercise.allTimeEstimated1RM ? `1RM Top Set: ${detailData.exercise.allTimeEstimated1RM} kg` : "Mejor serie histórica")
+                            : "Fórmula Brzycki"}
                         </span>
                       </div>
                     </div>
@@ -740,6 +880,8 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       metricType={detailData.exercise.metricType}
                       seasonName={activeSeason?.name}
                       seasonColor={seasonColor || undefined}
+                      metric={chartMetric}
+                      onMetricChange={setChartMetric}
                       allTimeBestLabel={detailData.exercise.allTimeBest?.label}
                       seasonBestLabel={detailData.exercise.seasonBest?.label}
                       allTimeBestValue={detailData.exercise.allTimeBest?.value}
@@ -816,36 +958,53 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
 
                       {/* Right: Top Set & PR Badge */}
                       <div className="flex items-center gap-3.5 self-end sm:self-center">
-                        {sess.topSet.isAllTimePR ? (
-                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[10px] font-mono font-bold shadow-sm">
-                            👑 ALL-TIME
-                          </span>
-                        ) : sess.topSet.isSeasonPR ? (
-                          <span
-                            className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border shadow-sm"
-                            style={{
-                              backgroundColor: "rgba(251, 191, 36, 0.15)",
-                              color: "#fbbf24",
-                              borderColor: "rgba(251, 191, 36, 0.35)",
-                            }}
-                          >
-                            🏆 PR SEASON
-                          </span>
-                        ) : sess.topSet.isPR ? (
-                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent/20 text-accent-lighter border border-accent/40 text-[10px] font-mono font-bold shadow-sm">
-                            ★ PR
-                          </span>
-                        ) : null}
+                        {(() => {
+                          const sessDisplay = sessionDisplayMap.get(sess.workoutId);
+                          const badge = sessDisplay?.badge;
+                          if (badge === "all_time") {
+                            return (
+                              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[10px] font-mono font-bold shadow-sm">
+                                👑 ALL-TIME
+                              </span>
+                            );
+                          }
+                          if (badge === "season") {
+                            return (
+                              <span
+                                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border shadow-sm"
+                                style={{
+                                  backgroundColor: "rgba(251, 191, 36, 0.15)",
+                                  color: "#fbbf24",
+                                  borderColor: "rgba(251, 191, 36, 0.35)",
+                                }}
+                              >
+                                🏆 PR SEASON
+                              </span>
+                            );
+                          }
+                          if (badge === "pr") {
+                            return (
+                              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent/20 text-accent-lighter border border-accent/40 text-[10px] font-mono font-bold shadow-sm">
+                                ★ PR
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
 
                         <div className="flex flex-col text-right font-mono tabular-nums">
                           <span className="text-xs font-bold text-accent-light">
-                            {sess.topSet.label}
+                            {sessionDisplayMap.get(sess.workoutId)?.primaryLabel ?? sess.topSet.label}
                           </span>
-                          {sess.topSet.secondaryValue && (
+                          {sessionDisplayMap.get(sess.workoutId)?.secondaryLabel ? (
+                            <span className="text-[10px] text-zinc-500">
+                              {sessionDisplayMap.get(sess.workoutId)?.secondaryLabel}
+                            </span>
+                          ) : sess.topSet.secondaryValue ? (
                             <span className="text-[10px] text-zinc-500">
                               1RM: {sess.topSet.secondaryValue} kg
                             </span>
-                          )}
+                          ) : null}
                         </div>
 
                         <div className="text-[11px] text-zinc-400 font-normal">

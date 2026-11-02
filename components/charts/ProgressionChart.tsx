@@ -49,6 +49,9 @@ export interface ProgressionChartProps {
   curveType?: CurveType;
   defaultCurveType?: CurveType;
   onCurveTypeChange?: (curveType: CurveType) => void;
+  metric?: ChartMetricView;
+  defaultMetric?: ChartMetricView;
+  onMetricChange?: (metric: ChartMetricView) => void;
   onPointClick?: (point: ChartDataPoint) => void;
   exerciseName?: string;
   metricType?: string;
@@ -290,6 +293,9 @@ export function ProgressionChart({
   curveType: controlledCurve,
   defaultCurveType = "smooth",
   onCurveTypeChange,
+  metric: controlledMetric,
+  defaultMetric = "top_set",
+  onMetricChange,
   onPointClick,
   exerciseName,
   metricType,
@@ -303,7 +309,7 @@ export function ProgressionChart({
 }: ProgressionChartProps) {
   const [internalMode, setInternalMode] = useState<ChartMode>(defaultMode);
   const [internalCurve, setInternalCurve] = useState<CurveType>(defaultCurveType);
-  const [internalMetric, setInternalMetric] = useState<ChartMetricView>("top_set");
+  const [internalMetric, setInternalMetric] = useState<ChartMetricView>(defaultMetric);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [modalHoverIndex, setModalHoverIndex] = useState<number | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -352,12 +358,14 @@ export function ProgressionChart({
       } catch {}
     }
 
-    try {
-      const savedMetric = localStorage.getItem("bytehevy_chart_metric") as ChartMetricView;
-      if (savedMetric && (savedMetric === "top_set" || savedMetric === "avg_1rm")) {
-        setInternalMetric(savedMetric);
-      }
-    } catch {}
+    if (controlledMetric === undefined) {
+      try {
+        const savedMetric = localStorage.getItem("bytehevy_chart_metric") as ChartMetricView;
+        if (savedMetric && (savedMetric === "top_set" || savedMetric === "avg_1rm")) {
+          setInternalMetric(savedMetric);
+        }
+      } catch {}
+    }
 
     if (typeof window !== "undefined") {
       setWindowHeight(window.innerHeight);
@@ -365,7 +373,7 @@ export function ProgressionChart({
       window.addEventListener("resize", handleResize);
       return () => window.removeEventListener("resize", handleResize);
     }
-  }, [controlledMode, controlledCurve]);
+  }, [controlledMode, controlledCurve, controlledMetric]);
 
   // Lock body scroll and handle Escape key to close fullscreen
   useEffect(() => {
@@ -408,10 +416,13 @@ export function ProgressionChart({
   };
 
   const handleMetricChange = (newMetric: ChartMetricView) => {
-    setInternalMetric(newMetric);
+    if (controlledMetric === undefined) {
+      setInternalMetric(newMetric);
+    }
     try {
       localStorage.setItem("bytehevy_chart_metric", newMetric);
     } catch {}
+    onMetricChange?.(newMetric);
   };
 
   // Ensure items are ordered by chronological timestamp
@@ -473,10 +484,11 @@ export function ProgressionChart({
     ];
   }, [isWeightMetric, isRepsMetric]);
 
+  const effectiveMetric = controlledMetric ?? internalMetric;
   const activeMetric: ChartMetricView = useMemo(() => {
-    if (internalMetric === "avg_1rm" && !isWeightMetric && !isRepsMetric) return "top_set";
-    return internalMetric;
-  }, [internalMetric, isWeightMetric, isRepsMetric]);
+    if (effectiveMetric === "avg_1rm" && !isWeightMetric && !isRepsMetric) return "top_set";
+    return effectiveMetric;
+  }, [effectiveMetric, isWeightMetric, isRepsMetric]);
 
   const currentUnit = useMemo(() => {
     if (activeMetric === "avg_1rm") {
