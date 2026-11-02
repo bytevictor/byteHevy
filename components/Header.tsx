@@ -52,8 +52,8 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
   const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: "explorer", label: "Explorador", icon: DumbbellIcon },
     { id: "weight", label: "Peso", icon: ScaleIcon },
-    { id: "goals", label: "Objetivos", icon: TargetIcon },
     { id: "journal", label: "Diario", icon: BookOpenIcon },
+    { id: "goals", label: "Objetivos", icon: TargetIcon },
     { id: "settings", label: "Configuración", icon: SettingsIcon },
   ];
 
@@ -293,18 +293,25 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
             {tabs.map((t) => {
               const Icon = t.icon;
               const isActive = currentTab === t.id;
+              const isIconOnly = t.id === "settings";
               return (
                 <button
                   key={t.id}
                   onClick={() => setActiveTab(t.id)}
-                  className={`h-full flex items-center gap-2 sm:gap-2.5 px-3.5 sm:px-4.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
+                  title={t.label}
+                  aria-label={t.label}
+                  className={`h-full flex items-center justify-center transition-all duration-200 cursor-pointer ${
+                    isIconOnly
+                      ? "px-2.5 sm:px-3 rounded-full shrink-0 aspect-square"
+                      : "gap-2 sm:gap-2.5 px-3.5 sm:px-4.5 rounded-full text-xs sm:text-sm font-medium"
+                  } ${
                     isActive
                       ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/80 font-bold"
                       : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? "text-accent-light" : "text-zinc-400"}`} />
-                  <span className="whitespace-nowrap">{t.label}</span>
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-accent-light" : "text-zinc-400"}`} />
+                  {!isIconOnly && <span className="whitespace-nowrap">{t.label}</span>}
                 </button>
               );
             })}
