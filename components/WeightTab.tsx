@@ -181,7 +181,8 @@ export function WeightTab() {
       enrichWithMovingAverages(
         prev.map((r) => {
           const newBmi = profile.alturaCm > 0 ? calculateBmi(r.peso) : r.bmi;
-          if (r.source === "zepp_life" && typeof r.grasaPct === "number") {
+          // Si el registro ya dispone de un % graso medido (de la báscula, Zepp Life, o manual), preservarlo
+          if (typeof r.grasaPct === "number") {
             const ffmiData =
               r.masaMagraKg && profile.alturaCm > 0
                 ? calculateFfmi(r.masaMagraKg)
@@ -210,7 +211,7 @@ export function WeightTab() {
         })
       )
     );
-  }, [profile.alturaCm, profile.edad, profile.sexo]);
+  }, [profile.alturaCm, profile.edad, profile.sexo, calculateBmi, calculateFfmi]);
 
   // Filtros y vistas
   const [chartMode, setChartMode] = useState<WeightChartMode>("combined");
@@ -238,6 +239,7 @@ export function WeightTab() {
   const [editDate, setEditDate] = useState("");
   const [editTime, setEditTime] = useState("");
   const [editWeight, setEditWeight] = useState("");
+  const [editFat, setEditFat] = useState("");
   const [editImp, setEditImp] = useState("");
   const [editImpLow, setEditImpLow] = useState("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -246,6 +248,7 @@ export function WeightTab() {
   const [newDate, setNewDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [newTime, setNewTime] = useState("08:00");
   const [newWeight, setNewWeight] = useState("");
+  const [newFat, setNewFat] = useState("");
   const [newImp, setNewImp] = useState("520");
   const [newImpLow, setNewImpLow] = useState("565");
 
@@ -280,6 +283,7 @@ export function WeightTab() {
     setEditDate(record.fecha);
     setEditTime(record.hora);
     setEditWeight(String(record.peso));
+    setEditFat(record.grasaPct !== null && record.grasaPct !== undefined ? String(record.grasaPct) : "");
     setEditImp(record.impedancia !== null && record.impedancia !== undefined ? String(Math.round(record.impedancia)) : "");
     setEditImpLow(record.impedanciaLow !== null && record.impedanciaLow !== undefined ? String(Math.round(record.impedanciaLow)) : "");
     setDeleteConfirmOpen(false);
@@ -293,6 +297,7 @@ export function WeightTab() {
     const p = parseFloat(editWeight.replace(",", "."));
     const imp = editImp ? parseFloat(editImp) : null;
     const impLow = editImpLow ? parseFloat(editImpLow) : null;
+    const parsedFat = editFat.trim() !== "" ? parseFloat(editFat.replace(",", ".")) : null;
 
     if (isNaN(p) || p <= 0) {
       alert("Por favor introduce un peso válido en kg");
@@ -303,19 +308,44 @@ export function WeightTab() {
     const [hh, mm] = editTime.split(":").map(Number);
     const ts = new Date(y, (m || 1) - 1, d || 1, hh || 8, mm || 0).getTime();
 
-    let comp = {
-      grasaPct: editingRecord.grasaPct,
-      masaMagraKg: editingRecord.masaMagraKg,
-      masaGrasaKg: editingRecord.masaGrasaKg,
-      aguaPct: editingRecord.aguaPct,
-      bmi: editingRecord.bmi,
-      ffmi: editingRecord.ffmi,
-    };
+    const newBmi = profile.alturaCm > 0 ? calculateBmi(p) : editingRecord.bmi;
 
-    if (editingRecord.source !== "zepp_life" || comp.grasaPct === null) {
-      comp = estimateBodyComposition(p, imp || 520, impLow || 565, profile);
+    let finalGrasaPct: number | null = null;
+    let finalMasaGrasaKg: number | null = null;
+    let finalMasaMagraKg: number | null = null;
+    let finalAguaPct: number | null = editingRecord.aguaPct;
+    let finalFfmi: number | null = null;
+
+    if (parsedFat !== null && !isNaN(parsedFat)) {
+      finalGrasaPct = Math.round(parsedFat * 10) / 10;
+      finalMasaGrasaKg = Math.round(p * (finalGrasaPct / 100) * 10) / 10;
+      finalMasaMagraKg = Math.max(0, Math.round((p - finalMasaGrasaKg) * 10) / 10);
+      if (profile.alturaCm > 0) {
+        const ffmiData = calculateFfmi(finalMasaMagraKg);
+        finalFfmi = ffmiData ? ffmiData.ffmi : null;
+      }
+    } else if (typeof editingRecord.grasaPct === "number") {
+      finalGrasaPct = editingRecord.grasaPct;
+      finalMasaGrasaKg = Math.round(p * (finalGrasaPct / 100) * 10) / 10;
+      finalMasaMagraKg = Math.max(0, Math.round((p - finalMasaGrasaKg) * 10) / 10);
+      if (profile.alturaCm > 0) {
+        const ffmiData = calculateFfmi(finalMasaMagraKg);
+        finalFfmi = ffmiData ? ffmiData.ffmi : null;
+      }
+    } else if (imp !== null && imp > 0) {
+      const comp = estimateBodyComposition(p, imp, impLow || imp + 45, profile);
+      finalGrasaPct = comp.grasaPct;
+      finalMasaGrasaKg = comp.masaGrasaKg;
+      finalMasaMagraKg = comp.masaMagraKg;
+      finalAguaPct = comp.aguaPct;
+      finalFfmi = comp.ffmi;
     } else {
-      comp.bmi = profile.alturaCm > 0 ? calculateBmi(p) : editingRecord.bmi;
+      const comp = estimateBodyComposition(p, 520, 565, profile);
+      finalGrasaPct = comp.grasaPct;
+      finalMasaGrasaKg = comp.masaGrasaKg;
+      finalMasaMagraKg = comp.masaMagraKg;
+      finalAguaPct = comp.aguaPct;
+      finalFfmi = comp.ffmi;
     }
 
     const updatedRecord: WeightRecord = {
@@ -326,12 +356,12 @@ export function WeightTab() {
       peso: Math.round(p * 10) / 10,
       impedancia: imp,
       impedanciaLow: impLow,
-      grasaPct: comp.grasaPct,
-      masaMagraKg: comp.masaMagraKg,
-      masaGrasaKg: comp.masaGrasaKg,
-      aguaPct: comp.aguaPct,
-      bmi: comp.bmi,
-      ffmi: comp.ffmi,
+      grasaPct: finalGrasaPct,
+      masaMagraKg: finalMasaMagraKg,
+      masaGrasaKg: finalMasaGrasaKg,
+      aguaPct: finalAguaPct,
+      bmi: newBmi || 0,
+      ffmi: finalFfmi,
     };
 
     setRecords((prev) => enrichWithMovingAverages(prev.map((r) => (r.id === editingRecord.id ? updatedRecord : r))));
@@ -631,6 +661,7 @@ export function WeightTab() {
     const p = parseFloat(newWeight.replace(",", "."));
     const imp = newImp ? parseFloat(newImp) : null;
     const impLow = newImpLow ? parseFloat(newImpLow) : null;
+    const parsedFat = newFat.trim() !== "" ? parseFloat(newFat.replace(",", ".")) : null;
 
     if (isNaN(p) || p <= 0) {
       alert("Por favor introduce un peso válido en kg");
@@ -641,7 +672,32 @@ export function WeightTab() {
     const [hh, mm] = newTime.split(":").map(Number);
     const ts = new Date(y, (m || 1) - 1, d || 1, hh || 8, mm || 0).getTime();
 
-    const comp = estimateBodyComposition(p, imp || 520, impLow || 565, profile);
+    let comp: {
+      grasaPct: number;
+      masaMagraKg: number;
+      masaGrasaKg: number;
+      aguaPct: number;
+      bmi: number;
+      ffmi: number;
+    };
+
+    if (parsedFat !== null && !isNaN(parsedFat)) {
+      const fatPct = Math.round(parsedFat * 10) / 10;
+      const masaGrasaKg = Math.round(p * (fatPct / 100) * 10) / 10;
+      const masaMagraKg = Math.max(0, Math.round((p - masaGrasaKg) * 10) / 10);
+      const bmi = profile.alturaCm > 0 ? calculateBmi(p) : 0;
+      const ffmiData = masaMagraKg > 0 && profile.alturaCm > 0 ? calculateFfmi(masaMagraKg) : null;
+      comp = {
+        grasaPct: fatPct,
+        masaMagraKg,
+        masaGrasaKg,
+        aguaPct: 55,
+        bmi,
+        ffmi: ffmiData ? ffmiData.ffmi : 0,
+      };
+    } else {
+      comp = estimateBodyComposition(p, imp || 520, impLow || 565, profile);
+    }
 
     const newRecord: WeightRecord = {
       id: `w-${Date.now()}`,
@@ -665,6 +721,7 @@ export function WeightTab() {
     setRecords((prev) => enrichWithMovingAverages([...prev, newRecord]));
     setManualEntryModalOpen(false);
     setNewWeight("");
+    setNewFat("");
 
     try {
       await fetch("/api/weight", {
@@ -852,21 +909,65 @@ export function WeightTab() {
   const liveEditPreview = useMemo(() => {
     if (!editingRecord) return null;
     const p = parseFloat(editWeight.replace(",", "."));
-    const imp = parseFloat(editImp) || 520;
-    const impLow = parseFloat(editImpLow) || 565;
     if (isNaN(p) || p <= 0) return null;
-    return estimateBodyComposition(p, imp, impLow, profile);
-  }, [editingRecord, editWeight, editImp, editImpLow, profile]);
+
+    const parsedFat = editFat.trim() !== "" ? parseFloat(editFat.replace(",", ".")) : null;
+    const knownFat = parsedFat !== null && !isNaN(parsedFat)
+      ? parsedFat
+      : (typeof editingRecord.grasaPct === "number" ? editingRecord.grasaPct : null);
+
+    const bmi = profile.alturaCm > 0 ? calculateBmi(p) : editingRecord.bmi || 0;
+
+    if (knownFat !== null) {
+      const masaGrasaKg = Math.round(p * (knownFat / 100) * 10) / 10;
+      const masaMagraKg = Math.max(0, Math.round((p - masaGrasaKg) * 10) / 10);
+      const ffmiData = masaMagraKg > 0 && profile.alturaCm > 0 ? calculateFfmi(masaMagraKg) : null;
+      return {
+        bmi,
+        grasaPct: Math.round(knownFat * 10) / 10,
+        masaGrasaKg,
+        masaMagraKg,
+        aguaPct: editingRecord.aguaPct || 55,
+        ffmi: ffmiData ? ffmiData.ffmi : editingRecord.ffmi || 0,
+      };
+    }
+
+    const imp = parseFloat(editImp);
+    const impLow = parseFloat(editImpLow);
+    if (!isNaN(imp) && imp > 0) {
+      return estimateBodyComposition(p, imp, !isNaN(impLow) && impLow > 0 ? impLow : imp + 45, profile);
+    }
+
+    return estimateBodyComposition(p, 520, 565, profile);
+  }, [editingRecord, editWeight, editFat, editImp, editImpLow, profile, calculateBmi, calculateFfmi]);
 
   // Cálculo en vivo para el modal de nuevo registro
   const liveNewPreview = useMemo(() => {
     if (!manualEntryModalOpen) return null;
     const p = parseFloat(newWeight.replace(",", "."));
+    if (isNaN(p) || p <= 0) return null;
+
+    const parsedFat = newFat.trim() !== "" ? parseFloat(newFat.replace(",", ".")) : null;
+    const bmi = profile.alturaCm > 0 ? calculateBmi(p) : 0;
+
+    if (parsedFat !== null && !isNaN(parsedFat)) {
+      const masaGrasaKg = Math.round(p * (parsedFat / 100) * 10) / 10;
+      const masaMagraKg = Math.max(0, Math.round((p - masaGrasaKg) * 10) / 10);
+      const ffmiData = masaMagraKg > 0 && profile.alturaCm > 0 ? calculateFfmi(masaMagraKg) : null;
+      return {
+        bmi,
+        grasaPct: Math.round(parsedFat * 10) / 10,
+        masaGrasaKg,
+        masaMagraKg,
+        aguaPct: 55,
+        ffmi: ffmiData ? ffmiData.ffmi : 0,
+      };
+    }
+
     const imp = parseFloat(newImp) || 520;
     const impLow = parseFloat(newImpLow) || 565;
-    if (isNaN(p) || p <= 0) return null;
     return estimateBodyComposition(p, imp, impLow, profile);
-  }, [manualEntryModalOpen, newWeight, newImp, newImpLow, profile]);
+  }, [manualEntryModalOpen, newWeight, newFat, newImp, newImpLow, profile, calculateBmi, calculateFfmi]);
 
   return (
     <div className="py-6 space-y-6">
@@ -2366,20 +2467,40 @@ export function WeightTab() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-zinc-400 block mb-1">Peso Corporal (kg)</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={editWeight}
-                    onChange={(e) => setEditWeight(e.target.value)}
-                    required
-                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-lg font-mono font-bold text-zinc-100 focus:outline-none focus:border-zinc-600"
-                  />
-                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 font-mono text-sm">
-                    kg
-                  </span>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-zinc-400 block mb-1">Peso Corporal (kg)</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={editWeight}
+                      onChange={(e) => setEditWeight(e.target.value)}
+                      required
+                      className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-base font-mono font-bold text-zinc-100 focus:outline-none focus:border-zinc-600"
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 font-mono text-sm">
+                      kg
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-zinc-400 block mb-1">
+                    % Grasa Corporal {editingRecord.source === "zepp_life" ? "(Báscula)" : ""}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={editFat}
+                      onChange={(e) => setEditFat(e.target.value)}
+                      placeholder={editingRecord.grasaPct !== null && editingRecord.grasaPct !== undefined ? String(editingRecord.grasaPct) : "Opcional"}
+                      className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-base font-mono font-bold text-yellow-400 focus:outline-none focus:border-zinc-600"
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 font-mono text-sm">
+                      %
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -2661,27 +2782,45 @@ export function WeightTab() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-zinc-400 block mb-1">Peso Corporal (kg)</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.1"
-                    placeholder="ej. 77.4"
-                    value={newWeight}
-                    onChange={(e) => setNewWeight(e.target.value)}
-                    required
-                    autoFocus
-                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-base font-mono font-bold text-zinc-100 focus:outline-none focus:border-zinc-600"
-                  />
-                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 font-mono text-sm">
-                    kg
-                  </span>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-zinc-400 block mb-1">Peso Corporal (kg)</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="ej. 77.4"
+                      value={newWeight}
+                      onChange={(e) => setNewWeight(e.target.value)}
+                      required
+                      autoFocus
+                      className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-base font-mono font-bold text-zinc-100 focus:outline-none focus:border-zinc-600"
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 font-mono text-sm">
+                      kg
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-zinc-400 block mb-1">% Grasa Corporal (opcional)</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="ej. 19.8"
+                      value={newFat}
+                      onChange={(e) => setNewFat(e.target.value)}
+                      className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-base font-mono font-bold text-yellow-400 focus:outline-none focus:border-zinc-600"
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 font-mono text-sm">
+                      %
+                    </span>
+                  </div>
                 </div>
               </div>
 
               <p className="text-[11px] text-zinc-500 italic">
-                El % graso, masa magra y masa grasa se estimarán automáticamente según tu perfil biométrico.
+                {newFat ? "Composición calculada con el % de grasa indicado y tu altura/edad." : "Si no indicas % graso, se estimará automáticamente según tu perfil biométrico."}
               </p>
 
               {liveNewPreview && (
