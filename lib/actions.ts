@@ -709,7 +709,7 @@ export async function getExerciseDetail(
       allTimeMaxEst1RM = est1RM;
     }
 
-    let wMax1RM = est1RM || 0;
+    let wMax1RM = 0;
     let wMax1RMSet: SetDetail | null = null;
     for (const s of w.sets) {
       const wt = Number(s.weightKg) || 0;
@@ -892,7 +892,7 @@ export async function getExerciseDetail(
       seasonMaxEst1RM = est1RM;
     }
 
-    let sWMax1RM = est1RM || 0;
+    let sWMax1RM = 0;
     let sWMax1RMSet: SetDetail | null = null;
     for (const s of w.sets) {
       const wt = Number(s.weightKg) || 0;

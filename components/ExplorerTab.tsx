@@ -727,26 +727,27 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                                 <span>Top Set 1RM</span>
                               </span>
                               <div
-                                className="text-base sm:text-lg font-mono tabular-nums font-bold mt-0.5 flex items-baseline gap-1.5 flex-wrap"
+                                className="text-base sm:text-lg font-mono tabular-nums font-bold mt-0.5"
                                 style={{ color: seasonColor }}
                               >
-                                <span>
-                                  {detailData.exercise.seasonMax1RM?.label ||
-                                    (detailData.exercise.estimated1RM
-                                      ? `${detailData.exercise.estimated1RM} kg 1RM`
-                                      : "—")}
-                                </span>
-                                {detailData.exercise.seasonMax1RM?.setLabel && (
-                                  <span className="text-xs font-normal text-zinc-400 font-sans">
-                                    ({detailData.exercise.seasonMax1RM.setLabel})
-                                  </span>
-                                )}
+                                {detailData.exercise.seasonMax1RM?.label ||
+                                  (detailData.exercise.estimated1RM
+                                    ? `${detailData.exercise.estimated1RM} kg 1RM`
+                                    : "—")}
                               </div>
-                              <span className="text-[10px] font-mono text-zinc-400 mt-0.5">
-                                {detailData.exercise.seasonMax1RM?.date ||
-                                  detailData.exercise.seasonBest?.date ||
-                                  "—"}
-                              </span>
+                              <div className="text-[10px] font-mono text-zinc-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                {detailData.exercise.seasonMax1RM?.setLabel && (
+                                  <>
+                                    <span className="text-zinc-300 font-medium">{detailData.exercise.seasonMax1RM.setLabel}</span>
+                                    <span className="text-zinc-600">·</span>
+                                  </>
+                                )}
+                                <span>
+                                  {detailData.exercise.seasonMax1RM?.date ||
+                                    detailData.exercise.seasonBest?.date ||
+                                    "—"}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         ) : (
@@ -805,24 +806,25 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
                                 <span>Top Set 1RM</span>
                               </span>
-                              <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-300 mt-0.5 flex items-baseline gap-1.5 flex-wrap">
-                                <span>
-                                  {detailData.exercise.allTimeMax1RM?.label ||
-                                    (detailData.exercise.allTimeEstimated1RM
-                                      ? `${detailData.exercise.allTimeEstimated1RM} kg 1RM`
-                                      : "—")}
-                                </span>
-                                {detailData.exercise.allTimeMax1RM?.setLabel && (
-                                  <span className="text-xs font-normal text-zinc-400 font-sans">
-                                    ({detailData.exercise.allTimeMax1RM.setLabel})
-                                  </span>
-                                )}
+                              <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-300 mt-0.5">
+                                {detailData.exercise.allTimeMax1RM?.label ||
+                                  (detailData.exercise.allTimeEstimated1RM
+                                    ? `${detailData.exercise.allTimeEstimated1RM} kg 1RM`
+                                    : "—")}
                               </div>
-                              <span className="text-[10px] font-mono text-zinc-400 mt-0.5">
-                                {detailData.exercise.allTimeMax1RM?.date ||
-                                  detailData.exercise.allTimeBest?.date ||
-                                  "Sin registro"}
-                              </span>
+                              <div className="text-[10px] font-mono text-zinc-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                {detailData.exercise.allTimeMax1RM?.setLabel && (
+                                  <>
+                                    <span className="text-zinc-300 font-medium">{detailData.exercise.allTimeMax1RM.setLabel}</span>
+                                    <span className="text-zinc-600">·</span>
+                                  </>
+                                )}
+                                <span>
+                                  {detailData.exercise.allTimeMax1RM?.date ||
+                                    detailData.exercise.allTimeBest?.date ||
+                                    "Sin registro"}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         ) : (
@@ -880,24 +882,25 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
                                 <span>Top Set 1RM</span>
                               </span>
-                              <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-300 mt-0.5 flex items-baseline gap-1.5 flex-wrap">
-                                <span>
-                                  {detailData.exercise.allTimeMax1RM?.label ||
-                                    (detailData.exercise.allTimeEstimated1RM
-                                      ? `${detailData.exercise.allTimeEstimated1RM} kg 1RM`
-                                      : "—")}
-                                </span>
-                                {detailData.exercise.allTimeMax1RM?.setLabel && (
-                                  <span className="text-xs font-normal text-zinc-400 font-sans">
-                                    ({detailData.exercise.allTimeMax1RM.setLabel})
-                                  </span>
-                                )}
+                              <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-300 mt-0.5">
+                                {detailData.exercise.allTimeMax1RM?.label ||
+                                  (detailData.exercise.allTimeEstimated1RM
+                                    ? `${detailData.exercise.allTimeEstimated1RM} kg 1RM`
+                                    : "—")}
                               </div>
-                              <span className="text-[10px] font-mono text-zinc-400 mt-0.5">
-                                {detailData.exercise.allTimeMax1RM?.date ||
-                                  detailData.exercise.allTimeBest?.date ||
-                                  "Sin registro"}
-                              </span>
+                              <div className="text-[10px] font-mono text-zinc-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                {detailData.exercise.allTimeMax1RM?.setLabel && (
+                                  <>
+                                    <span className="text-zinc-300 font-medium">{detailData.exercise.allTimeMax1RM.setLabel}</span>
+                                    <span className="text-zinc-600">·</span>
+                                  </>
+                                )}
+                                <span>
+                                  {detailData.exercise.allTimeMax1RM?.date ||
+                                    detailData.exercise.allTimeBest?.date ||
+                                    "Sin registro"}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         ) : (
