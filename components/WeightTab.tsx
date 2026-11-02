@@ -1248,96 +1248,117 @@ export function WeightTab() {
 
       {/* 4. Gráfico Principal Interactivo de Evolución */}
       <div className="p-4 sm:p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 backdrop-blur-sm shadow-xl space-y-4">
-        {/* Barra de Controles del Gráfico */}
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pb-3 border-b border-zinc-800/60">
-          {/* Selector de Métricas */}
-          <div className="flex flex-wrap items-center gap-1 bg-zinc-950/70 p-1 rounded-xl border border-zinc-800">
+        {/* Barra de Controles del Gráfico: Organizada en horizontal, compacta y cuadrada */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 pb-3 border-b border-zinc-800/60">
+          {/* Selector de Parámetros / Métricas (Horizontal, cuadrado y con indicadores de color) */}
+          <div className="inline-flex items-center p-0.5 rounded-xl bg-zinc-950/90 border border-zinc-800 shadow-inner overflow-x-auto">
             <button
+              type="button"
               onClick={() => setChartMode("combined")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                 chartMode === "combined"
-                  ? "bg-zinc-800 text-zinc-100 font-bold shadow-sm"
+                  ? "bg-zinc-800 text-zinc-100 shadow-xs border border-zinc-700/60"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
+              title="Vista combinada: Peso (azul cobalto) y % Grasa (amarillo)"
             >
-              Combinado (Peso + % Grasa)
+              <span className="flex items-center gap-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+              </span>
+              <span>Combinado</span>
             </button>
+
             <button
+              type="button"
               onClick={() => setChartMode("weight_only")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                 chartMode === "weight_only"
-                  ? "bg-zinc-800 text-zinc-100 font-bold shadow-sm"
+                  ? "bg-zinc-800 text-zinc-100 shadow-xs border border-zinc-700/60"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
+              title="Solo Peso Corporal y Media Móvil de 7 días (azul cobalto)"
             >
-              Solo Peso & MA-7
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+              <span>Peso & MA-7</span>
             </button>
+
             <button
+              type="button"
               onClick={() => setChartMode("fat_only")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                 chartMode === "fat_only"
-                  ? "bg-zinc-800 text-zinc-100 font-bold shadow-sm"
+                  ? "bg-zinc-800 text-zinc-100 shadow-xs border border-zinc-700/60"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
+              title="Solo Porcentaje de Grasa Corporal (amarillo)"
             >
-              Solo % Graso
+              <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+              <span>% Grasa</span>
             </button>
+
             <button
+              type="button"
               onClick={() => setChartMode("composition")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                 chartMode === "composition"
-                  ? "bg-zinc-800 text-zinc-100 font-bold shadow-sm"
+                  ? "bg-zinc-800 text-zinc-100 shadow-xs border border-zinc-700/60"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
+              title="Composición Corporal: Masa Magra (rojo) vs Masa Grasa (amarillo)"
             >
-              Masa Magra vs Grasa
+              <span className="flex items-center gap-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+              </span>
+              <span>Composición</span>
             </button>
           </div>
 
-          {/* Selector de Curva (Rectas / Curvas / Suavizada) + Filtros Temporales */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Control segmentado de tipo de curva (exactamente como en ProgressionChart) */}
+          {/* Selector de Curva (solo iconos cuadrados) + Filtros Temporales + Agrupación */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Control segmentado de tipo de trazado (cuadrado solo con iconos) */}
             <div className="inline-flex items-center p-0.5 rounded-xl bg-zinc-950/90 border border-zinc-800 shadow-inner">
               <button
                 type="button"
                 onClick={() => setCurveType("linear")}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
                   curveType === "linear"
                     ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
-                    : "text-zinc-400 hover:text-zinc-200"
+                    : "text-zinc-500 hover:text-zinc-200"
                 }`}
-                title="Trazado lineal con picos directos entre puntos"
+                title="Líneas rectas directas entre puntos"
+                aria-label="Rectas"
               >
                 <LinearLineIcon className="w-3.5 h-3.5" />
-                <span>Rectas</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setCurveType("smooth")}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
                   curveType === "smooth"
                     ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
-                    : "text-zinc-400 hover:text-zinc-200"
+                    : "text-zinc-500 hover:text-zinc-200"
                 }`}
-                title="Curvas naturales (spline cúbico monótono)"
+                title="Curvas naturales (spline cúbico)"
+                aria-label="Curvas"
               >
                 <SmoothLineIcon className="w-3.5 h-3.5" />
-                <span>Curvas</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setCurveType("flow")}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
                   curveType === "flow"
                     ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
-                    : "text-zinc-400 hover:text-zinc-200"
+                    : "text-zinc-500 hover:text-zinc-200"
                 }`}
                 title="Completamente suavizadas (línea continua fluida)"
+                aria-label="Fluida"
               >
                 <FlowLineIcon className="w-3.5 h-3.5" />
-                <span>Fluida</span>
               </button>
             </div>
 
@@ -1345,7 +1366,7 @@ export function WeightTab() {
             {activeSeason && activeSeasonId !== "all" && (
               <button
                 onClick={() => setSyncWithSeason(!syncWithSeason)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors cursor-pointer ${
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-colors cursor-pointer ${
                   syncWithSeason
                     ? "bg-zinc-800 text-zinc-100 border-zinc-700"
                     : "bg-zinc-900/40 text-zinc-500 border-zinc-800 hover:text-zinc-300"
@@ -1353,15 +1374,15 @@ export function WeightTab() {
                 title="Filtrar por la temporada activa"
               >
                 <div
-                  className="w-2 h-2 rounded-full"
+                  className="w-2 h-2 rounded-full shrink-0"
                   style={{ backgroundColor: syncWithSeason ? seasonColor : "#71717a" }}
                 />
-                <span className="truncate max-w-[120px]">Season: {activeSeason.name}</span>
+                <span className="truncate max-w-[100px]">Season: {activeSeason.name}</span>
               </button>
             )}
 
             {/* Filtros de Rango Temporal */}
-            <div className="flex items-center gap-0.5 bg-zinc-950/70 p-1 rounded-xl border border-zinc-800">
+            <div className="inline-flex items-center p-0.5 rounded-xl bg-zinc-950/90 border border-zinc-800 shadow-inner">
               {(["1M", "3M", "6M", "1A", "all"] as TimeRange[]).map((r) => (
                 <button
                   key={r}
@@ -1369,9 +1390,9 @@ export function WeightTab() {
                     setTimeRange(r);
                     if (syncWithSeason) setSyncWithSeason(false);
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${
                     timeRange === r && !syncWithSeason
-                      ? "bg-zinc-800 text-zinc-100 font-bold"
+                      ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
                       : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
@@ -1382,14 +1403,14 @@ export function WeightTab() {
 
             {/* Control de Agrupación (Fórmula anti-amontonamiento) */}
             <div className="inline-flex items-center p-0.5 rounded-xl bg-zinc-950/90 border border-zinc-800 shadow-inner">
-              <span className="text-[10px] text-zinc-500 font-medium px-1.5 hidden sm:inline">
+              <span className="text-[10px] text-zinc-500 font-medium pl-2 pr-1 hidden sm:inline">
                 Agrupar:
               </span>
               {(
                 [
                   { id: "auto", label: "Auto", title: "Automático: calcula la media si las medidas están amontonadas" },
                   { id: "daily", label: "Día", title: "Diario: fuerza puntos diarios sin agrupar semanas" },
-                  { id: "weekly", label: "Semana", title: "Semanal: calcula la media de cada semana (7 días)" },
+                  { id: "weekly", label: "Sem", title: "Semanal: calcula la media de cada semana (7 días)" },
                   { id: "monthly", label: "Mes", title: "Mensual: calcula la media de cada mes" },
                 ] as { id: WeightGroupingMode; label: string; title: string }[]
               ).map((m) => (
