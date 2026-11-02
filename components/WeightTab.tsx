@@ -42,6 +42,8 @@ import {
   estimateBodyComposition,
   enrichWithMovingAverages,
   aggregateRecordsByDay,
+  aggregateRecordsAdaptive,
+  WeightGroupingMode,
   DEFAULT_USER_PROFILE,
 } from "@/lib/mock-weight-data";
 
@@ -214,6 +216,7 @@ export function WeightTab() {
   const [chartMode, setChartMode] = useState<WeightChartMode>("combined");
   const [curveType, setCurveType] = useState<CurveType>("smooth");
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
+  const [groupingMode, setGroupingMode] = useState<WeightGroupingMode>("auto");
   const [syncWithSeason, setSyncWithSeason] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortAsc, setSortAsc] = useState(false);
@@ -466,12 +469,14 @@ export function WeightTab() {
     return result.sort((a, b) => a.timestamp - b.timestamp);
   }, [records, timeRange, syncWithSeason, activeSeason, activeSeasonId]);
 
-  // Agrupación de pesajes por día para la gráfica:
-  // Cuando hay varias medidas el mismo día, el punto que aparece en la gráfica es la media
-  const chartRecords = useMemo(() => {
-    const aggregated = aggregateRecordsByDay(filteredRecords, profile);
-    return enrichWithMovingAverages(aggregated);
-  }, [filteredRecords, profile]);
+  // Agrupación adaptativa inteligente para la gráfica:
+  // Cuando las medidas se amontonan (como en el TODO o en el peso anual "1A"),
+  // la fórmula agrupa y calcula la media semanal o mensual para evitar solapamientos.
+  const adaptiveResult = useMemo(() => {
+    return aggregateRecordsAdaptive(filteredRecords, profile, groupingMode);
+  }, [filteredRecords, profile, groupingMode]);
+
+  const chartRecords = adaptiveResult.records;
 
   // Resumen de Métricas Clave (KPIs) basado en chartRecords
   const stats = useMemo(() => {
@@ -1273,8 +1278,57 @@ export function WeightTab() {
                 </button>
               ))}
             </div>
+
+            {/* Control de Agrupación (Fórmula anti-amontonamiento) */}
+            <div className="inline-flex items-center p-0.5 rounded-xl bg-zinc-950/90 border border-zinc-800 shadow-inner">
+              <span className="text-[10px] text-zinc-500 font-medium px-1.5 hidden sm:inline">
+                Agrupar:
+              </span>
+              {(
+                [
+                  { id: "auto", label: "Auto", title: "Automático: calcula la media si las medidas están amontonadas" },
+                  { id: "daily", label: "Día", title: "Diario: fuerza puntos diarios sin agrupar semanas" },
+                  { id: "weekly", label: "Semana", title: "Semanal: calcula la media de cada semana (7 días)" },
+                  { id: "monthly", label: "Mes", title: "Mensual: calcula la media de cada mes" },
+                ] as { id: WeightGroupingMode; label: string; title: string }[]
+              ).map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setGroupingMode(m.id)}
+                  className={`px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                    groupingMode === m.id
+                      ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
+                      : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                  title={m.title}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* Banner informativo de fórmula de descongestión activa */}
+        {adaptiveResult.effectiveInterval !== "daily" && (
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+              <span className="font-semibold">
+                Fórmula de medias activa:
+              </span>
+              <span className="text-blue-200">
+                {adaptiveResult.effectiveInterval === "weekly"
+                  ? `Mostrando media semanal (${adaptiveResult.displayedPoints} semanas de ${adaptiveResult.totalMeasurements} tomas registradas)`
+                  : `Mostrando media mensual (${adaptiveResult.displayedPoints} meses de ${adaptiveResult.totalMeasurements} tomas registradas)`}
+              </span>
+            </div>
+            <span className="text-[10px] text-blue-300/80 font-mono">
+              Puntos descongestionados sin solapamientos
+            </span>
+          </div>
+        )}
 
         {/* Canvas SVG Interactivo */}
         <div className="relative w-full overflow-hidden select-none">
@@ -1592,6 +1646,15 @@ export function WeightTab() {
 
                 return samples.map((r, i) => {
                   const x = chartScales.getX(r.timestamp);
+                  let label = r.fecha.slice(5);
+                  if (r.periodType === "monthly") {
+                    const d = new Date(r.timestamp);
+                    label = d.toLocaleDateString("es-ES", { month: "short", year: "2-digit" });
+                  } else if (r.periodType === "weekly") {
+                    const d = new Date(r.timestamp);
+                    label = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+                  }
+
                   return (
                     <text
                       key={i}
@@ -1602,7 +1665,7 @@ export function WeightTab() {
                       fill="#71717a"
                       fontFamily="monospace"
                     >
-                      {r.fecha.slice(5)}
+                      {label}
                     </text>
                   );
                 });
@@ -1638,11 +1701,15 @@ export function WeightTab() {
               <div className="flex items-center justify-between border-b border-zinc-800 pb-1 text-zinc-400 font-mono text-[11px]">
                 <span className="flex items-center gap-1 font-semibold text-zinc-200">
                   <CalendarIcon className="w-3.5 h-3.5 text-zinc-400" />
-                  {hoveredPoint.fecha}
+                  {hoveredPoint.periodLabel || hoveredPoint.fecha}
                 </span>
-                {hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1 ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-cyan-500/15 text-cyan-300 font-semibold text-[10px] border border-cyan-500/30">
-                    Media ({hoveredPoint.measurements.length} tomas)
+                {hoveredPoint.measurements && hoveredPoint.measurements.length > 1 ? (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-blue-500/15 text-blue-300 font-semibold text-[10px] border border-blue-500/30">
+                    {hoveredPoint.periodType === "weekly"
+                      ? `Media semanal (${hoveredPoint.measurements.length} tomas)`
+                      : hoveredPoint.periodType === "monthly"
+                      ? `Media mensual (${hoveredPoint.measurements.length} tomas)`
+                      : `Media diaria (${hoveredPoint.measurements.length} tomas)`}
                   </span>
                 ) : (
                   <span className="flex items-center gap-1">
@@ -1655,7 +1722,13 @@ export function WeightTab() {
               <div className="grid grid-cols-3 gap-2 pt-0.5">
                 <div>
                   <span className="text-[10px] text-zinc-400 block">
-                    {hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1 ? "Peso Medio" : "Peso"}
+                    {hoveredPoint.periodType === "weekly"
+                      ? "Peso Semanal"
+                      : hoveredPoint.periodType === "monthly"
+                      ? "Peso Mensual"
+                      : hoveredPoint.measurements && hoveredPoint.measurements.length > 1
+                      ? "Peso Medio"
+                      : "Peso"}
                   </span>
                   <span className="font-extrabold text-sm text-blue-400 font-mono">
                     {hoveredPoint.peso.toFixed(1)} kg
@@ -1677,7 +1750,13 @@ export function WeightTab() {
 
                 <div>
                   <span className="text-[10px] text-zinc-400 block">
-                    {hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1 ? "% Grasa Media" : "% Graso"}
+                    {hoveredPoint.periodType === "weekly"
+                      ? "% Grasa Semanal"
+                      : hoveredPoint.periodType === "monthly"
+                      ? "% Grasa Mensual"
+                      : hoveredPoint.measurements && hoveredPoint.measurements.length > 1
+                      ? "% Grasa Media"
+                      : "% Graso"}
                   </span>
                   <span className="font-extrabold text-sm text-yellow-400 font-mono">
                     {typeof hoveredPoint.grasaPct === "number" ? `${hoveredPoint.grasaPct.toFixed(1)}%` : "—"}
@@ -1753,7 +1832,7 @@ export function WeightTab() {
                 </div>
               )}
 
-              {hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1 ? (
+              {hoveredPoint.measurements && hoveredPoint.measurements.length > 1 ? (
                 <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between gap-2">
                   <span className="text-[10px] text-zinc-400 font-mono">
                     Rango: {hoveredPoint.minPeso?.toFixed(1)} - {hoveredPoint.maxPeso?.toFixed(1)} kg
@@ -1763,7 +1842,7 @@ export function WeightTab() {
                       e.stopPropagation();
                       setSelectedDayModal(hoveredPoint);
                     }}
-                    className="px-2.5 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold text-[10px] cursor-pointer transition-colors shadow-sm"
+                    className="px-2.5 py-1 rounded-lg bg-blue-500 hover:bg-blue-400 text-zinc-950 font-bold text-[10px] cursor-pointer transition-colors shadow-sm"
                   >
                     Ver {hoveredPoint.measurements.length} medidas
                   </button>
@@ -1815,7 +1894,11 @@ export function WeightTab() {
             <span className="w-3.5 h-3.5 rounded-full border border-dashed border-blue-400/80 inline-flex items-center justify-center">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
             </span>
-            <span className="text-[11px] text-zinc-300">Días con varias tomas (Media)</span>
+            <span className="text-[11px] text-zinc-300">
+              {adaptiveResult.effectiveInterval !== "daily"
+                ? "Períodos agrupados (Media)"
+                : "Días con varias tomas (Media)"}
+            </span>
           </div>
         </div>
       </div>
@@ -2666,13 +2749,23 @@ export function WeightTab() {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
-                    <span>Medidas del {selectedDayModal.fecha}</span>
+                    <span>
+                      {selectedDayModal.periodType === "weekly"
+                        ? `Semana: ${selectedDayModal.periodLabel || selectedDayModal.fecha}`
+                        : selectedDayModal.periodType === "monthly"
+                        ? `Mes: ${selectedDayModal.periodLabel || selectedDayModal.fecha}`
+                        : `Medidas del ${selectedDayModal.fecha}`}
+                    </span>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30">
                       {selectedDayModal.measurements?.length || 1} tomas
                     </span>
                   </h3>
                   <p className="text-xs text-zinc-400">
-                    En la gráfica general se muestra la media diaria de este conjunto de medidas.
+                    {selectedDayModal.periodType === "weekly"
+                      ? "En la gráfica se muestra la media semanal calculada para este período."
+                      : selectedDayModal.periodType === "monthly"
+                      ? "En la gráfica se muestra la media mensual calculada para este período."
+                      : "En la gráfica general se muestra la media diaria de este conjunto de medidas."}
                   </p>
                 </div>
               </div>
@@ -2684,10 +2777,16 @@ export function WeightTab() {
               </button>
             </div>
 
-            {/* Tarjetas resumen de la media diaria */}
+            {/* Tarjetas resumen de la media diaria o de período */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 text-center font-mono">
               <div className="p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/60">
-                <span className="text-[10px] text-zinc-400 block font-sans">Peso Medio</span>
+                <span className="text-[10px] text-zinc-400 block font-sans">
+                  {selectedDayModal.periodType === "weekly"
+                    ? "Media Semanal"
+                    : selectedDayModal.periodType === "monthly"
+                    ? "Media Mensual"
+                    : "Peso Medio"}
+                </span>
                 <span className="text-base font-extrabold text-blue-400">{selectedDayModal.peso.toFixed(1)} kg</span>
               </div>
               <div className="p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/60">

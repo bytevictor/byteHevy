@@ -43,8 +43,11 @@ export interface WeightRecord {
   measurementsCount?: number;   // Cantidad de medidas realizadas ese día
   measurements?: WeightRecord[]; // Lista de pesajes individuales de ese día
   isDailyAverage?: boolean;     // True si el punto representa la media diaria
-  minPeso?: number;             // Peso mínimo de ese día
-  maxPeso?: number;             // Peso máximo de ese día
+  isPeriodAverage?: boolean;    // True si el punto representa una media agrupada (semanal / mensual)
+  periodType?: "daily" | "weekly" | "monthly"; // Escala temporal de agrupación
+  periodLabel?: string;         // Etiqueta legible (ej: "12 - 18 oct 2026" o "Octubre 2026")
+  minPeso?: number;             // Peso mínimo de ese día o período
+  maxPeso?: number;             // Peso máximo de ese día o período
 }
 
 /**
@@ -343,6 +346,329 @@ export function aggregateRecordsByDay(
   // Ordenar cronológicamente
   result.sort((a, b) => a.timestamp - b.timestamp);
   return result;
+}
+
+export type WeightGroupingMode = "auto" | "daily" | "weekly" | "monthly";
+
+/**
+ * Devuelve el lunes (YYYY-MM-DD) de la semana correspondiente a una fecha
+ */
+export function getMondayOfWeek(fechaStr: string): string {
+  const date = new Date(fechaStr + "T12:00:00");
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(date);
+  monday.setDate(diff);
+  return monday.toISOString().split("T")[0];
+}
+
+/**
+ * Etiqueta legible para una semana a partir de la fecha de su lunes: ej. "12 - 18 oct 2026"
+ */
+export function getWeekRangeLabel(mondayStr: string): string {
+  const monday = new Date(mondayStr + "T12:00:00");
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const mD = monday.getDate();
+  const sD = sunday.getDate();
+  const mMonth = monday.toLocaleDateString("es-ES", { month: "short" });
+  const sMonth = sunday.toLocaleDateString("es-ES", { month: "short" });
+  const year = monday.getFullYear();
+  return mMonth === sMonth
+    ? `${mD} - ${sD} ${mMonth} ${year}`
+    : `${mD} ${mMonth} - ${sD} ${sMonth} ${year}`;
+}
+
+/**
+ * Etiqueta legible para un mes a partir de YYYY-MM: ej. "Octubre 2026"
+ */
+export function getMonthLabel(monthKey: string): string {
+  const d = new Date(monthKey + "-15T12:00:00");
+  const monthName = d.toLocaleDateString("es-ES", { month: "long" });
+  const capitalized = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+  return `${capitalized} ${d.getFullYear()}`;
+}
+
+export interface AdaptiveAggregationResult {
+  records: WeightRecord[];
+  effectiveInterval: "daily" | "weekly" | "monthly";
+  isCrowded: boolean;
+  reason: string;
+  totalMeasurements: number;
+  displayedPoints: number;
+}
+
+/**
+ * Agrupación adaptativa inteligente para evitar que las medidas se amontonen
+ * en rangos amplios como "1A" (anual) o "Todo".
+ * 
+ * Fórmula de densidad:
+ * - Si la cantidad de días > 45 o el intervalo abarca más de 120 días con muchas tomas:
+ *   se agrupa por semanas (media semanal) o meses (media mensual).
+ * - Calcula la media aritmética exacta de peso, grasa %, masa magra, agua, etc.
+ * - Mantiene el desglose de todas las tomas individuales del período en `measurements`.
+ */
+export function aggregateRecordsAdaptive(
+  rawRecords: WeightRecord[],
+  profile: UserBiometricProfile = DEFAULT_USER_PROFILE,
+  mode: WeightGroupingMode = "auto"
+): AdaptiveAggregationResult {
+  if (rawRecords.length === 0) {
+    return {
+      records: [],
+      effectiveInterval: "daily",
+      isCrowded: false,
+      reason: "Sin datos",
+      totalMeasurements: 0,
+      displayedPoints: 0,
+    };
+  }
+
+  // 1. Agrupar primero por día para resolver múltiples tomas en un mismo día
+  const dailyRecords = aggregateRecordsByDay(rawRecords, profile);
+  const count = dailyRecords.length;
+
+  if (count <= 1) {
+    return {
+      records: enrichWithMovingAverages(dailyRecords, 7),
+      effectiveInterval: "daily",
+      isCrowded: false,
+      reason: "Pocos registros",
+      totalMeasurements: rawRecords.length,
+      displayedPoints: count,
+    };
+  }
+
+  // Ordenar cronológicamente
+  dailyRecords.sort((a, b) => a.timestamp - b.timestamp);
+  const minTime = dailyRecords[0].timestamp;
+  const maxTime = dailyRecords[dailyRecords.length - 1].timestamp;
+  const spanDays = Math.max(1, Math.round((maxTime - minTime) / (24 * 3600 * 1000)));
+
+  // Detección de amontonamiento:
+  // En el canvas de 880px, más de 45 puntos o abarcar más de 120 días con > 35 puntos
+  // provoca que los círculos de 6-12px se toquen o superpongan.
+  const isCrowded = count > 45 || (spanDays > 120 && count > 35);
+
+  let effectiveInterval: "daily" | "weekly" | "monthly" = "daily";
+  let reason = "Registros con espaciado óptimo diario";
+
+  if (mode === "daily") {
+    effectiveInterval = "daily";
+    reason = "Forzado en modo diario";
+  } else if (mode === "weekly") {
+    effectiveInterval = "weekly";
+    reason = "Forzado en modo semanal (media 7d)";
+  } else if (mode === "monthly") {
+    effectiveInterval = "monthly";
+    reason = "Forzado en modo mensual";
+  } else {
+    // Modo AUTO: aplicar fórmula de descongestión
+    if (!isCrowded) {
+      effectiveInterval = "daily";
+      reason = "Densidad óptima para vista diaria";
+    } else {
+      // Amontonado: si abarca más de 450 días y hay más de 70 puntos, agrupamos por mes;
+      // en caso de 1 año (~365 días) o hasta 450 días, agrupamos por semana (52 puntos en 1 año)
+      if (spanDays > 450 && count > 70) {
+        effectiveInterval = "monthly";
+        reason = `Medidas amontonadas (${count} días en ${spanDays}d): agrupado en media mensual`;
+      } else {
+        effectiveInterval = "weekly";
+        reason = `Medidas amontonadas (${count} días en ${spanDays}d): agrupado en media semanal (7 días)`;
+      }
+    }
+  }
+
+  if (effectiveInterval === "daily") {
+    const enriched = enrichWithMovingAverages(dailyRecords, 7);
+    return {
+      records: enriched,
+      effectiveInterval: "daily",
+      isCrowded,
+      reason,
+      totalMeasurements: rawRecords.length,
+      displayedPoints: enriched.length,
+    };
+  }
+
+  // Agrupación Semanal o Mensual
+  const groups = new Map<string, WeightRecord[]>();
+  const isWeekly = effectiveInterval === "weekly";
+
+  for (const day of dailyRecords) {
+    const key = isWeekly ? getMondayOfWeek(day.fecha) : day.fecha.slice(0, 7);
+    const list = groups.get(key) || [];
+    list.push(day);
+    groups.set(key, list);
+  }
+
+  const aggregatedResult: WeightRecord[] = [];
+  const h = profile.alturaCm > 0 ? profile.alturaCm : 178;
+
+  for (const [key, daysInPeriod] of groups.entries()) {
+    // Recopilar todas las tomas individuales subyacentes
+    const allMeasurements: WeightRecord[] = [];
+    for (const d of daysInPeriod) {
+      if (d.measurements && d.measurements.length > 0) {
+        allMeasurements.push(...d.measurements);
+      } else {
+        allMeasurements.push(d);
+      }
+    }
+    allMeasurements.sort((a, b) => a.timestamp - b.timestamp);
+
+    const mCount = allMeasurements.length;
+    const avgPeso =
+      Math.round((allMeasurements.reduce((sum, r) => sum + r.peso, 0) / mCount) * 10) / 10;
+    const weights = allMeasurements.map((r) => r.peso);
+    const minPeso = Math.min(...weights);
+    const maxPeso = Math.max(...weights);
+
+    // Medias de grasa, masa magra, masa grasa, agua
+    const validFats = allMeasurements.filter(
+      (r) => typeof r.grasaPct === "number" && !isNaN(r.grasaPct)
+    );
+    const avgFat =
+      validFats.length > 0
+        ? Math.round(
+            (validFats.reduce((sum, r) => sum + (r.grasaPct || 0), 0) / validFats.length) * 10
+          ) / 10
+        : null;
+
+    const validLeans = allMeasurements.filter(
+      (r) => typeof r.masaMagraKg === "number" && !isNaN(r.masaMagraKg)
+    );
+    const avgLean =
+      validLeans.length > 0
+        ? Math.round(
+            (validLeans.reduce((sum, r) => sum + (r.masaMagraKg || 0), 0) / validLeans.length) * 10
+          ) / 10
+        : null;
+
+    const validFatKgs = allMeasurements.filter(
+      (r) => typeof r.masaGrasaKg === "number" && !isNaN(r.masaGrasaKg)
+    );
+    const avgFatKg =
+      validFatKgs.length > 0
+        ? Math.round(
+            (validFatKgs.reduce((sum, r) => sum + (r.masaGrasaKg || 0), 0) / validFatKgs.length) * 10
+          ) / 10
+        : null;
+
+    const validWaters = allMeasurements.filter(
+      (r) => typeof r.aguaPct === "number" && !isNaN(r.aguaPct)
+    );
+    const avgWater =
+      validWaters.length > 0
+        ? Math.round(
+            (validWaters.reduce((sum, r) => sum + (r.aguaPct || 0), 0) / validWaters.length) * 10
+          ) / 10
+        : null;
+
+    const validImps = allMeasurements.filter(
+      (r) => typeof r.impedancia === "number" && !isNaN(r.impedancia)
+    );
+    const avgImp =
+      validImps.length > 0
+        ? Math.round(validImps.reduce((sum, r) => sum + (r.impedancia || 0), 0) / validImps.length)
+        : null;
+
+    const validImpLows = allMeasurements.filter(
+      (r) => typeof r.impedanciaLow === "number" && !isNaN(r.impedanciaLow)
+    );
+    const avgImpLow =
+      validImpLows.length > 0
+        ? Math.round(
+            validImpLows.reduce((sum, r) => sum + (r.impedanciaLow || 0), 0) / validImpLows.length
+          )
+        : null;
+
+    const validBone = allMeasurements.filter(
+      (r) => typeof r.boneMass === "number" && !isNaN(r.boneMass)
+    );
+    const avgBone =
+      validBone.length > 0
+        ? Math.round(
+            (validBone.reduce((sum, r) => sum + (r.boneMass || 0), 0) / validBone.length) * 100
+          ) / 100
+        : null;
+
+    const validMetab = allMeasurements.filter(
+      (r) => typeof r.metabolism === "number" && !isNaN(r.metabolism)
+    );
+    const avgMetab =
+      validMetab.length > 0
+        ? Math.round(validMetab.reduce((sum, r) => sum + (r.metabolism || 0), 0) / validMetab.length)
+        : null;
+
+    const validMuscle = allMeasurements.filter(
+      (r) => typeof r.muscleRate === "number" && !isNaN(r.muscleRate)
+    );
+    const avgMuscle =
+      validMuscle.length > 0
+        ? Math.round(
+            (validMuscle.reduce((sum, r) => sum + (r.muscleRate || 0), 0) / validMuscle.length) * 100
+          ) / 100
+        : null;
+
+    const bmi = calculateBmi(avgPeso, h);
+    const ffmiData = avgLean && h > 0 ? calculateFfmi(avgLean, h) : null;
+
+    // Timestamp medio de las tomas del período
+    const avgTimestamp = Math.round(
+      allMeasurements.reduce((sum, r) => sum + r.timestamp, 0) / mCount
+    );
+
+    const periodLabel = isWeekly ? getWeekRangeLabel(key) : getMonthLabel(key);
+
+    aggregatedResult.push({
+      id: isWeekly ? `week-${key}` : `month-${key}`,
+      fecha: isWeekly ? key : `${key}-01`,
+      hora: isWeekly ? `Semanal (${mCount} tomas)` : `Mensual (${mCount} tomas)`,
+      timestamp: avgTimestamp,
+      peso: avgPeso,
+      impedancia: avgImp,
+      impedanciaLow: avgImpLow,
+      grasaPct: avgFat,
+      masaMagraKg: avgLean,
+      masaGrasaKg: avgFatKg,
+      aguaPct: avgWater,
+      bmi,
+      ffmi: ffmiData ? ffmiData.ffmi : null,
+      boneMass: avgBone,
+      metabolism: avgMetab,
+      muscleRate: avgMuscle,
+      altura: h,
+      source: isWeekly ? "media_semanal" : "media_mensual",
+      measurementsCount: mCount,
+      measurements: allMeasurements,
+      isDailyAverage: true, // Para mantener compatibilidad con clics y tooltips
+      isPeriodAverage: true,
+      periodType: effectiveInterval,
+      periodLabel,
+      minPeso,
+      maxPeso,
+      esValido: true,
+    });
+  }
+
+  // Ordenar cronológicamente
+  aggregatedResult.sort((a, b) => a.timestamp - b.timestamp);
+
+  // Enriquecer con medias móviles proporcionales a la escala de agrupación
+  // Para semanal: ventana de 28 días (4 semanas). Para mensual: ventana de 90 días (3 meses).
+  const windowDays = isWeekly ? 28 : 90;
+  const finalRecords = enrichWithMovingAverages(aggregatedResult, windowDays);
+
+  return {
+    records: finalRecords,
+    effectiveInterval,
+    isCrowded,
+    reason,
+    totalMeasurements: rawRecords.length,
+    displayedPoints: finalRecords.length,
+  };
 }
 
 /**

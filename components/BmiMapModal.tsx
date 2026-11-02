@@ -945,3 +945,4 @@ export function BmiMapModal({ isOpen, onClose, weight: propWeight }: BmiMapModal
     </div>
   );
 }
+
