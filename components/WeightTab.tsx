@@ -950,23 +950,23 @@ export function WeightTab() {
         </button>
       </div>
 
-      {/* 3. Panel de Métricas / KPI Cards (6 Cards) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
-        {/* KPI 1: Peso Actual */}
+      {/* 3. Panel de Métricas / KPI Cards (5 Cards) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3.5">
+        {/* KPI 1: Peso Actual (Azul Cobalto) */}
         <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
             <span className="flex items-center gap-1.5">
-              <ScaleIcon className="w-3.5 h-3.5" style={{ color: seasonColor }} />
-              Peso Actual
+              <ScaleIcon className="w-3.5 h-3.5 text-blue-500" />
+              <span className="text-zinc-300 font-semibold">Peso Actual</span>
             </span>
-            <span className="text-[10px] font-mono text-zinc-500">kg</span>
+            <span className="text-[10px] font-mono text-blue-400 font-medium">kg</span>
           </div>
 
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold text-zinc-100 tracking-tight font-mono">
+            <span className="text-2xl sm:text-3xl font-extrabold text-blue-400 tracking-tight font-mono">
               {stats.latestWeight.toFixed(1)}
             </span>
-            <span className="text-xs text-zinc-400 font-normal">kg</span>
+            <span className="text-xs text-blue-400/80 font-normal">kg</span>
           </div>
 
           <div className="mt-2.5 flex items-center justify-between text-[11px]">
@@ -986,28 +986,28 @@ export function WeightTab() {
               <span className="text-zinc-500 font-normal">7d</span>
             </div>
             <span className="text-[10px] text-zinc-500 font-mono">
-              MA-7: {stats.ma7Weight.toFixed(1)}
+              MA-7: <span className="text-blue-400 font-semibold">{stats.ma7Weight.toFixed(1)}</span>
             </span>
           </div>
         </div>
 
-        {/* KPI 2: % Graso */}
+        {/* KPI 2: % Graso (Amarillo) */}
         <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
             <span className="flex items-center gap-1.5">
-              <PercentIcon className="w-3.5 h-3.5 text-cyan-400" />
-              % Grasa Corporal
+              <PercentIcon className="w-3.5 h-3.5 text-yellow-400" />
+              <span className="text-zinc-300 font-semibold">% Grasa Corporal</span>
             </span>
-            <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-              BIA
+            <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+              FAT %
             </span>
           </div>
 
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold text-cyan-300 tracking-tight font-mono">
+            <span className="text-2xl sm:text-3xl font-extrabold text-yellow-300 tracking-tight font-mono">
               {stats.latestFat.toFixed(1)}
             </span>
-            <span className="text-xs text-cyan-400/80 font-normal">%</span>
+            <span className="text-xs text-yellow-400/80 font-normal">%</span>
           </div>
 
           <div className="mt-2.5 flex items-center justify-between text-[11px]">
@@ -1028,7 +1028,7 @@ export function WeightTab() {
           </div>
         </div>
 
-        {/* KPI 3: BMI / IMC (Nuevo basado en Altura & Edad) */}
+        {/* KPI 3: BMI / IMC (Color actual: Indigo) */}
         {(() => {
           const currentBmi = stats.latestWeight > 0 ? calculateBmi(stats.latestWeight) : 0;
           const bmiCat = getBmiCategory(currentBmi);
@@ -1040,7 +1040,7 @@ export function WeightTab() {
               <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
                 <span className="flex items-center gap-1.5">
                   <UserIcon className="w-3.5 h-3.5 text-indigo-400" />
-                  BMI / IMC
+                  <span className="text-zinc-300 font-semibold">BMI / IMC</span>
                 </span>
                 <span
                   className={`px-1.5 py-0.2 rounded text-[9px] font-semibold border ${bmiCat.bgColor} ${bmiCat.color} ${bmiCat.borderColor}`}
@@ -1074,77 +1074,52 @@ export function WeightTab() {
           );
         })()}
 
-        {/* KPI 4: Masa Magra (FFM) */}
+        {/* KPI 4: Masa Magra (Rojo) */}
         <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
             <span className="flex items-center gap-1.5">
-              <ActivityIcon className="w-3.5 h-3.5 text-emerald-400" />
-              Masa Magra
+              <ActivityIcon className="w-3.5 h-3.5 text-red-500" />
+              <span className="text-zinc-300 font-semibold">Masa Magra</span>
             </span>
-            <span className="text-[10px] font-mono text-zinc-500">FFM</span>
+            <span className="text-[10px] font-mono text-red-400 font-semibold">FFM</span>
           </div>
 
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold text-emerald-300 tracking-tight font-mono">
+            <span className="text-2xl sm:text-3xl font-extrabold text-red-400 tracking-tight font-mono">
               {stats.latestLean.toFixed(1)}
             </span>
-            <span className="text-xs text-emerald-400/80 font-normal">kg</span>
+            <span className="text-xs text-red-400/80 font-normal">kg</span>
           </div>
 
           <div className="mt-2.5 flex items-center justify-between text-[11px]">
-            <span className="text-emerald-400/90 font-medium">Musculatura preservada</span>
+            <span className="text-red-400/90 font-medium">Musculatura</span>
             <span className="text-[10px] text-zinc-500 font-mono">
               {((stats.latestLean / (stats.latestWeight || 1)) * 100).toFixed(0)}%
             </span>
           </div>
         </div>
 
-        {/* KPI 5: Masa Grasa */}
+        {/* KPI 5: Masa Grasa (Amarillo) */}
         <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
             <span className="flex items-center gap-1.5">
-              <TrendingDownIcon className="w-3.5 h-3.5 text-rose-400" />
-              Masa Grasa
+              <TrendingDownIcon className="w-3.5 h-3.5 text-yellow-400" />
+              <span className="text-zinc-300 font-semibold">Masa Grasa</span>
             </span>
-            <span className="text-[10px] font-mono text-zinc-500">FAT</span>
+            <span className="text-[10px] font-mono text-yellow-400 font-semibold">FAT</span>
           </div>
 
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold text-rose-300 tracking-tight font-mono">
+            <span className="text-2xl sm:text-3xl font-extrabold text-yellow-300 tracking-tight font-mono">
               {stats.latestFatKg.toFixed(1)}
             </span>
-            <span className="text-xs text-rose-400/80 font-normal">kg</span>
+            <span className="text-xs text-yellow-400/80 font-normal">kg</span>
           </div>
 
           <div className="mt-2.5 flex items-center justify-between text-[11px]">
-            <span className="text-rose-400/90 font-medium">Tejido adiposo</span>
+            <span className="text-yellow-400/90 font-medium">Tejido adiposo</span>
             <span className="text-[10px] text-zinc-500 font-mono">
               {((stats.latestFatKg / (stats.latestWeight || 1)) * 100).toFixed(0)}%
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 6: Impedancia Dual */}
-        <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
-            <span className="flex items-center gap-1.5">
-              <ZapIcon className="w-3.5 h-3.5 text-amber-400" />
-              Impedancia Dual
-            </span>
-            <span className="text-[10px] font-mono text-zinc-500">Ω</span>
-          </div>
-
-          <div className="flex items-baseline gap-2">
-            <span className="text-xl sm:text-2xl font-extrabold text-amber-300 tracking-tight font-mono">
-              {stats.latestImp}{" "}
-              <span className="text-xs font-normal text-zinc-400">/ {stats.latestImpLow}</span>
-            </span>
-          </div>
-
-          <div className="mt-2.5 flex items-center justify-between text-[11px]">
-            <span className="text-zinc-400">Ratio ZLow / Z</span>
-            <span className="text-[10px] text-emerald-400 font-mono font-semibold">
-              {(stats.latestImpLow / (stats.latestImp || 1)).toFixed(3)} (Óptimo)
             </span>
           </div>
         </div>
@@ -1305,16 +1280,16 @@ export function WeightTab() {
               }}
             >
               <defs>
-                {/* Degradado Peso */}
+                {/* Degradado Peso (Azul Cobalto) */}
                 <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={seasonColor} stopOpacity="0.28" />
-                  <stop offset="100%" stopColor={seasonColor} stopOpacity="0.0" />
+                  <stop offset="0%" stopColor="#2563eb" stopOpacity="0.28" />
+                  <stop offset="100%" stopColor="#2563eb" stopOpacity="0.0" />
                 </linearGradient>
 
-                {/* Degradado Grasa */}
+                {/* Degradado Grasa (Amarillo) */}
                 <linearGradient id="fatGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.25" />
-                  <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.0" />
+                  <stop offset="0%" stopColor="#eab308" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="#eab308" stopOpacity="0.0" />
                 </linearGradient>
               </defs>
 
@@ -1346,7 +1321,7 @@ export function WeightTab() {
                         y={y + 3.5}
                         textAnchor="end"
                         fontSize="11"
-                        fill="#a1a1aa"
+                        fill="#60a5fa"
                         fontFamily="monospace"
                       >
                         {weightVal.toFixed(1)} kg
@@ -1360,7 +1335,7 @@ export function WeightTab() {
                         y={y + 3.5}
                         textAnchor="start"
                         fontSize="11"
-                        fill="#06b6d4"
+                        fill="#eab308"
                         fontFamily="monospace"
                       >
                         {fatVal.toFixed(1)}%
@@ -1370,7 +1345,7 @@ export function WeightTab() {
                 );
               })}
 
-              {/* 1. CURVAS DE PESO */}
+              {/* 1. CURVAS DE PESO (Azul Cobalto) */}
               {(chartMode === "combined" || chartMode === "weight_only") && (
                 <>
                   {/* Área degradada de peso con el trazado exacto de curveType */}
@@ -1380,16 +1355,16 @@ export function WeightTab() {
                   <path
                     d={chartPaths.weightLine}
                     fill="none"
-                    stroke={seasonColor}
+                    stroke="#2563eb"
                     strokeWidth={chartMode === "weight_only" ? "1.75" : "2"}
-                    strokeOpacity={chartMode === "weight_only" ? "0.55" : "0.9"}
+                    strokeOpacity={chartMode === "weight_only" ? "0.6" : "0.95"}
                   />
 
                   {/* Línea de Media Móvil 7D de Peso (destacada) */}
                   <path
                     d={chartPaths.maWeightLine}
                     fill="none"
-                    stroke={seasonColor}
+                    stroke="#3b82f6"
                     strokeWidth="2.5"
                     strokeDasharray={chartMode === "weight_only" ? undefined : "3 3"}
                   />
@@ -1410,7 +1385,7 @@ export function WeightTab() {
                             cy={cy}
                             r={isHovered ? 9 : 6}
                             fill="none"
-                            stroke={seasonColor}
+                            stroke="#3b82f6"
                             strokeWidth={1.5}
                             strokeDasharray="2 2"
                             className="pointer-events-none opacity-85"
@@ -1420,7 +1395,7 @@ export function WeightTab() {
                           cx={cx}
                           cy={cy}
                           r={isHovered ? 6 : isFlow ? (isMulti ? 3 : 1.5) : (isMulti ? 4 : 3)}
-                          fill={isHovered ? "#ffffff" : seasonColor}
+                          fill={isHovered ? "#ffffff" : "#2563eb"}
                           stroke="#18181b"
                           strokeWidth={isHovered ? 2.5 : 1}
                           className="transition-all cursor-pointer hover:r-[6px]"
@@ -1439,7 +1414,7 @@ export function WeightTab() {
                 </>
               )}
 
-              {/* 2. CURVAS DE % GRASO */}
+              {/* 2. CURVAS DE % GRASO (Amarillo) */}
               {(chartMode === "combined" || chartMode === "fat_only") && (
                 <>
                   {/* Área degradada de grasa */}
@@ -1449,16 +1424,16 @@ export function WeightTab() {
                   <path
                     d={chartPaths.fatLine}
                     fill="none"
-                    stroke="#06b6d4"
+                    stroke="#eab308"
                     strokeWidth={chartMode === "fat_only" ? "1.75" : "2"}
-                    strokeOpacity={chartMode === "fat_only" ? "0.55" : "0.9"}
+                    strokeOpacity={chartMode === "fat_only" ? "0.6" : "0.95"}
                   />
 
                   {/* Línea de Media Móvil 7D de Grasa */}
                   <path
                     d={chartPaths.maFatLine}
                     fill="none"
-                    stroke="#06b6d4"
+                    stroke="#facc15"
                     strokeWidth="2.5"
                     strokeDasharray={chartMode === "fat_only" ? undefined : "3 3"}
                   />
@@ -1480,7 +1455,7 @@ export function WeightTab() {
                               cy={cy}
                               r={isHovered ? 9 : 6}
                               fill="none"
-                              stroke="#06b6d4"
+                              stroke="#eab308"
                               strokeWidth={1.5}
                               strokeDasharray="2 2"
                               className="pointer-events-none opacity-85"
@@ -1490,7 +1465,7 @@ export function WeightTab() {
                             cx={cx}
                             cy={cy}
                             r={isHovered ? 6 : isFlow ? (isMulti ? 3 : 1.5) : (isMulti ? 4 : 3)}
-                            fill={isHovered ? "#ffffff" : "#06b6d4"}
+                            fill={isHovered ? "#ffffff" : "#eab308"}
                             stroke="#18181b"
                             strokeWidth={isHovered ? 2.5 : 1}
                             className="transition-all cursor-pointer hover:r-[6px]"
@@ -1509,11 +1484,11 @@ export function WeightTab() {
                 </>
               )}
 
-              {/* 3. MODO COMPOSICIÓN CORPORAL (Masa Magra vs Grasa) */}
+              {/* 3. MODO COMPOSICIÓN CORPORAL (Masa Magra en Rojo vs Masa Grasa en Amarillo) */}
               {chartMode === "composition" && (
                 <>
-                  <path d={chartPaths.leanLine} fill="none" stroke="#10b981" strokeWidth="2.5" />
-                  <path d={chartPaths.fatKgLine} fill="none" stroke="#f43f5e" strokeWidth="2.5" />
+                  <path d={chartPaths.leanLine} fill="none" stroke="#ef4444" strokeWidth="2.5" />
+                  <path d={chartPaths.fatKgLine} fill="none" stroke="#eab308" strokeWidth="2.5" />
 
                   {chartRecords
                     .filter((r): r is typeof r & { masaMagraKg: number } => typeof r.masaMagraKg === "number")
@@ -1528,7 +1503,7 @@ export function WeightTab() {
                           cx={cx}
                           cy={cyLean}
                           r={isHovered ? 6 : (isMulti ? 4 : 3)}
-                          fill="#10b981"
+                          fill="#ef4444"
                           stroke="#18181b"
                           strokeWidth={1.5}
                           className="cursor-pointer"
@@ -1557,7 +1532,7 @@ export function WeightTab() {
                           cx={cx}
                           cy={cyFatKg}
                           r={isHovered ? 6 : (isMulti ? 4 : 3)}
-                          fill="#f43f5e"
+                          fill="#eab308"
                           stroke="#18181b"
                           strokeWidth={1.5}
                           className="cursor-pointer"
@@ -1667,7 +1642,7 @@ export function WeightTab() {
                   <span className="text-[10px] text-zinc-400 block">
                     {hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1 ? "Peso Medio" : "Peso"}
                   </span>
-                  <span className="font-extrabold text-sm text-zinc-100 font-mono">
+                  <span className="font-extrabold text-sm text-blue-400 font-mono">
                     {hoveredPoint.peso.toFixed(1)} kg
                   </span>
                   {hoveredPoint.deltaPeso !== undefined && (
@@ -1689,7 +1664,7 @@ export function WeightTab() {
                   <span className="text-[10px] text-zinc-400 block">
                     {hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1 ? "% Grasa Media" : "% Graso"}
                   </span>
-                  <span className="font-extrabold text-sm text-cyan-300 font-mono">
+                  <span className="font-extrabold text-sm text-yellow-400 font-mono">
                     {typeof hoveredPoint.grasaPct === "number" ? `${hoveredPoint.grasaPct.toFixed(1)}%` : "—"}
                   </span>
                 </div>
@@ -1705,13 +1680,13 @@ export function WeightTab() {
               <div className="pt-1 border-t border-zinc-800/80 grid grid-cols-3 gap-2 text-[10px]">
                 <div>
                   <span className="text-zinc-500 block">Masa Magra:</span>
-                  <span className="font-semibold text-emerald-400 font-mono">
+                  <span className="font-semibold text-red-400 font-mono">
                     {typeof hoveredPoint.masaMagraKg === "number" ? `${hoveredPoint.masaMagraKg.toFixed(1)} kg` : "—"}
                   </span>
                 </div>
                 <div>
                   <span className="text-zinc-500 block">Masa Grasa:</span>
-                  <span className="font-semibold text-rose-400 font-mono">
+                  <span className="font-semibold text-yellow-400 font-mono">
                     {typeof hoveredPoint.masaGrasaKg === "number" ? `${hoveredPoint.masaGrasaKg.toFixed(1)} kg` : "—"}
                   </span>
                 </div>
@@ -1781,38 +1756,38 @@ export function WeightTab() {
         <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 pt-2 text-xs text-zinc-400 border-t border-zinc-800/60">
           {(chartMode === "combined" || chartMode === "weight_only") && (
             <div className="flex items-center gap-2">
-              <span className="w-3 h-0.5 rounded-full" style={{ backgroundColor: seasonColor }} />
-              <span className="font-medium text-zinc-200">Peso Diario (kg)</span>
+              <span className="w-3 h-0.5 rounded-full bg-blue-500" />
+              <span className="font-medium text-blue-400">Peso Diario (kg)</span>
             </div>
           )}
           {(chartMode === "combined" || chartMode === "weight_only") && (
             <div className="flex items-center gap-2">
-              <span className="w-4 h-0.5 border-t border-dashed" style={{ borderColor: seasonColor }} />
-              <span>Media Móvil 7d (Tendencia)</span>
+              <span className="w-4 h-0.5 border-t border-dashed border-blue-400" />
+              <span className="text-zinc-400">Media Móvil 7d (Tendencia)</span>
             </div>
           )}
           {(chartMode === "combined" || chartMode === "fat_only") && (
             <div className="flex items-center gap-2">
-              <span className="w-3 h-0.5 bg-cyan-400 rounded-full" />
-              <span className="font-medium text-cyan-300">% Graso BIA</span>
+              <span className="w-3 h-0.5 bg-yellow-400 rounded-full" />
+              <span className="font-medium text-yellow-400">% Graso</span>
             </div>
           )}
           {chartMode === "composition" && (
             <>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-0.5 bg-emerald-400 rounded-full" />
-                <span className="font-medium text-emerald-300">Masa Magra (kg)</span>
+                <span className="w-3 h-0.5 bg-red-500 rounded-full" />
+                <span className="font-medium text-red-400">Masa Magra (kg)</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-0.5 bg-rose-400 rounded-full" />
-                <span className="font-medium text-rose-300">Masa Grasa (kg)</span>
+                <span className="w-3 h-0.5 bg-yellow-400 rounded-full" />
+                <span className="font-medium text-yellow-400">Masa Grasa (kg)</span>
               </div>
             </>
           )}
 
           <div className="flex items-center gap-1.5 text-zinc-400">
-            <span className="w-3.5 h-3.5 rounded-full border border-dashed border-cyan-400/80 inline-flex items-center justify-center">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+            <span className="w-3.5 h-3.5 rounded-full border border-dashed border-blue-400/80 inline-flex items-center justify-center">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
             </span>
             <span className="text-[11px] text-zinc-300">Días con varias tomas (Media)</span>
           </div>
@@ -1898,8 +1873,6 @@ export function WeightTab() {
                 <th className="py-2.5 px-3">% Graso</th>
                 <th className="py-2.5 px-3">Masa Magra</th>
                 <th className="py-2.5 px-3">Masa Grasa</th>
-                <th className="py-2.5 px-3">Impedancia (Ω)</th>
-                <th className="py-2.5 px-3">Z Low (Ω)</th>
                 <th className="py-2.5 px-3 text-right">Acciones</th>
               </tr>
             </thead>
@@ -1940,7 +1913,7 @@ export function WeightTab() {
                                   e.stopPropagation();
                                   toggleExpandDay(r.fecha);
                                 }}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-[11px] font-sans font-semibold transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 text-[11px] font-sans font-semibold transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
                                 title="Pulsar para ver las distintas medidas de este día"
                               >
                                 <span>{r.measurements?.length} medidas</span>
@@ -1954,11 +1927,11 @@ export function WeightTab() {
                           </div>
                         </td>
 
-                        <td className="py-3 px-3 font-bold text-zinc-100 text-sm">
+                        <td className="py-3 px-3 font-bold text-blue-400 text-sm">
                           {r.peso.toFixed(1)}{" "}
                           <span className="text-[10px] text-zinc-500 font-normal">kg</span>
                           {isMulti && (
-                            <span className="block text-[9px] text-cyan-400/90 font-normal font-mono">
+                            <span className="block text-[9px] text-blue-400/80 font-normal font-mono">
                               (media)
                             </span>
                           )}
@@ -1997,24 +1970,16 @@ export function WeightTab() {
                           })()}
                         </td>
 
-                        <td className="py-3 px-3 font-semibold text-cyan-400">
+                        <td className="py-3 px-3 font-semibold text-yellow-400">
                           {typeof r.grasaPct === "number" ? `${r.grasaPct.toFixed(1)}%` : <span className="text-zinc-600">—</span>}
                         </td>
 
-                        <td className="py-3 px-3 text-emerald-400 font-medium">
+                        <td className="py-3 px-3 text-red-400 font-medium">
                           {typeof r.masaMagraKg === "number" ? `${r.masaMagraKg.toFixed(1)} kg` : <span className="text-zinc-600">—</span>}
                         </td>
 
-                        <td className="py-3 px-3 text-rose-400 font-medium">
+                        <td className="py-3 px-3 text-yellow-400 font-medium">
                           {typeof r.masaGrasaKg === "number" ? `${r.masaGrasaKg.toFixed(1)} kg` : <span className="text-zinc-600">—</span>}
-                        </td>
-
-                        <td className="py-3 px-3 text-amber-300 font-medium">
-                          {typeof r.impedancia === "number" ? `${Math.round(r.impedancia)} Ω` : <span className="text-zinc-600">—</span>}
-                        </td>
-
-                        <td className="py-3 px-3 text-zinc-400">
-                          {typeof r.impedanciaLow === "number" ? `${Math.round(r.impedanciaLow)} Ω` : <span className="text-zinc-600">—</span>}
                         </td>
 
                         <td className="py-3 px-3 text-right">
@@ -2026,7 +1991,7 @@ export function WeightTab() {
                               <>
                                 <button
                                   onClick={() => setSelectedDayModal(r)}
-                                  className="p-1.5 rounded-lg hover:bg-cyan-500/15 text-cyan-400 hover:text-cyan-200 transition-colors cursor-pointer"
+                                  className="p-1.5 rounded-lg hover:bg-blue-500/15 text-blue-400 hover:text-blue-200 transition-colors cursor-pointer"
                                   title="Ver desglose en modal"
                                 >
                                   <InfoIcon className="w-3.5 h-3.5" />
@@ -2064,14 +2029,14 @@ export function WeightTab() {
                       {/* Desglose desplegado de las medidas individuales de este día */}
                       {isMulti && isExpanded && r.measurements && (
                         <tr className="bg-zinc-950/80 border-b border-zinc-800">
-                          <td colSpan={10} className="p-3 pl-6 sm:pl-10">
+                          <td colSpan={8} className="p-3 pl-6 sm:pl-10">
                             <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/80 p-3.5 space-y-2.5 shadow-inner">
                               <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-zinc-800/60 text-xs">
                                 <div className="flex items-center gap-2">
                                   <span className="font-bold text-zinc-200">
                                     Medidas tomadas el {r.fecha}
                                   </span>
-                                  <span className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 text-[10px] font-mono border border-cyan-500/20">
+                                  <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 text-[10px] font-mono border border-blue-500/20">
                                     Media: {r.peso.toFixed(1)} kg
                                     {typeof r.grasaPct === "number" && ` · ${r.grasaPct.toFixed(1)}%`}
                                   </span>
@@ -2090,7 +2055,7 @@ export function WeightTab() {
                                     className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-colors"
                                     title="Abrir desglose en modal"
                                   >
-                                    <InfoIcon className="w-3 h-3 text-cyan-400" />
+                                    <InfoIcon className="w-3 h-3 text-blue-400" />
                                     <span>Ver en modal</span>
                                   </button>
                                   <button
@@ -2118,7 +2083,6 @@ export function WeightTab() {
                                       <th className="py-1 px-2">% Grasa</th>
                                       <th className="py-1 px-2">Masa Magra</th>
                                       <th className="py-1 px-2">Masa Grasa</th>
-                                      <th className="py-1 px-2">Impedancia</th>
                                       <th className="py-1 px-2">Origen</th>
                                       <th className="py-1 px-2 text-right">Acciones</th>
                                     </tr>
@@ -2133,24 +2097,21 @@ export function WeightTab() {
                                           <ClockIcon className="w-3 h-3 text-zinc-500" />
                                           {sub.hora}
                                         </td>
-                                        <td className="py-1.5 px-2 font-bold text-zinc-100">
+                                        <td className="py-1.5 px-2 font-bold text-blue-400">
                                           {sub.peso.toFixed(1)}{" "}
                                           <span className="text-[9px] text-zinc-500 font-normal">kg</span>
                                         </td>
                                         <td className="py-1.5 px-2 text-indigo-300">
                                           {(sub.bmi || calculateBmi(sub.peso)).toFixed(1)}
                                         </td>
-                                        <td className="py-1.5 px-2 text-cyan-400 font-semibold">
+                                        <td className="py-1.5 px-2 text-yellow-400 font-semibold">
                                           {typeof sub.grasaPct === "number" ? `${sub.grasaPct.toFixed(1)}%` : "—"}
                                         </td>
-                                        <td className="py-1.5 px-2 text-emerald-400">
+                                        <td className="py-1.5 px-2 text-red-400">
                                           {typeof sub.masaMagraKg === "number" ? `${sub.masaMagraKg.toFixed(1)} kg` : "—"}
                                         </td>
-                                        <td className="py-1.5 px-2 text-rose-400">
+                                        <td className="py-1.5 px-2 text-yellow-400">
                                           {typeof sub.masaGrasaKg === "number" ? `${sub.masaGrasaKg.toFixed(1)} kg` : "—"}
-                                        </td>
-                                        <td className="py-1.5 px-2 text-amber-300">
-                                          {typeof sub.impedancia === "number" ? `${Math.round(sub.impedancia)} Ω` : "—"}
                                         </td>
                                         <td className="py-1.5 px-2 text-zinc-500 text-[10px] font-sans">
                                           {sub.source || "zepp_life"}
@@ -2187,7 +2148,7 @@ export function WeightTab() {
                 })
               ) : (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-zinc-500 font-sans">
+                  <td colSpan={8} className="py-8 text-center text-zinc-500 font-sans">
                     No se encontraron registros de pesaje.
                   </td>
                 </tr>
@@ -2297,29 +2258,6 @@ export function WeightTab() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-zinc-400 block mb-1">Impedancia (Ω)</label>
-                  <input
-                    type="number"
-                    step="1"
-                    value={editImp}
-                    onChange={(e) => setEditImp(e.target.value)}
-                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 font-mono focus:outline-none focus:border-zinc-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-zinc-400 block mb-1">Impedancia Low (Ω)</label>
-                  <input
-                    type="number"
-                    step="1"
-                    value={editImpLow}
-                    onChange={(e) => setEditImpLow(e.target.value)}
-                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 font-mono focus:outline-none focus:border-zinc-600"
-                  />
-                </div>
-              </div>
-
               {/* Vista previa en tiempo real de la recomposición calculada */}
               {liveEditPreview && (
                 <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-1.5">
@@ -2335,19 +2273,19 @@ export function WeightTab() {
                     </div>
                     <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
                       <span className="text-[10px] text-zinc-400 block">% Graso</span>
-                      <span className="font-extrabold text-cyan-400 font-mono text-sm">
+                      <span className="font-extrabold text-yellow-400 font-mono text-sm">
                         {liveEditPreview.grasaPct}%
                       </span>
                     </div>
                     <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
                       <span className="text-[10px] text-zinc-400 block">Masa Magra</span>
-                      <span className="font-extrabold text-emerald-400 font-mono text-sm">
+                      <span className="font-extrabold text-red-400 font-mono text-sm">
                         {liveEditPreview.masaMagraKg} kg
                       </span>
                     </div>
                     <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
                       <span className="text-[10px] text-zinc-400 block">Masa Grasa</span>
-                      <span className="font-extrabold text-rose-400 font-mono text-sm">
+                      <span className="font-extrabold text-yellow-400 font-mono text-sm">
                         {liveEditPreview.masaGrasaKg} kg
                       </span>
                     </div>
@@ -2617,33 +2555,8 @@ export function WeightTab() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-zinc-400 block mb-1">Impedancia (Ω)</label>
-                  <input
-                    type="number"
-                    step="1"
-                    placeholder="520"
-                    value={newImp}
-                    onChange={(e) => setNewImp(e.target.value)}
-                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 font-mono focus:outline-none focus:border-zinc-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-zinc-400 block mb-1">Impedancia Low (Ω)</label>
-                  <input
-                    type="number"
-                    step="1"
-                    placeholder="565"
-                    value={newImpLow}
-                    onChange={(e) => setNewImpLow(e.target.value)}
-                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 font-mono focus:outline-none focus:border-zinc-600"
-                  />
-                </div>
-              </div>
-
               <p className="text-[11px] text-zinc-500 italic">
-                El % graso, masa magra y agua se estimarán automáticamente según el índice de bioimpedancia y tu perfil biométrico.
+                El % graso, masa magra y masa grasa se estimarán automáticamente según tu perfil biométrico.
               </p>
 
               {liveNewPreview && (
@@ -2660,19 +2573,19 @@ export function WeightTab() {
                     </div>
                     <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
                       <span className="text-[10px] text-zinc-400 block">% Graso</span>
-                      <span className="font-extrabold text-cyan-400 font-mono text-sm">
+                      <span className="font-extrabold text-yellow-400 font-mono text-sm">
                         {liveNewPreview.grasaPct}%
                       </span>
                     </div>
                     <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
                       <span className="text-[10px] text-zinc-400 block">Masa Magra</span>
-                      <span className="font-extrabold text-emerald-400 font-mono text-sm">
+                      <span className="font-extrabold text-red-400 font-mono text-sm">
                         {liveNewPreview.masaMagraKg} kg
                       </span>
                     </div>
                     <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
                       <span className="text-[10px] text-zinc-400 block">Masa Grasa</span>
-                      <span className="font-extrabold text-rose-400 font-mono text-sm">
+                      <span className="font-extrabold text-yellow-400 font-mono text-sm">
                         {liveNewPreview.masaGrasaKg} kg
                       </span>
                     </div>
@@ -2706,13 +2619,13 @@ export function WeightTab() {
           <div className="w-full max-w-2xl bg-zinc-900 border border-zinc-700/80 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-cyan-400">
+                <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-blue-400">
                   <CalendarIcon className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
                     <span>Medidas del {selectedDayModal.fecha}</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30">
                       {selectedDayModal.measurements?.length || 1} tomas
                     </span>
                   </h3>
@@ -2733,17 +2646,17 @@ export function WeightTab() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 text-center font-mono">
               <div className="p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/60">
                 <span className="text-[10px] text-zinc-400 block font-sans">Peso Medio</span>
-                <span className="text-base font-extrabold text-zinc-100">{selectedDayModal.peso.toFixed(1)} kg</span>
+                <span className="text-base font-extrabold text-blue-400">{selectedDayModal.peso.toFixed(1)} kg</span>
               </div>
               <div className="p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/60">
                 <span className="text-[10px] text-zinc-400 block font-sans">Grasa Media</span>
-                <span className="text-base font-extrabold text-cyan-400">
+                <span className="text-base font-extrabold text-yellow-400">
                   {typeof selectedDayModal.grasaPct === "number" ? `${selectedDayModal.grasaPct.toFixed(1)}%` : "—"}
                 </span>
               </div>
               <div className="p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/60">
                 <span className="text-[10px] text-zinc-400 block font-sans">Masa Magra</span>
-                <span className="text-base font-extrabold text-emerald-400">
+                <span className="text-base font-extrabold text-red-400">
                   {typeof selectedDayModal.masaMagraKg === "number" ? `${selectedDayModal.masaMagraKg.toFixed(1)} kg` : "—"}
                 </span>
               </div>
@@ -2765,7 +2678,7 @@ export function WeightTab() {
                     setNewDate(selectedDayModal.fecha);
                     setManualEntryModalOpen(true);
                   }}
-                  className="text-[11px] text-cyan-400 hover:underline flex items-center gap-1 font-sans cursor-pointer normal-case font-medium"
+                  className="text-[11px] text-blue-400 hover:underline flex items-center gap-1 font-sans cursor-pointer normal-case font-medium"
                 >
                   <PlusIcon className="w-3 h-3" />
                   <span>Añadir otra toma</span>
@@ -2784,7 +2697,7 @@ export function WeightTab() {
                       </span>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-zinc-100 text-sm font-mono">{m.peso.toFixed(1)} kg</span>
+                          <span className="font-bold text-blue-400 text-sm font-mono">{m.peso.toFixed(1)} kg</span>
                           <span className="text-zinc-500 font-mono text-[11px] flex items-center gap-1">
                             <ClockIcon className="w-3 h-3" />
                             {m.hora}
@@ -2795,16 +2708,13 @@ export function WeightTab() {
                         </div>
                         <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px] text-zinc-400 font-mono">
                           {typeof m.grasaPct === "number" && (
-                            <span className="text-cyan-400">Grasa: {m.grasaPct.toFixed(1)}%</span>
+                            <span className="text-yellow-400 font-semibold">Grasa: {m.grasaPct.toFixed(1)}%</span>
                           )}
                           {typeof m.masaMagraKg === "number" && (
-                            <span className="text-emerald-400">Magra: {m.masaMagraKg.toFixed(1)} kg</span>
+                            <span className="text-red-400 font-semibold">Magra: {m.masaMagraKg.toFixed(1)} kg</span>
                           )}
                           {typeof m.masaGrasaKg === "number" && (
-                            <span className="text-rose-400">M. Grasa: {m.masaGrasaKg.toFixed(1)} kg</span>
-                          )}
-                          {typeof m.impedancia === "number" && (
-                            <span className="text-amber-300">Z: {Math.round(m.impedancia)} Ω</span>
+                            <span className="text-yellow-400 font-semibold">M. Grasa: {m.masaGrasaKg.toFixed(1)} kg</span>
                           )}
                         </div>
                       </div>
