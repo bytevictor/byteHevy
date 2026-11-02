@@ -54,7 +54,6 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
     { id: "weight", label: "Peso", icon: ScaleIcon },
     { id: "journal", label: "Diario", icon: BookOpenIcon },
     { id: "goals", label: "Objetivos", icon: TargetIcon },
-    { id: "settings", label: "Configuración", icon: SettingsIcon },
   ];
 
   // Normalized tab matching (treat "sync" as "settings")
@@ -293,33 +292,27 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
             {tabs.map((t) => {
               const Icon = t.icon;
               const isActive = currentTab === t.id;
-              const isIconOnly = t.id === "settings";
               return (
                 <button
                   key={t.id}
                   onClick={() => setActiveTab(t.id)}
                   title={t.label}
-                  aria-label={t.label}
-                  className={`h-full flex items-center justify-center transition-all duration-200 cursor-pointer ${
-                    isIconOnly
-                      ? "px-2.5 sm:px-3 rounded-full shrink-0 aspect-square"
-                      : "gap-2 sm:gap-2.5 px-3.5 sm:px-4.5 rounded-full text-xs sm:text-sm font-medium"
-                  } ${
+                  className={`h-full flex items-center gap-2 sm:gap-2.5 px-3.5 sm:px-4.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
                     isActive
                       ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/80 font-bold"
                       : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
                   }`}
                 >
                   <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-accent-light" : "text-zinc-400"}`} />
-                  {!isIconOnly && <span className="whitespace-nowrap">{t.label}</span>}
+                  <span className="whitespace-nowrap">{t.label}</span>
                 </button>
               );
             })}
           </nav>
         </div>
 
-        {/* Right: Stats Overview */}
-        <div className="flex items-center gap-2.5 shrink-0">
+        {/* Right: Stats Overview & Settings Button */}
+        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
           {loadingStats ? (
             <div className="hidden lg:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-900/60 border border-zinc-800/80 text-xs shadow-sm animate-pulse">
               <span className="w-1.5 h-1.5 rounded-full bg-zinc-700" />
@@ -336,6 +329,24 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
               <span>sesiones</span>
             </div>
           ) : null}
+
+          {/* Standalone Settings Button (Rightmost) */}
+          <button
+            onClick={() => setActiveTab("settings")}
+            title="Configuración"
+            aria-label="Configuración"
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer border shadow-md ${
+              currentTab === "settings"
+                ? "bg-zinc-800 text-zinc-100 border-zinc-700/80 shadow-md font-bold"
+                : "bg-zinc-900/90 border-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850 hover:border-zinc-700/80"
+            }`}
+          >
+            <SettingsIcon
+              className={`w-4.5 h-4.5 transition-colors ${
+                currentTab === "settings" ? "text-accent-light" : "text-zinc-400"
+              }`}
+            />
+          </button>
         </div>
       </div>
     </header>
