@@ -634,22 +634,6 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-850 border border-zinc-700/60 text-zinc-400 font-normal">
                         {activeMedia.equipment}
                       </span>
-                      {activeSeason && seasonColor && (
-                        <span
-                          className="text-[10px] font-mono px-2 py-0.5 rounded-full border font-medium flex items-center gap-1.5"
-                          style={{
-                            backgroundColor: hexToRgba(seasonColor, 0.16),
-                            borderColor: hexToRgba(seasonColor, 0.35),
-                            color: seasonColor,
-                          }}
-                        >
-                          <span
-                            className="w-1.5 h-1.5 rounded-full"
-                            style={{ backgroundColor: seasonColor }}
-                          />
-                          <span>Season: {activeSeason.name}</span>
-                        </span>
-                      )}
                     </div>
 
                     <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-100 truncate" title={detailData.exercise.name}>
@@ -685,16 +669,6 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                           >
                             <FlameIcon className="w-3.5 h-3.5 shrink-0" style={{ color: seasonColor }} />
                             <span>PR Season</span>
-                          </span>
-                          <span
-                            className="text-[9px] uppercase tracking-wider font-mono font-semibold px-2 py-0.5 rounded border shrink-0"
-                            style={{
-                              backgroundColor: hexToRgba(seasonColor, 0.15),
-                              borderColor: hexToRgba(seasonColor, 0.35),
-                              color: seasonColor,
-                            }}
-                          >
-                            {activeSeason.name}
                           </span>
                         </div>
 
@@ -779,9 +753,6 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                             <CrownIcon className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
                             <span>ALL-TIME PR</span>
                           </span>
-                          <span className="text-[9px] uppercase tracking-wider font-mono font-semibold px-2 py-0.5 rounded bg-yellow-500/15 text-yellow-300/90 border border-yellow-500/30 shrink-0">
-                            Histórico
-                          </span>
                         </div>
 
                         {isWeightMetric ? (
@@ -854,9 +825,6 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                           <span className="text-[10px] uppercase tracking-wider text-yellow-400 font-bold flex items-center gap-1.5">
                             <CrownIcon className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
                             <span>ALL-TIME PR</span>
-                          </span>
-                          <span className="text-[9px] uppercase tracking-wider font-mono font-semibold px-2 py-0.5 rounded bg-yellow-500/15 text-yellow-300/90 border border-yellow-500/30 shrink-0">
-                            Histórico
                           </span>
                         </div>
 
@@ -948,27 +916,6 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                       </div>
                     </div>
                   )}
-
-                  {/* Muscle Activation Guide */}
-                  <div className="p-2.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80">
-                    <span className="text-[10px] uppercase tracking-wider text-zinc-500 block mb-1 font-medium">
-                      Activación Anatómica
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-500/10 border border-red-500/30 text-[11px] text-red-300 font-semibold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                        {MUSCLE_LABELS[activeMedia.primaryMuscle]} (Primario)
-                      </span>
-                      {activeMedia.secondaryMuscles.map((sec, i) => (
-                        <span
-                          key={i}
-                          className="px-2 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400"
-                        >
-                          {MUSCLE_LABELS[sec] || sec}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
                 </div>
               </div>
 
