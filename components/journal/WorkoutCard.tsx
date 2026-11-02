@@ -157,7 +157,7 @@ export function WorkoutCard({
                 <span className="font-mono tabular-nums text-accent-light font-medium text-[11px]">
                   {ex.topSetLabel}
                 </span>
-                <span className="text-zinc-500 font-mono text-[10px]">({ex.sets.length}s)</span>
+                <span className="text-zinc-500 font-mono text-[10px]">({ex.sets.length} ser.)</span>
               </div>
             );
           })}

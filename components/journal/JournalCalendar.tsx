@@ -393,8 +393,8 @@ export function JournalCalendar({
 
                   {/* Summary sets & volume */}
                   <div className="flex items-center justify-between text-[9px] font-mono text-zinc-400 mt-0.5">
-                    <span className="text-accent-lighter font-medium">
-                      {day.totalSets}s
+                    <span className="text-accent-lighter font-medium" title={`${day.totalSets} series completadas`}>
+                      {day.totalSets} ser.
                     </span>
                     <span>{formatVolume(day.totalVolume)}</span>
                   </div>
