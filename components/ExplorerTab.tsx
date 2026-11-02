@@ -675,140 +675,252 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                           borderColor: hexToRgba(seasonColor, 0.4),
                         }}
                       >
-                        <div className="flex items-center justify-between">
+                        <div
+                          className="flex items-center justify-between pb-1.5 border-b"
+                          style={{ borderColor: hexToRgba(seasonColor, 0.25) }}
+                        >
                           <span
-                            className="text-[10px] uppercase tracking-wider font-bold truncate"
+                            className="text-[10px] uppercase tracking-wider font-bold truncate flex items-center gap-1.5"
                             style={{ color: seasonColor }}
                           >
-                            {isAvg1RMMetric
-                              ? isRepsMetric
-                                ? "PR Season (Reps Medias)"
-                                : "PR Season (1RM Medio)"
-                              : "PR Season"}
+                            <FlameIcon className="w-3.5 h-3.5 shrink-0" style={{ color: seasonColor }} />
+                            <span>PR Season</span>
                           </span>
-                          <FlameIcon className="w-3.5 h-3.5" style={{ color: seasonColor }} />
-                        </div>
-                        <div
-                          className="text-base sm:text-lg font-mono tabular-nums font-bold mt-0.5"
-                          style={{ color: seasonColor }}
-                        >
-                          {isAvg1RMMetric
-                            ? detailData.exercise.seasonBestAvg1RM?.label || "Sin registros"
-                            : detailData.exercise.seasonBest?.label || "Sin registros"}
-                        </div>
-                        <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between mt-0.5">
-                          <span>
-                            {isAvg1RMMetric
-                              ? detailData.exercise.seasonBestAvg1RM?.date || "—"
-                              : detailData.exercise.seasonBest?.date || "—"}
+                          <span
+                            className="text-[9px] uppercase tracking-wider font-mono font-semibold px-1.5 py-0.5 rounded border shrink-0"
+                            style={{
+                              backgroundColor: hexToRgba(seasonColor, 0.15),
+                              borderColor: hexToRgba(seasonColor, 0.35),
+                              color: seasonColor,
+                            }}
+                          >
+                            {activeSeason.name}
                           </span>
-                          {isAvg1RMMetric ? (
-                            detailData.exercise.seasonBest?.label && (
-                              <span className="font-sans font-medium text-zinc-400">
-                                Top Set: {detailData.exercise.seasonBest.label}
-                              </span>
-                            )
-                          ) : (
-                            detailData.exercise.estimated1RM && (
-                              <span className="font-sans font-medium" style={{ color: seasonColor }}>
-                                1RM: {detailData.exercise.estimated1RM} kg
-                              </span>
-                            )
-                          )}
                         </div>
+
+                        {isWeightMetric ? (
+                          <div className="grid grid-cols-2 gap-2.5 pt-2">
+                            {/* Col 1: Set con más peso en la Season */}
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[9px] uppercase tracking-wider text-zinc-400 font-semibold truncate flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: seasonColor }} />
+                                <span className="truncate">Mayor Peso</span>
+                              </span>
+                              <div
+                                className="text-sm sm:text-base font-mono tabular-nums font-bold mt-0.5 truncate"
+                                style={{ color: seasonColor }}
+                              >
+                                {detailData.exercise.seasonBest?.label || "Sin registros"}
+                              </div>
+                              <span className="text-[10px] font-mono text-zinc-400 truncate mt-0.5">
+                                {detailData.exercise.seasonBest?.date || "—"}
+                              </span>
+                            </div>
+
+                            {/* Col 2: Top set a 1RM en la Season */}
+                            <div className="flex flex-col min-w-0 border-l border-zinc-800/90 pl-2.5">
+                              <span
+                                className="text-[9px] uppercase tracking-wider font-semibold truncate flex items-center gap-1"
+                                style={{ color: seasonColor }}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: seasonColor }} />
+                                <span className="truncate">Top Set 1RM</span>
+                              </span>
+                              <div
+                                className="text-sm sm:text-base font-mono tabular-nums font-bold mt-0.5 truncate"
+                                style={{ color: seasonColor }}
+                              >
+                                {detailData.exercise.seasonMax1RM?.label ||
+                                  (detailData.exercise.estimated1RM
+                                    ? `${detailData.exercise.estimated1RM} kg 1RM`
+                                    : "—")}
+                              </div>
+                              <div className="text-[10px] font-mono text-zinc-400 truncate mt-0.5 flex items-center gap-1">
+                                <span className="truncate">
+                                  {detailData.exercise.seasonMax1RM?.date ||
+                                    detailData.exercise.seasonBest?.date ||
+                                    "—"}
+                                </span>
+                                {detailData.exercise.seasonMax1RM?.setLabel && (
+                                  <span className="text-[9px] text-zinc-500 font-sans shrink-0">
+                                    ({detailData.exercise.seasonMax1RM.setLabel})
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="pt-2 flex flex-col justify-between">
+                            <div
+                              className="text-base sm:text-lg font-mono tabular-nums font-bold mt-0.5"
+                              style={{ color: seasonColor }}
+                            >
+                              {detailData.exercise.seasonBest?.label || "Sin registros"}
+                            </div>
+                            <span className="text-[10px] font-mono text-zinc-500 mt-0.5">
+                              {detailData.exercise.seasonBest?.date || "—"}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
-                      {/* ALL-TIME PR Card */}
+                      {/* ALL-TIME PR Card (Ambas medidas con ambas fechas) */}
                       <div className="p-3 rounded-xl bg-gradient-to-br from-yellow-500/10 via-zinc-900 to-zinc-900 border border-yellow-500/30 flex flex-col justify-between shadow-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] uppercase tracking-wider text-yellow-400 font-bold">
-                            {isAvg1RMMetric
-                              ? isRepsMetric
-                                ? "ALL-TIME PR (Reps Medias)"
-                                : "ALL-TIME PR (1RM Medio)"
-                              : "ALL-TIME PR"}
+                        <div className="flex items-center justify-between pb-1.5 border-b border-yellow-500/15">
+                          <span className="text-[10px] uppercase tracking-wider text-yellow-400 font-bold flex items-center gap-1.5">
+                            <CrownIcon className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
+                            <span>ALL-TIME PR</span>
                           </span>
-                          <CrownIcon className="w-3.5 h-3.5 text-yellow-400" />
-                        </div>
-                        <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-200 mt-0.5">
-                          {isAvg1RMMetric
-                            ? (detailData.exercise.allTimeBestAvg1RM?.label ||
-                               (detailData.exercise.allTimeMaxAvg1RM ? `${detailData.exercise.allTimeMaxAvg1RM} kg 1RM` : "—"))
-                            : detailData.exercise.allTimeBest?.label || "—"}
-                        </div>
-                        <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between mt-0.5">
-                          <span>
-                            {isAvg1RMMetric
-                              ? detailData.exercise.allTimeBestAvg1RM?.date || "Sin registro"
-                              : detailData.exercise.allTimeBest?.date || "Sin registro"}
+                          <span className="text-[9px] uppercase tracking-wider font-mono font-semibold px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-300/90 border border-yellow-500/30 shrink-0">
+                            Histórico
                           </span>
-                          {isAvg1RMMetric ? (
-                            detailData.exercise.allTimeBest?.label && (
-                              <span className="text-yellow-400/90 font-sans">
-                                Top Set: {detailData.exercise.allTimeBest.label}
-                              </span>
-                            )
-                          ) : (
-                            detailData.exercise.allTimeEstimated1RM && (
-                              <span className="text-yellow-400/90 font-sans">
-                                1RM: {detailData.exercise.allTimeEstimated1RM} kg
-                              </span>
-                            )
-                          )}
                         </div>
+
+                        {isWeightMetric ? (
+                          <div className="grid grid-cols-2 gap-2.5 pt-2">
+                            {/* Col 1: Set con más peso histórico */}
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[9px] uppercase tracking-wider text-zinc-400 font-semibold truncate flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400/80 shrink-0" />
+                                <span className="truncate">Mayor Peso</span>
+                              </span>
+                              <div className="text-sm sm:text-base font-mono tabular-nums font-bold text-yellow-100 mt-0.5 truncate">
+                                {detailData.exercise.allTimeBest?.label || "—"}
+                              </div>
+                              <span className="text-[10px] font-mono text-zinc-400 truncate mt-0.5">
+                                {detailData.exercise.allTimeBest?.date || "Sin registro"}
+                              </span>
+                            </div>
+
+                            {/* Col 2: Top set a 1RM histórico */}
+                            <div className="flex flex-col min-w-0 border-l border-zinc-800/90 pl-2.5">
+                              <span className="text-[9px] uppercase tracking-wider text-yellow-400 font-semibold truncate flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                                <span className="truncate">Top Set 1RM</span>
+                              </span>
+                              <div className="text-sm sm:text-base font-mono tabular-nums font-bold text-yellow-300 mt-0.5 truncate">
+                                {detailData.exercise.allTimeMax1RM?.label ||
+                                  (detailData.exercise.allTimeEstimated1RM
+                                    ? `${detailData.exercise.allTimeEstimated1RM} kg 1RM`
+                                    : "—")}
+                              </div>
+                              <div className="text-[10px] font-mono text-zinc-400 truncate mt-0.5 flex items-center gap-1">
+                                <span className="truncate">
+                                  {detailData.exercise.allTimeMax1RM?.date ||
+                                    detailData.exercise.allTimeBest?.date ||
+                                    "Sin registro"}
+                                </span>
+                                {detailData.exercise.allTimeMax1RM?.setLabel && (
+                                  <span className="text-[9px] text-zinc-500 font-sans shrink-0">
+                                    ({detailData.exercise.allTimeMax1RM.setLabel})
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="pt-2 flex flex-col justify-between">
+                            <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-200">
+                              {detailData.exercise.allTimeBest?.label || "—"}
+                            </div>
+                            <span className="text-[10px] font-mono text-zinc-500 mt-0.5">
+                              {detailData.exercise.allTimeBest?.date || "Sin registro"}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {/* PR Card (All-Time) */}
-                      <div className="p-3 rounded-xl bg-gradient-to-br from-accent/15 via-zinc-900 to-zinc-900 border border-accent/30 flex flex-col justify-between shadow-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] uppercase tracking-wider text-accent-light font-bold">
-                            {isAvg1RMMetric
-                              ? isRepsMetric
-                                ? "Récord Personal (Reps Medias)"
-                                : "Récord Personal (1RM Medio)"
-                              : "Récord Personal (PR)"}
+                      {/* ALL-TIME PR Card (Ambas medidas con ambas fechas) */}
+                      <div className="p-3 rounded-xl bg-gradient-to-br from-yellow-500/10 via-zinc-900 to-zinc-900 border border-yellow-500/30 flex flex-col justify-between shadow-xs">
+                        <div className="flex items-center justify-between pb-1.5 border-b border-yellow-500/15">
+                          <span className="text-[10px] uppercase tracking-wider text-yellow-400 font-bold flex items-center gap-1.5">
+                            <CrownIcon className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
+                            <span>ALL-TIME PR</span>
                           </span>
-                          <TrophyIcon className="w-3.5 h-3.5 text-accent-light" />
+                          <span className="text-[9px] uppercase tracking-wider font-mono font-semibold px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-300/90 border border-yellow-500/30 shrink-0">
+                            Histórico
+                          </span>
                         </div>
-                        <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-accent-lighter mt-0.5">
-                          {isAvg1RMMetric
-                            ? (detailData.exercise.allTimeBestAvg1RM?.label ||
-                               (detailData.exercise.allTimeMaxAvg1RM ? `${detailData.exercise.allTimeMaxAvg1RM} kg 1RM` : "—"))
-                            : detailData.exercise.allTimeBest?.label || "—"}
-                        </div>
-                        <span className="text-[10px] font-mono text-zinc-500 mt-0.5">
-                          {isAvg1RMMetric
-                            ? detailData.exercise.allTimeBestAvg1RM?.date || "Sin registro"
-                            : detailData.exercise.allTimeBest?.date || "Sin registro"}
-                        </span>
+
+                        {isWeightMetric ? (
+                          <div className="grid grid-cols-2 gap-2.5 pt-2">
+                            {/* Col 1: Set con más peso histórico */}
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[9px] uppercase tracking-wider text-zinc-400 font-semibold truncate flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400/80 shrink-0" />
+                                <span className="truncate">Mayor Peso</span>
+                              </span>
+                              <div className="text-sm sm:text-base font-mono tabular-nums font-bold text-yellow-100 mt-0.5 truncate">
+                                {detailData.exercise.allTimeBest?.label || "—"}
+                              </div>
+                              <span className="text-[10px] font-mono text-zinc-400 truncate mt-0.5">
+                                {detailData.exercise.allTimeBest?.date || "Sin registro"}
+                              </span>
+                            </div>
+
+                            {/* Col 2: Top set a 1RM histórico */}
+                            <div className="flex flex-col min-w-0 border-l border-zinc-800/90 pl-2.5">
+                              <span className="text-[9px] uppercase tracking-wider text-yellow-400 font-semibold truncate flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                                <span className="truncate">Top Set 1RM</span>
+                              </span>
+                              <div className="text-sm sm:text-base font-mono tabular-nums font-bold text-yellow-300 mt-0.5 truncate">
+                                {detailData.exercise.allTimeMax1RM?.label ||
+                                  (detailData.exercise.allTimeEstimated1RM
+                                    ? `${detailData.exercise.allTimeEstimated1RM} kg 1RM`
+                                    : "—")}
+                              </div>
+                              <div className="text-[10px] font-mono text-zinc-400 truncate mt-0.5 flex items-center gap-1">
+                                <span className="truncate">
+                                  {detailData.exercise.allTimeMax1RM?.date ||
+                                    detailData.exercise.allTimeBest?.date ||
+                                    "Sin registro"}
+                                </span>
+                                {detailData.exercise.allTimeMax1RM?.setLabel && (
+                                  <span className="text-[9px] text-zinc-500 font-sans shrink-0">
+                                    ({detailData.exercise.allTimeMax1RM.setLabel})
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="pt-2 flex flex-col justify-between">
+                            <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-yellow-200">
+                              {detailData.exercise.allTimeBest?.label || "—"}
+                            </div>
+                            <span className="text-[10px] font-mono text-zinc-500 mt-0.5">
+                              {detailData.exercise.allTimeBest?.date || "Sin registro"}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {/* 1RM Estimado Card */}
                       <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between shadow-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
-                            {isAvg1RMMetric
-                              ? isRepsMetric
-                                ? "Reps Máx (Top Set)"
-                                : "Top Set Máximo"
-                              : "1RM Estimado"}
+                        <div className="flex items-center justify-between pb-1.5 border-b border-zinc-800/80">
+                          <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold flex items-center gap-1.5">
+                            <FlameIcon className="w-3.5 h-3.5 text-zinc-500" />
+                            <span>1RM Estimado</span>
                           </span>
-                          <FlameIcon className="w-3.5 h-3.5 text-zinc-500" />
+                          <span className="text-[9px] font-mono text-zinc-500 uppercase">Brzycki</span>
                         </div>
-                        <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-zinc-200 mt-0.5">
-                          {isAvg1RMMetric
-                            ? detailData.exercise.allTimeBest?.label || "—"
-                            : (detailData.exercise.estimated1RM
-                                ? `${detailData.exercise.estimated1RM} ${getUnit(detailData.exercise.metricType)}`
-                                : "—")}
+                        <div className="pt-2 flex flex-col justify-between">
+                          <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-zinc-200">
+                            {detailData.exercise.allTimeMax1RM?.value
+                              ? `${detailData.exercise.allTimeMax1RM.value} ${getUnit(detailData.exercise.metricType)}`
+                              : detailData.exercise.estimated1RM
+                              ? `${detailData.exercise.estimated1RM} ${getUnit(detailData.exercise.metricType)}`
+                              : "—"}
+                          </div>
+                          <span className="text-[10px] text-zinc-500 mt-0.5">
+                            {detailData.exercise.allTimeMax1RM?.setLabel
+                              ? `A partir de ${detailData.exercise.allTimeMax1RM.setLabel}`
+                              : "Fórmula Brzycki sobre mejor set"}
+                          </span>
                         </div>
-                        <span className="text-[10px] text-zinc-500 mt-0.5">
-                          {isAvg1RMMetric
-                            ? (detailData.exercise.allTimeEstimated1RM ? `1RM Top Set: ${detailData.exercise.allTimeEstimated1RM} kg` : "Mejor serie histórica")
-                            : "Fórmula Brzycki"}
-                        </span>
                       </div>
                     </div>
                   )}
