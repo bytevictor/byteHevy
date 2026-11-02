@@ -82,12 +82,12 @@ export function WorkoutSessionModal({
           {/* Workout Quote / Personal notes */}
           {workout.description && (
             <div className="p-3.5 rounded-xl bg-accent/10 border border-accent/20 text-xs italic text-accent-lighter/90 leading-relaxed">
-              "{workout.description}"
+              &ldquo;{workout.description}&rdquo;
             </div>
           )}
 
           {/* Session Overview Stats Pill */}
-          <div className="flex items-center gap-3 px-3.5 py-2 rounded-xl bg-zinc-950/60 border border-zinc-800 text-xs font-mono text-zinc-400">
+          <div className="flex items-center gap-3 px-3.5 py-2 rounded-xl bg-zinc-950/60 border border-zinc-800 text-xs font-mono text-zinc-400 flex-wrap">
             <span>
               <strong className="text-zinc-200">{workout.exercises.length}</strong> ejercicios
             </span>
@@ -95,6 +95,27 @@ export function WorkoutSessionModal({
             <span>
               <strong className="text-zinc-200">{totalSets}</strong> series totales
             </span>
+            {workout.totalVolumeKg ? (
+              <>
+                <span className="text-zinc-700">•</span>
+                <span>
+                  Vol: <strong className="text-zinc-200">{workout.totalVolumeKg.toLocaleString("es-ES")} kg</strong>
+                </span>
+              </>
+            ) : null}
+            {workout.averageRestSeconds ? (
+              <>
+                <span className="text-zinc-700">•</span>
+                <span>
+                  Descanso medio:{" "}
+                  <strong className="text-accent-light">
+                    {Math.floor(workout.averageRestSeconds / 60)}m{" "}
+                    {workout.averageRestSeconds % 60 < 10 ? "0" : ""}
+                    {workout.averageRestSeconds % 60}s
+                  </strong>
+                </span>
+              </>
+            ) : null}
           </div>
 
           {/* Exercises Breakdown in this session */}

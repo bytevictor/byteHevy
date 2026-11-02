@@ -1585,6 +1585,19 @@ export async function deleteGoal(id: string) {
   return { success: true };
 }
 
+export interface JournalExercise {
+  id: string;
+  name: string;
+  metricType?: string;
+  exerciseNotes: string;
+  sets: SetDetail[];
+  topSetLabel: string;
+  gifUrl?: string;
+  primaryMuscle?: MuscleGroup | string;
+  volumeKg?: number;
+  best1RM?: number;
+}
+
 export interface JournalWorkout {
   id: string;
   title: string;
@@ -1593,15 +1606,10 @@ export interface JournalWorkout {
   endTime: string;
   durationSeconds: number;
   description: string;
-  exercises: {
-    id: string;
-    name: string;
-    metricType?: string;
-    exerciseNotes: string;
-    sets: SetDetail[];
-    topSetLabel: string;
-    gifUrl?: string;
-  }[];
+  totalVolumeKg?: number;
+  totalSets?: number;
+  averageRestSeconds?: number;
+  exercises: JournalExercise[];
 }
 
 export async function getJournalWorkouts(seasonId?: string | null): Promise<JournalWorkout[]> {
@@ -1673,8 +1681,31 @@ export async function getJournalWorkouts(seasonId?: string | null): Promise<Jour
       });
     }
 
-    const exList = Array.from(exMap.values()).map((ex) => {
+    let workoutTotalVolume = 0;
+    let workoutTotalSets = 0;
+    let workoutActiveTime = 0;
+
+    const exList: JournalExercise[] = Array.from(exMap.values()).map((ex) => {
       let topLabel = "-";
+      let exVol = 0;
+      let exBest1RM = 0;
+
+      for (const s of ex.sets) {
+        workoutTotalSets++;
+        if (s.durationSeconds) {
+          workoutActiveTime += s.durationSeconds;
+        } else {
+          workoutActiveTime += Math.min(60, Math.max(20, (s.reps || 8) * 3.5));
+        }
+
+        if (s.weightKg !== null && s.reps !== null && s.weightKg > 0 && s.reps > 0) {
+          exVol += s.weightKg * s.reps;
+          const s1rm = calculate1RM(s.weightKg, s.reps);
+          if (s1rm > exBest1RM) exBest1RM = s1rm;
+        }
+      }
+      workoutTotalVolume += exVol;
+
       if (ex.sets.length > 0) {
         const first = ex.sets[0];
         if (first.durationSeconds) {
@@ -1711,12 +1742,22 @@ export async function getJournalWorkouts(seasonId?: string | null): Promise<Jour
         }
       }
 
+      const media = cacheMap.get(ex.name.toLowerCase().trim()) || getExerciseMedia(ex.name);
+
       return {
         ...ex,
         topSetLabel: topLabel,
-        gifUrl: cacheMap.get(ex.name.toLowerCase().trim())?.gifUrl || getExerciseMedia(ex.name).gifUrl,
+        gifUrl: media.gifUrl,
+        primaryMuscle: media.primaryMuscle,
+        volumeKg: Math.round(exVol),
+        best1RM: exBest1RM > 0 ? exBest1RM : undefined,
       };
     });
+
+    const durationSec = Number(w.duration_seconds) || 0;
+    const intervals = Math.max(1, workoutTotalSets - 1);
+    const restTotalSec = Math.max(0, durationSec - workoutActiveTime);
+    const avgRestSec = durationSec > 0 && workoutTotalSets > 1 ? Math.round(restTotalSec / intervals) : 0;
 
     results.push({
       id: wId,
@@ -1724,8 +1765,11 @@ export async function getJournalWorkouts(seasonId?: string | null): Promise<Jour
       startTime: String(w.start_time),
       startTimestamp: Number(w.start_timestamp),
       endTime: w.end_time ? String(w.end_time) : "",
-      durationSeconds: Number(w.duration_seconds) || 0,
+      durationSeconds: durationSec,
       description: w.description ? String(w.description) : "",
+      totalVolumeKg: Math.round(workoutTotalVolume),
+      totalSets: workoutTotalSets,
+      averageRestSeconds: avgRestSec,
       exercises: exList,
     });
   }
@@ -1790,8 +1834,31 @@ export async function getWorkoutDetail(workoutId: string): Promise<JournalWorkou
     });
   }
 
-  const exList = Array.from(exMap.values()).map((ex) => {
+  let workoutTotalVolume = 0;
+  let workoutTotalSets = 0;
+  let workoutActiveTime = 0;
+
+  const exList: JournalExercise[] = Array.from(exMap.values()).map((ex) => {
     let topLabel = "-";
+    let exVol = 0;
+    let exBest1RM = 0;
+
+    for (const s of ex.sets) {
+      workoutTotalSets++;
+      if (s.durationSeconds) {
+        workoutActiveTime += s.durationSeconds;
+      } else {
+        workoutActiveTime += Math.min(60, Math.max(20, (s.reps || 8) * 3.5));
+      }
+
+      if (s.weightKg !== null && s.reps !== null && s.weightKg > 0 && s.reps > 0) {
+        exVol += s.weightKg * s.reps;
+        const s1rm = calculate1RM(s.weightKg, s.reps);
+        if (s1rm > exBest1RM) exBest1RM = s1rm;
+      }
+    }
+    workoutTotalVolume += exVol;
+
     if (ex.sets.length > 0) {
       const first = ex.sets[0];
       if (first.durationSeconds) {
@@ -1828,12 +1895,22 @@ export async function getWorkoutDetail(workoutId: string): Promise<JournalWorkou
       }
     }
 
+    const media = cacheMap.get(ex.name.toLowerCase().trim()) || getExerciseMedia(ex.name);
+
     return {
       ...ex,
       topSetLabel: topLabel,
-      gifUrl: cacheMap.get(ex.name.toLowerCase().trim())?.gifUrl || getExerciseMedia(ex.name).gifUrl,
+      gifUrl: media.gifUrl,
+      primaryMuscle: media.primaryMuscle,
+      volumeKg: Math.round(exVol),
+      best1RM: exBest1RM > 0 ? exBest1RM : undefined,
     };
   });
+
+  const durationSec = Number(w.duration_seconds) || 0;
+  const intervals = Math.max(1, workoutTotalSets - 1);
+  const restTotalSec = Math.max(0, durationSec - workoutActiveTime);
+  const avgRestSec = durationSec > 0 && workoutTotalSets > 1 ? Math.round(restTotalSec / intervals) : 0;
 
   return {
     id: wId,
@@ -1841,8 +1918,11 @@ export async function getWorkoutDetail(workoutId: string): Promise<JournalWorkou
     startTime: String(w.start_time),
     startTimestamp: Number(w.start_timestamp),
     endTime: w.end_time ? String(w.end_time) : "",
-    durationSeconds: Number(w.duration_seconds) || 0,
+    durationSeconds: durationSec,
     description: w.description ? String(w.description) : "",
+    totalVolumeKg: Math.round(workoutTotalVolume),
+    totalSets: workoutTotalSets,
+    averageRestSeconds: avgRestSec,
     exercises: exList,
   };
 }
