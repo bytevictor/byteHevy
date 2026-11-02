@@ -14,6 +14,7 @@ import {
   SparklesIcon,
   PlusIcon,
   TrashIcon,
+  EditIcon,
   XIcon,
   CheckIcon,
   InfoIcon,
@@ -22,6 +23,9 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   DownloadIcon,
+  LinearLineIcon,
+  SmoothLineIcon,
+  FlowLineIcon,
 } from "./Icons";
 import { useSeason } from "@/lib/season-context";
 import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
@@ -37,6 +41,102 @@ import {
 
 export type WeightChartMode = "combined" | "weight_only" | "fat_only" | "composition";
 export type TimeRange = "1M" | "3M" | "6M" | "1A" | "all";
+export type CurveType = "linear" | "smooth" | "flow";
+
+/**
+ * Generador de trazados SVG:
+ * - "linear": Segmentos rectos directos entre puntos.
+ * - "smooth": Monotone Cubic Spline (Fritsch-Carlson) sin sobreoscilación artificial.
+ * - "flow": Catmull-Rom ultra-suave continuo y fluido.
+ */
+function buildPath(
+  points: { x: number; y: number }[],
+  curveType: CurveType,
+  minY = 20,
+  maxY = 400
+): string {
+  if (points.length === 0) return "";
+  if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+
+  if (points.length === 2 || curveType === "linear") {
+    return points.reduce((acc, curr, i) => {
+      return i === 0
+        ? `M ${curr.x.toFixed(1)} ${curr.y.toFixed(1)}`
+        : `${acc} L ${curr.x.toFixed(1)} ${curr.y.toFixed(1)}`;
+    }, "");
+  }
+
+  if (curveType === "flow") {
+    const n = points.length;
+    let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+    const tension = 0.4;
+
+    for (let i = 0; i < n - 1; i++) {
+      const p0 = i > 0 ? points[i - 1] : points[i];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = i < n - 2 ? points[i + 2] : p2;
+
+      const spanX = p2.x - p1.x;
+      if (spanX <= 0) {
+        d += ` L ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+        continue;
+      }
+
+      const cp1x = p1.x + spanX * tension;
+      const cp1y = Math.max(minY, Math.min(maxY, p1.y + (p2.y - p0.y) * tension * 0.5));
+
+      const cp2x = p2.x - spanX * tension;
+      const cp2y = Math.max(minY, Math.min(maxY, p2.y - (p3.y - p1.y) * tension * 0.5));
+
+      d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+    }
+    return d;
+  }
+
+  // "smooth" - Monotone cubic spline (Fritsch-Carlson)
+  const n = points.length;
+  const dxs: number[] = [];
+  const dys: number[] = [];
+  const ms: number[] = [];
+
+  for (let i = 0; i < n - 1; i++) {
+    const dx = points[i + 1].x - points[i].x;
+    const dy = points[i + 1].y - points[i].y;
+    dxs.push(dx);
+    dys.push(dy);
+    ms.push(dx === 0 ? 0 : dy / dx);
+  }
+
+  const tangents: number[] = [ms[0]];
+  for (let i = 1; i < n - 1; i++) {
+    const m0 = ms[i - 1];
+    const m1 = ms[i];
+    if (m0 * m1 <= 0) {
+      tangents.push(0);
+    } else {
+      const dx0 = dxs[i - 1];
+      const dx1 = dxs[i];
+      const common = dx0 + dx1;
+      tangents.push((3 * common) / ((common + dx1) / m0 + (common + dx0) / m1));
+    }
+  }
+  tangents.push(ms[ms.length - 1]);
+
+  let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = points[i];
+    const p1 = points[i + 1];
+    const dx = dxs[i];
+    const cp1x = p0.x + dx / 3;
+    const cp1y = Math.max(minY, Math.min(maxY, p0.y + (tangents[i] * dx) / 3));
+    const cp2x = p1.x - dx / 3;
+    const cp2y = Math.max(minY, Math.min(maxY, p1.y - (tangents[i + 1] * dx) / 3));
+    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p1.x.toFixed(1)} ${p1.y.toFixed(1)}`;
+  }
+
+  return d;
+}
 
 export function WeightTab() {
   const { activeSeason, activeSeasonId } = useSeason();
@@ -47,6 +147,7 @@ export function WeightTab() {
 
   // Filtros y vistas
   const [chartMode, setChartMode] = useState<WeightChartMode>("combined");
+  const [curveType, setCurveType] = useState<CurveType>("smooth");
   const [timeRange, setTimeRange] = useState<TimeRange>("3M");
   const [syncWithSeason, setSyncWithSeason] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -62,7 +163,16 @@ export function WeightTab() {
     validCount: number;
   } | null>(null);
 
-  // Formulario de pesaje manual
+  // Estado para editar / ver detalle de una entrada
+  const [editingRecord, setEditingRecord] = useState<WeightRecord | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editTime, setEditTime] = useState("");
+  const [editWeight, setEditWeight] = useState("");
+  const [editImp, setEditImp] = useState("");
+  const [editImpLow, setEditImpLow] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  // Formulario de pesaje manual nuevo
   const [newDate, setNewDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [newTime, setNewTime] = useState("08:00");
   const [newWeight, setNewWeight] = useState("");
@@ -77,11 +187,91 @@ export function WeightTab() {
   const [tablePage, setTablePage] = useState(1);
   const pageSize = 12;
 
+  // Abrir modal de edición con los datos del registro seleccionado
+  const handleOpenEdit = useCallback((record: WeightRecord) => {
+    setEditingRecord(record);
+    setEditDate(record.fecha);
+    setEditTime(record.hora);
+    setEditWeight(String(record.peso));
+    setEditImp(String(record.impedancia));
+    setEditImpLow(String(record.impedanciaLow));
+    setDeleteConfirmOpen(false);
+  }, []);
+
+  // Guardar cambios del registro editado
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRecord) return;
+
+    const p = parseFloat(editWeight.replace(",", "."));
+    const imp = parseFloat(editImp) || 520;
+    const impLow = parseFloat(editImpLow) || 565;
+
+    if (isNaN(p) || p <= 0) {
+      alert("Por favor introduce un peso válido en kg");
+      return;
+    }
+
+    const [y, m, d] = editDate.split("-").map(Number);
+    const [hh, mm] = editTime.split(":").map(Number);
+    const ts = new Date(y, m - 1, d, hh, mm).getTime();
+
+    const comp = estimateBodyComposition(p, imp, impLow);
+
+    const updatedRecord: WeightRecord = {
+      ...editingRecord,
+      fecha: editDate,
+      hora: editTime,
+      timestamp: ts,
+      peso: Math.round(p * 10) / 10,
+      impedancia: imp,
+      impedanciaLow: impLow,
+      grasaPct: comp.grasaPct,
+      masaMagraKg: comp.masaMagraKg,
+      masaGrasaKg: comp.masaGrasaKg,
+      aguaPct: comp.aguaPct,
+    };
+
+    const updatedList = records.map((r) => (r.id === editingRecord.id ? updatedRecord : r));
+    setRecords(enrichWithMovingAverages(updatedList));
+    setEditingRecord(null);
+  };
+
+  // Eliminar el registro en edición
+  const handleDeleteCurrentEditing = () => {
+    if (!editingRecord) return;
+    const updated = enrichWithMovingAverages(records.filter((r) => r.id !== editingRecord.id));
+    setRecords(updated);
+    setEditingRecord(null);
+    setDeleteConfirmOpen(false);
+    if (hoveredPoint?.id === editingRecord.id) {
+      setHoveredPoint(null);
+      setHoverX(null);
+    }
+  };
+
+  // Eliminar directamente desde la tabla
+  const handleDeleteRecord = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const target = records.find((r) => r.id === id);
+    const msg = target
+      ? `¿Eliminar el pesaje del ${target.fecha} (${target.peso} kg)?`
+      : "¿Eliminar este pesaje?";
+    if (confirm(msg)) {
+      const updated = enrichWithMovingAverages(records.filter((r) => r.id !== id));
+      setRecords(updated);
+      if (editingRecord?.id === id) setEditingRecord(null);
+      if (hoveredPoint?.id === id) {
+        setHoveredPoint(null);
+        setHoverX(null);
+      }
+    }
+  };
+
   // Filtrado de datos por rango temporal y season
   const filteredRecords = useMemo(() => {
     let result = [...records];
 
-    // Si hay una season activa y syncWithSeason está activo
     if (syncWithSeason && activeSeason && activeSeasonId !== "all" && activeSeason.startTimestamp) {
       const seasonStart = activeSeason.startTimestamp * 1000;
       const seasonEnd = activeSeason.endTimestamp ? activeSeason.endTimestamp * 1000 : Infinity;
@@ -126,7 +316,6 @@ export function WeightTab() {
     const latest = filteredRecords[filteredRecords.length - 1];
     const first = filteredRecords[0];
 
-    // Registro de hace ~7 días
     const weekAgoTarget = latest.timestamp - 7 * 24 * 3600 * 1000;
     const weekAgoRecord =
       [...filteredRecords].reverse().find((r) => r.timestamp <= weekAgoTarget) || first;
@@ -255,11 +444,6 @@ export function WeightTab() {
     }
   };
 
-  const handleDeleteRecord = (id: string) => {
-    const updated = enrichWithMovingAverages(records.filter((r) => r.id !== id));
-    setRecords(updated);
-  };
-
   // Dimensiones del gráfico SVG
   const svgWidth = 1000;
   const svgHeight = 360;
@@ -296,12 +480,6 @@ export function WeightTab() {
     const maxFat = Math.ceil(rawMaxF + 1);
     const fatSpan = maxFat - minFat || 1;
 
-    // Escala Masa Magra / Grasa
-    const leans = filteredRecords.map((r) => r.masaMagraKg);
-    const fatKgs = filteredRecords.map((r) => r.masaGrasaKg);
-    const minLean = Math.floor(Math.min(...leans) - 1);
-    const maxLean = Math.ceil(Math.max(...leans) + 1);
-
     const getX = (ts: number) => padding.left + ((ts - minTime) / timeSpan) * chartInnerWidth;
     const getYWeight = (w: number) =>
       padding.top + chartInnerHeight - ((w - minWeight) / weightSpan) * chartInnerHeight;
@@ -315,47 +493,62 @@ export function WeightTab() {
       maxWeight,
       minFat,
       maxFat,
-      minLean,
-      maxLean,
       getX,
       getYWeight,
       getYFat,
     };
   }, [filteredRecords, chartInnerWidth, chartInnerHeight, padding]);
 
-  // Generador de rutas SVG
+  // Generador de rutas SVG respetando curveType ("linear" | "smooth" | "flow")
   const chartPaths = useMemo(() => {
     if (!chartScales || filteredRecords.length === 0) return null;
     const { getX, getYWeight, getYFat } = chartScales;
-
-    // Línea de Peso Diario
-    const weightPoints = filteredRecords.map((r) => `${getX(r.timestamp)},${getYWeight(r.peso)}`);
-    const weightLine = `M ${weightPoints.join(" L ")}`;
-
-    // Línea de Media Móvil 7D de Peso (suavizada)
-    const maWeightPoints = filteredRecords.map(
-      (r) => `${getX(r.timestamp)},${getYWeight(r.ma7Peso || r.peso)}`
-    );
-    const maWeightLine = `M ${maWeightPoints.join(" L ")}`;
-
-    // Área bajo la curva de peso
+    const bottomY = padding.top + chartInnerHeight;
     const firstX = getX(filteredRecords[0].timestamp);
     const lastX = getX(filteredRecords[filteredRecords.length - 1].timestamp);
-    const bottomY = padding.top + chartInnerHeight;
-    const weightArea = `${weightLine} L ${lastX},${bottomY} L ${firstX},${bottomY} Z`;
 
-    // Línea de % Graso
-    const fatPoints = filteredRecords.map((r) => `${getX(r.timestamp)},${getYFat(r.grasaPct)}`);
-    const fatLine = `M ${fatPoints.join(" L ")}`;
+    // 1. Puntos de Peso Diario
+    const weightPoints = filteredRecords.map((r) => ({
+      x: getX(r.timestamp),
+      y: getYWeight(r.peso),
+    }));
+    const weightLine = buildPath(weightPoints, curveType, padding.top, bottomY);
+    const weightArea = `${weightLine} L ${lastX.toFixed(1)} ${bottomY} L ${firstX.toFixed(1)} ${bottomY} Z`;
 
-    // Línea de Media Móvil 7D de Grasa
-    const maFatPoints = filteredRecords.map(
-      (r) => `${getX(r.timestamp)},${getYFat(r.ma7Grasa || r.grasaPct)}`
-    );
-    const maFatLine = `M ${maFatPoints.join(" L ")}`;
+    // 2. Puntos de Media Móvil 7D de Peso (suavizada con curveType)
+    const maWeightPoints = filteredRecords.map((r) => ({
+      x: getX(r.timestamp),
+      y: getYWeight(r.ma7Peso || r.peso),
+    }));
+    const maWeightLine = buildPath(maWeightPoints, curveType, padding.top, bottomY);
 
-    // Área bajo la curva de grasa
-    const fatArea = `${fatLine} L ${lastX},${bottomY} L ${firstX},${bottomY} Z`;
+    // 3. Puntos de % Graso
+    const fatPoints = filteredRecords.map((r) => ({
+      x: getX(r.timestamp),
+      y: getYFat(r.grasaPct),
+    }));
+    const fatLine = buildPath(fatPoints, curveType, padding.top, bottomY);
+    const fatArea = `${fatLine} L ${lastX.toFixed(1)} ${bottomY} L ${firstX.toFixed(1)} ${bottomY} Z`;
+
+    // 4. Puntos de Media Móvil 7D de Grasa
+    const maFatPoints = filteredRecords.map((r) => ({
+      x: getX(r.timestamp),
+      y: getYFat(r.ma7Grasa || r.grasaPct),
+    }));
+    const maFatLine = buildPath(maFatPoints, curveType, padding.top, bottomY);
+
+    // 5. Modo Composición (Masa Magra y Masa Grasa)
+    const leanPoints = filteredRecords.map((r) => ({
+      x: getX(r.timestamp),
+      y: getYWeight(r.masaMagraKg),
+    }));
+    const leanLine = buildPath(leanPoints, curveType, padding.top, bottomY);
+
+    const fatKgPoints = filteredRecords.map((r) => ({
+      x: getX(r.timestamp),
+      y: getYWeight(r.masaGrasaKg),
+    }));
+    const fatKgLine = buildPath(fatKgPoints, curveType, padding.top, bottomY);
 
     return {
       weightLine,
@@ -364,8 +557,10 @@ export function WeightTab() {
       fatLine,
       maFatLine,
       fatArea,
+      leanLine,
+      fatKgLine,
     };
-  }, [chartScales, filteredRecords, padding, chartInnerHeight]);
+  }, [chartScales, filteredRecords, curveType, padding, chartInnerHeight]);
 
   // Manejador del cursor sobre el SVG
   const handleSvgMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -374,7 +569,6 @@ export function WeightTab() {
     const clientX = e.clientX - rect.left;
     const svgX = (clientX / rect.width) * svgWidth;
 
-    // Encontrar el punto más cercano
     let closest: WeightRecord | null = null;
     let closestDist = Infinity;
 
@@ -397,6 +591,16 @@ export function WeightTab() {
     setHoveredPoint(null);
     setHoverX(null);
   };
+
+  // Cálculo en vivo para el modal de edición
+  const liveEditPreview = useMemo(() => {
+    if (!editingRecord) return null;
+    const p = parseFloat(editWeight.replace(",", "."));
+    const imp = parseFloat(editImp) || 520;
+    const impLow = parseFloat(editImpLow) || 565;
+    if (isNaN(p) || p <= 0) return null;
+    return estimateBodyComposition(p, imp, impLow);
+  }, [editingRecord, editWeight, editImp, editImpLow]);
 
   return (
     <div className="py-6 space-y-6">
@@ -424,11 +628,8 @@ export function WeightTab() {
                 </span>
               </div>
               <p className="text-xs text-zinc-400 mt-0.5">
-                Evolución de peso corporal y % graso vía Bioimpedancia Dual (
-                <code className="text-zinc-300 font-mono text-[11px]">
-                  Fecha, hora, Impedancia, Impedancia Low, Peso
-                </code>
-                )
+                Haz clic en cualquier punto de la gráfica o fila para{" "}
+                <span className="text-zinc-200 font-semibold">modificar o eliminar</span> la entrada.
               </p>
             </div>
           </div>
@@ -458,20 +659,20 @@ export function WeightTab() {
         </div>
       </div>
 
-      {/* 2. Banner informativo sobre el Schema y la fase de diseño */}
+      {/* 2. Banner informativo sobre el Schema y la interacción */}
       <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 backdrop-blur-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-zinc-300">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center shrink-0 text-blue-400">
             <InfoIcon className="w-4 h-4" />
           </div>
           <div>
-            <span className="font-semibold text-zinc-200">
-              Datos simulados conformes al esquema de tu báscula:
-            </span>{" "}
-            Los gráficos y KPIs se calculan dinámicamente a partir de la impedancia multifrecuencia (
-            <span className="text-zinc-400 font-mono text-[11px]">Z</span> y{" "}
-            <span className="text-zinc-400 font-mono text-[11px]">Z Low</span>). Puedes importar tu
-            CSV en cualquier momento para ver tus pesajes reales.
+            <span className="font-semibold text-zinc-200">Interactividad completa:</span> Puedes
+            hacer clic sobre cualquier punto de la gráfica o en el historial para{" "}
+            <span className="text-amber-400 font-medium">editar sus valores o eliminarlo</span>.
+            Utiliza el selector de trazado para alternar entre{" "}
+            <span className="text-zinc-200 font-medium">Líneas Rectas</span>,{" "}
+            <span className="text-zinc-200 font-medium">Curvas</span> o{" "}
+            <span className="text-zinc-200 font-medium">Completamente Suavizadas (Fluida)</span>.
           </div>
         </div>
 
@@ -640,9 +841,9 @@ export function WeightTab() {
       {/* 4. Gráfico Principal Interactivo de Evolución */}
       <div className="p-4 sm:p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 backdrop-blur-sm shadow-xl space-y-4">
         {/* Barra de Controles del Gráfico */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-zinc-800/60">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pb-3 border-b border-zinc-800/60">
           {/* Selector de Métricas */}
-          <div className="flex items-center gap-1 bg-zinc-950/70 p-1 rounded-xl border border-zinc-800">
+          <div className="flex flex-wrap items-center gap-1 bg-zinc-950/70 p-1 rounded-xl border border-zinc-800">
             <button
               onClick={() => setChartMode("combined")}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
@@ -685,8 +886,54 @@ export function WeightTab() {
             </button>
           </div>
 
-          {/* Filtros Temporales & Sincronización con Season */}
-          <div className="flex items-center gap-2">
+          {/* Selector de Curva (Rectas / Curvas / Suavizada) + Filtros Temporales */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Control segmentado de tipo de curva (exactamente como en ProgressionChart) */}
+            <div className="inline-flex items-center p-0.5 rounded-xl bg-zinc-950/90 border border-zinc-800 shadow-inner">
+              <button
+                type="button"
+                onClick={() => setCurveType("linear")}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                  curveType === "linear"
+                    ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+                title="Trazado lineal con picos directos entre puntos"
+              >
+                <LinearLineIcon className="w-3.5 h-3.5" />
+                <span>Rectas</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCurveType("smooth")}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                  curveType === "smooth"
+                    ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+                title="Curvas naturales (spline cúbico monótono)"
+              >
+                <SmoothLineIcon className="w-3.5 h-3.5" />
+                <span>Curvas</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCurveType("flow")}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                  curveType === "flow"
+                    ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+                title="Completamente suavizadas (línea continua fluida)"
+              >
+                <FlowLineIcon className="w-3.5 h-3.5" />
+                <span>Fluida</span>
+              </button>
+            </div>
+
+            {/* Sincronización con Season */}
             {activeSeason && activeSeasonId !== "all" && (
               <button
                 onClick={() => setSyncWithSeason(!syncWithSeason)}
@@ -701,10 +948,11 @@ export function WeightTab() {
                   className="w-2 h-2 rounded-full"
                   style={{ backgroundColor: syncWithSeason ? seasonColor : "#71717a" }}
                 />
-                <span>Season: {activeSeason.name}</span>
+                <span className="truncate max-w-[120px]">Season: {activeSeason.name}</span>
               </button>
             )}
 
+            {/* Filtros de Rango Temporal */}
             <div className="flex items-center gap-0.5 bg-zinc-950/70 p-1 rounded-xl border border-zinc-800">
               {(["1M", "3M", "6M", "1A", "all"] as TimeRange[]).map((r) => (
                 <button
@@ -726,7 +974,7 @@ export function WeightTab() {
           </div>
         </div>
 
-        {/* Canvas SVG */}
+        {/* Canvas SVG Interactivo */}
         <div className="relative w-full overflow-hidden select-none">
           {chartScales && chartPaths && filteredRecords.length > 0 ? (
             <svg
@@ -734,6 +982,9 @@ export function WeightTab() {
               className="w-full h-auto overflow-visible cursor-crosshair"
               onMouseMove={handleSvgMouseMove}
               onMouseLeave={handleSvgMouseLeave}
+              onClick={() => {
+                if (hoveredPoint) handleOpenEdit(hoveredPoint);
+              }}
             >
               <defs>
                 {/* Degradado Peso */}
@@ -752,7 +1003,8 @@ export function WeightTab() {
               {/* Guías horizontales y Ejes */}
               {[0, 0.25, 0.5, 0.75, 1].map((frac, idx) => {
                 const y = padding.top + chartInnerHeight * (1 - frac);
-                const weightVal = chartScales.minWeight + (chartScales.maxWeight - chartScales.minWeight) * frac;
+                const weightVal =
+                  chartScales.minWeight + (chartScales.maxWeight - chartScales.minWeight) * frac;
                 const fatVal = chartScales.minFat + (chartScales.maxFat - chartScales.minFat) * frac;
 
                 return (
@@ -768,7 +1020,9 @@ export function WeightTab() {
                     />
 
                     {/* Etiquetas eje izquierdo (Peso) */}
-                    {(chartMode === "combined" || chartMode === "weight_only" || chartMode === "composition") && (
+                    {(chartMode === "combined" ||
+                      chartMode === "weight_only" ||
+                      chartMode === "composition") && (
                       <text
                         x={padding.left - 12}
                         y={y + 3.5}
@@ -801,19 +1055,19 @@ export function WeightTab() {
               {/* 1. CURVAS DE PESO */}
               {(chartMode === "combined" || chartMode === "weight_only") && (
                 <>
-                  {/* Área degradada de peso */}
+                  {/* Área degradada de peso con el trazado exacto de curveType */}
                   <path d={chartPaths.weightArea} fill="url(#weightGrad)" />
 
-                  {/* Línea de peso diario (puntos discretos) */}
+                  {/* Línea de peso diario */}
                   <path
                     d={chartPaths.weightLine}
                     fill="none"
                     stroke={seasonColor}
-                    strokeWidth={chartMode === "weight_only" ? "1.5" : "2"}
-                    strokeOpacity={chartMode === "weight_only" ? "0.45" : "0.9"}
+                    strokeWidth={chartMode === "weight_only" ? "1.75" : "2"}
+                    strokeOpacity={chartMode === "weight_only" ? "0.55" : "0.9"}
                   />
 
-                  {/* Línea de Media Móvil 7D de Peso (suavizada y destacada) */}
+                  {/* Línea de Media Móvil 7D de Peso (destacada) */}
                   <path
                     d={chartPaths.maWeightLine}
                     fill="none"
@@ -822,21 +1076,27 @@ export function WeightTab() {
                     strokeDasharray={chartMode === "weight_only" ? undefined : "3 3"}
                   />
 
-                  {/* Puntos individuales de pesaje */}
+                  {/* Puntos individuales de pesaje (clicables para editar/eliminar) */}
                   {filteredRecords.map((r) => {
                     const cx = chartScales.getX(r.timestamp);
                     const cy = chartScales.getYWeight(r.peso);
                     const isHovered = hoveredPoint?.id === r.id;
+                    const isFlow = curveType === "flow";
+
                     return (
                       <circle
                         key={r.id}
                         cx={cx}
                         cy={cy}
-                        r={isHovered ? 5 : 2.5}
+                        r={isHovered ? 6 : isFlow ? 1.5 : 3}
                         fill={isHovered ? "#ffffff" : seasonColor}
                         stroke="#18181b"
-                        strokeWidth={isHovered ? 2 : 1}
-                        className="transition-all"
+                        strokeWidth={isHovered ? 2.5 : 1}
+                        className="transition-all cursor-pointer hover:r-[6px]"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEdit(r);
+                        }}
                       />
                     );
                   })}
@@ -854,8 +1114,8 @@ export function WeightTab() {
                     d={chartPaths.fatLine}
                     fill="none"
                     stroke="#06b6d4"
-                    strokeWidth={chartMode === "fat_only" ? "1.5" : "2"}
-                    strokeOpacity={chartMode === "fat_only" ? "0.45" : "0.9"}
+                    strokeWidth={chartMode === "fat_only" ? "1.75" : "2"}
+                    strokeOpacity={chartMode === "fat_only" ? "0.55" : "0.9"}
                   />
 
                   {/* Línea de Media Móvil 7D de Grasa */}
@@ -871,16 +1131,22 @@ export function WeightTab() {
                     const cx = chartScales.getX(r.timestamp);
                     const cy = chartScales.getYFat(r.grasaPct);
                     const isHovered = hoveredPoint?.id === r.id;
+                    const isFlow = curveType === "flow";
+
                     return (
                       <circle
                         key={`f-${r.id}`}
                         cx={cx}
                         cy={cy}
-                        r={isHovered ? 5 : 2.5}
+                        r={isHovered ? 6 : isFlow ? 1.5 : 3}
                         fill={isHovered ? "#ffffff" : "#06b6d4"}
                         stroke="#18181b"
-                        strokeWidth={isHovered ? 2 : 1}
-                        className="transition-all"
+                        strokeWidth={isHovered ? 2.5 : 1}
+                        className="transition-all cursor-pointer hover:r-[6px]"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEdit(r);
+                        }}
                       />
                     );
                   })}
@@ -890,8 +1156,10 @@ export function WeightTab() {
               {/* 3. MODO COMPOSICIÓN CORPORAL (Masa Magra vs Grasa) */}
               {chartMode === "composition" && (
                 <>
-                  {/* Curva Masa Magra */}
-                  {filteredRecords.map((r, i) => {
+                  <path d={chartPaths.leanLine} fill="none" stroke="#10b981" strokeWidth="2.5" />
+                  <path d={chartPaths.fatKgLine} fill="none" stroke="#f43f5e" strokeWidth="2.5" />
+
+                  {filteredRecords.map((r) => {
                     const cx = chartScales.getX(r.timestamp);
                     const cyLean = chartScales.getYWeight(r.masaMagraKg);
                     const isHovered = hoveredPoint?.id === r.id;
@@ -900,22 +1168,20 @@ export function WeightTab() {
                         key={`lean-${r.id}`}
                         cx={cx}
                         cy={cyLean}
-                        r={isHovered ? 5 : 2.5}
+                        r={isHovered ? 6 : 3}
                         fill="#10b981"
                         stroke="#18181b"
                         strokeWidth={1.5}
+                        className="cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEdit(r);
+                        }}
                       />
                     );
                   })}
-                  <path
-                    d={`M ${filteredRecords.map((r) => `${chartScales.getX(r.timestamp)},${chartScales.getYWeight(r.masaMagraKg)}`).join(" L ")}`}
-                    fill="none"
-                    stroke="#10b981"
-                    strokeWidth="2.5"
-                  />
 
-                  {/* Curva Masa Grasa en kg */}
-                  {filteredRecords.map((r, i) => {
+                  {filteredRecords.map((r) => {
                     const cx = chartScales.getX(r.timestamp);
                     const cyFatKg = chartScales.getYWeight(r.masaGrasaKg);
                     const isHovered = hoveredPoint?.id === r.id;
@@ -924,19 +1190,18 @@ export function WeightTab() {
                         key={`fatkg-${r.id}`}
                         cx={cx}
                         cy={cyFatKg}
-                        r={isHovered ? 5 : 2.5}
+                        r={isHovered ? 6 : 3}
                         fill="#f43f5e"
                         stroke="#18181b"
                         strokeWidth={1.5}
+                        className="cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEdit(r);
+                        }}
                       />
                     );
                   })}
-                  <path
-                    d={`M ${filteredRecords.map((r) => `${chartScales.getX(r.timestamp)},${chartScales.getYWeight(r.masaGrasaKg)}`).join(" L ")}`}
-                    fill="none"
-                    stroke="#f43f5e"
-                    strokeWidth="2.5"
-                  />
                 </>
               )}
 
@@ -989,14 +1254,16 @@ export function WeightTab() {
             </div>
           )}
 
-          {/* Tooltip flotante interactivo */}
+          {/* Tooltip flotante interactivo con botón de edición rápida */}
           {hoveredPoint && hoverX !== null && (
             <div
-              className="absolute top-2 pointer-events-none z-20 bg-zinc-900/95 border border-zinc-700/80 rounded-xl p-3 shadow-2xl backdrop-blur-md text-xs space-y-1.5 min-w-[210px]"
+              className="absolute top-2 pointer-events-auto z-20 bg-zinc-900/95 border border-zinc-700/80 rounded-xl p-3 shadow-2xl backdrop-blur-md text-xs space-y-1.5 min-w-[220px] transition-all cursor-pointer hover:border-accent-light"
               style={{
                 left: Math.min(Math.max(20, (hoverX / svgWidth) * 100), 75) + "%",
                 transform: "translateX(-50%)",
               }}
+              onClick={() => handleOpenEdit(hoveredPoint)}
+              title="Haz clic para modificar o eliminar este pesaje"
             >
               <div className="flex items-center justify-between border-b border-zinc-800 pb-1 text-zinc-400 font-mono text-[11px]">
                 <span className="flex items-center gap-1 font-semibold text-zinc-200">
@@ -1053,11 +1320,9 @@ export function WeightTab() {
                 </div>
               </div>
 
-              <div className="pt-1 border-t border-zinc-800/60 flex items-center justify-between text-[10px] text-zinc-400 font-mono">
-                <span>Impedancia:</span>
-                <span className="text-amber-400 font-semibold">
-                  {hoveredPoint.impedancia} Ω ({hoveredPoint.impedanciaLow} Ω Low)
-                </span>
+              <div className="pt-1.5 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-accent-light font-medium">
+                <span>Clic para editar o borrar</span>
+                <EditIcon className="w-3.5 h-3.5" />
               </div>
             </div>
           )}
@@ -1109,7 +1374,7 @@ export function WeightTab() {
               </span>
             </h2>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Valores brutos registrados por la báscula y métricas derivadas
+              Haz clic en cualquier fila para editar sus datos o eliminar el pesaje
             </p>
           </div>
 
@@ -1159,10 +1424,14 @@ export function WeightTab() {
             <tbody className="divide-y divide-zinc-800/60 font-mono">
               {paginatedTableRecords.length > 0 ? (
                 paginatedTableRecords.map((r) => (
-                  <tr key={r.id} className="hover:bg-zinc-850/40 transition-colors">
+                  <tr
+                    key={r.id}
+                    onClick={() => handleOpenEdit(r)}
+                    className="hover:bg-zinc-850/70 transition-colors cursor-pointer group"
+                  >
                     <td className="py-3 px-3 text-zinc-300 font-sans">
-                      <div className="flex items-center gap-1.5 font-medium">
-                        <CalendarIcon className="w-3.5 h-3.5 text-zinc-500" />
+                      <div className="flex items-center gap-1.5 font-medium group-hover:text-accent-light transition-colors">
+                        <CalendarIcon className="w-3.5 h-3.5 text-zinc-500 group-hover:text-accent-light" />
                         <span>{r.fecha}</span>
                         <span className="text-zinc-500 text-[11px] font-mono">· {r.hora}</span>
                       </div>
@@ -1205,13 +1474,25 @@ export function WeightTab() {
                     <td className="py-3 px-3 text-zinc-400">{r.impedanciaLow} Ω</td>
 
                     <td className="py-3 px-3 text-right">
-                      <button
-                        onClick={() => handleDeleteRecord(r.id)}
-                        className="p-1 rounded-lg hover:bg-rose-500/10 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
-                        title="Eliminar pesaje"
+                      <div
+                        className="inline-flex items-center gap-1"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        <TrashIcon className="w-3.5 h-3.5" />
-                      </button>
+                        <button
+                          onClick={() => handleOpenEdit(r)}
+                          className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+                          title="Modificar pesaje"
+                        >
+                          <EditIcon className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteRecord(r.id, e)}
+                          className="p-1.5 rounded-lg hover:bg-rose-500/15 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
+                          title="Eliminar pesaje"
+                        >
+                          <TrashIcon className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -1252,7 +1533,198 @@ export function WeightTab() {
         )}
       </div>
 
-      {/* 6. MODAL: Importar CSV */}
+      {/* 6. MODAL: Modificar o Eliminar Entrada Seleccionada */}
+      {editingRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-zinc-900 border border-zinc-700/80 rounded-2xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center border"
+                  style={{
+                    backgroundColor: hexToRgba(seasonColor, 0.15),
+                    borderColor: hexToRgba(seasonColor, 0.35),
+                    color: seasonColor,
+                  }}
+                >
+                  <EditIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-zinc-100">Modificar Pesaje</h3>
+                  <p className="text-xs text-zinc-400">
+                    ID: {editingRecord.id} · Registrado el {editingRecord.fecha}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setEditingRecord(null);
+                  setDeleteConfirmOpen(false);
+                }}
+                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-200 cursor-pointer"
+              >
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-zinc-400 block mb-1">Fecha</label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    required
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 focus:outline-none focus:border-zinc-600 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-zinc-400 block mb-1">Hora</label>
+                  <input
+                    type="time"
+                    value={editTime}
+                    onChange={(e) => setEditTime(e.target.value)}
+                    required
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 focus:outline-none focus:border-zinc-600 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-zinc-400 block mb-1">Peso Corporal (kg)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={editWeight}
+                    onChange={(e) => setEditWeight(e.target.value)}
+                    required
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-lg font-mono font-bold text-zinc-100 focus:outline-none focus:border-zinc-600"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 font-mono text-sm">
+                    kg
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-zinc-400 block mb-1">Impedancia (Ω)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={editImp}
+                    onChange={(e) => setEditImp(e.target.value)}
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 font-mono focus:outline-none focus:border-zinc-600"
+                  />
+                </div>
+                <div>
+                  <label className="text-zinc-400 block mb-1">Impedancia Low (Ω)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={editImpLow}
+                    onChange={(e) => setEditImpLow(e.target.value)}
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 font-mono focus:outline-none focus:border-zinc-600"
+                  />
+                </div>
+              </div>
+
+              {/* Vista previa en tiempo real de la recomposición calculada */}
+              {liveEditPreview && (
+                <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-1.5">
+                  <span className="text-[11px] font-semibold text-zinc-300 block">
+                    Recálculo biométrico instantáneo:
+                  </span>
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                      <span className="text-[10px] text-zinc-400 block">% Graso</span>
+                      <span className="font-extrabold text-cyan-400 font-mono text-sm">
+                        {liveEditPreview.grasaPct}%
+                      </span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                      <span className="text-[10px] text-zinc-400 block">Masa Magra</span>
+                      <span className="font-extrabold text-emerald-400 font-mono text-sm">
+                        {liveEditPreview.masaMagraKg} kg
+                      </span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                      <span className="text-[10px] text-zinc-400 block">Masa Grasa</span>
+                      <span className="font-extrabold text-rose-400 font-mono text-sm">
+                        {liveEditPreview.masaGrasaKg} kg
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Alerta de confirmación de borrado */}
+              {deleteConfirmOpen ? (
+                <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-200 space-y-2">
+                  <div className="font-semibold text-xs">
+                    ¿Estás seguro de que deseas eliminar este pesaje?
+                  </div>
+                  <p className="text-[11px] text-rose-300/90">
+                    Esta acción eliminará el pesaje del {editingRecord.fecha} ({editingRecord.peso} kg)
+                    y recalculará las tendencias de la gráfica.
+                  </p>
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirmOpen(false)}
+                      className="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 hover:text-white text-xs cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeleteCurrentEditing}
+                      className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs cursor-pointer shadow-md"
+                    >
+                      Sí, Eliminar Definitivamente
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Botones de acción del modal */}
+              <div className="flex items-center justify-between pt-3 border-t border-zinc-800">
+                {!deleteConfirmOpen && (
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirmOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 text-xs font-semibold cursor-pointer transition-colors"
+                  >
+                    <TrashIcon className="w-3.5 h-3.5" />
+                    <span>Eliminar Registro</span>
+                  </button>
+                )}
+
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setEditingRecord(null)}
+                    className="px-3.5 py-2 rounded-xl text-zinc-400 hover:text-zinc-200 cursor-pointer text-xs"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-accent-light text-zinc-950 hover:bg-accent transition-all cursor-pointer shadow-md"
+                  >
+                    <CheckIcon className="w-3.5 h-3.5 stroke-[2.5]" />
+                    <span>Guardar Cambios</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 7. MODAL: Importar CSV */}
       {csvModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
           <div className="w-full max-w-2xl bg-zinc-900 border border-zinc-700/80 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1388,7 +1860,7 @@ export function WeightTab() {
         </div>
       )}
 
-      {/* 7. MODAL: Nuevo Pesaje Manual */}
+      {/* 8. MODAL: Nuevo Pesaje Manual */}
       {manualEntryModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
           <div className="w-full max-w-md bg-zinc-900 border border-zinc-700/80 rounded-2xl shadow-2xl p-6 space-y-4">
@@ -1414,7 +1886,7 @@ export function WeightTab() {
                     value={newDate}
                     onChange={(e) => setNewDate(e.target.value)}
                     required
-                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 focus:outline-none focus:border-zinc-600"
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 focus:outline-none focus:border-zinc-600 font-mono"
                   />
                 </div>
                 <div>
@@ -1424,23 +1896,28 @@ export function WeightTab() {
                     value={newTime}
                     onChange={(e) => setNewTime(e.target.value)}
                     required
-                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 focus:outline-none focus:border-zinc-600"
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 focus:outline-none focus:border-zinc-600 font-mono"
                   />
                 </div>
               </div>
 
               <div>
                 <label className="text-zinc-400 block mb-1">Peso Corporal (kg)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  placeholder="ej. 77.4"
-                  value={newWeight}
-                  onChange={(e) => setNewWeight(e.target.value)}
-                  required
-                  autoFocus
-                  className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-base font-mono font-bold text-zinc-100 focus:outline-none focus:border-zinc-600"
-                />
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="ej. 77.4"
+                    value={newWeight}
+                    onChange={(e) => setNewWeight(e.target.value)}
+                    required
+                    autoFocus
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-base font-mono font-bold text-zinc-100 focus:outline-none focus:border-zinc-600"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 font-mono text-sm">
+                    kg
+                  </span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

@@ -346,6 +346,34 @@ export function PercentIcon({ className = "w-4 h-4", style }: IconProps) {
   );
 }
 
+export function LinearLineIcon({ className = "w-3 h-3", style }: IconProps) {
+  return (
+    <svg className={className} style={style} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 13L6 5L10 10L14 3" />
+      <circle cx="6" cy="5" r="1.1" fill="currentColor" />
+      <circle cx="10" cy="10" r="1.1" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function SmoothLineIcon({ className = "w-3 h-3", style }: IconProps) {
+  return (
+    <svg className={className} style={style} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12C4.5 12 5.5 4 8 4C10.5 4 11.5 12 14 12" />
+      <circle cx="8" cy="4" r="1.2" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function FlowLineIcon({ className = "w-3 h-3", style }: IconProps) {
+  return (
+    <svg className={className} style={style} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1.5 12C3.5 12 4.5 4 8 4C11.5 4 12.5 12 14.5 12" />
+    </svg>
+  );
+}
+
+
 
 
 
