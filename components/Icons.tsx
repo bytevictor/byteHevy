@@ -294,6 +294,59 @@ export function BarChartIcon({ className = "w-4 h-4", style }: IconProps) {
   );
 }
 
+export function ScaleIcon({ className = "w-4 h-4", style }: IconProps) {
+  return (
+    <svg className={className} style={style} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <rect x="3" y="3" width="18" height="18" rx="3.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.5 7.5h7a1 1 0 011 1v1.5a1 1 0 01-1 1h-7a1 1 0 01-1-1V8.5a1 1 0 011-1z" />
+      <circle cx="12" cy="15.5" r="0.75" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function TrendingDownIcon({ className = "w-4 h-4", style }: IconProps) {
+  return (
+    <svg className={className} style={style} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h6m0 0v-6m0 6l-7-7-4 4-6-6" />
+    </svg>
+  );
+}
+
+export function TrendingUpIcon({ className = "w-4 h-4", style }: IconProps) {
+  return (
+    <svg className={className} style={style} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h6m0 0v6m0-6l-7 7-4-4-6 6" />
+    </svg>
+  );
+}
+
+export function ZapIcon({ className = "w-4 h-4", style }: IconProps) {
+  return (
+    <svg className={className} style={style} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+    </svg>
+  );
+}
+
+export function ActivityIcon({ className = "w-4 h-4", style }: IconProps) {
+  return (
+    <svg className={className} style={style} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M22 12h-4l-3 9L9 3l-3 9H2" />
+    </svg>
+  );
+}
+
+export function PercentIcon({ className = "w-4 h-4", style }: IconProps) {
+  return (
+    <svg className={className} style={style} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <line x1="19" y1="5" x2="5" y2="19" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="7" cy="7" r="2.5" />
+      <circle cx="17" cy="17" r="2.5" />
+    </svg>
+  );
+}
+
+
 
 
 

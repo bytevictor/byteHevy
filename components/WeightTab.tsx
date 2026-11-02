@@ -1,0 +1,1496 @@
+"use client";
+
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import {
+  ScaleIcon,
+  TrendingDownIcon,
+  TrendingUpIcon,
+  ZapIcon,
+  ActivityIcon,
+  PercentIcon,
+  CalendarIcon,
+  ClockIcon,
+  UploadCloudIcon,
+  SparklesIcon,
+  PlusIcon,
+  TrashIcon,
+  XIcon,
+  CheckIcon,
+  InfoIcon,
+  SearchIcon,
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  DownloadIcon,
+} from "./Icons";
+import { useSeason } from "@/lib/season-context";
+import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
+import {
+  WeightRecord,
+  generateMockWeightRecords,
+  parseWeightCsv,
+  getSampleCsvContent,
+  estimateBodyComposition,
+  enrichWithMovingAverages,
+  DEFAULT_USER_PROFILE,
+} from "@/lib/mock-weight-data";
+
+export type WeightChartMode = "combined" | "weight_only" | "fat_only" | "composition";
+export type TimeRange = "1M" | "3M" | "6M" | "1A" | "all";
+
+export function WeightTab() {
+  const { activeSeason, activeSeasonId } = useSeason();
+  const seasonColor = getSeasonColor(activeSeason);
+
+  // Estado de registros de peso (iniciado con mock data)
+  const [records, setRecords] = useState<WeightRecord[]>(() => generateMockWeightRecords());
+
+  // Filtros y vistas
+  const [chartMode, setChartMode] = useState<WeightChartMode>("combined");
+  const [timeRange, setTimeRange] = useState<TimeRange>("3M");
+  const [syncWithSeason, setSyncWithSeason] = useState<boolean>(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortAsc, setSortAsc] = useState(false);
+
+  // Modales
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [manualEntryModalOpen, setManualEntryModalOpen] = useState(false);
+  const [csvText, setCsvText] = useState("");
+  const [csvPreview, setCsvPreview] = useState<{
+    records: WeightRecord[];
+    errors: string[];
+    validCount: number;
+  } | null>(null);
+
+  // Formulario de pesaje manual
+  const [newDate, setNewDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [newTime, setNewTime] = useState("08:00");
+  const [newWeight, setNewWeight] = useState("");
+  const [newImp, setNewImp] = useState("520");
+  const [newImpLow, setNewImpLow] = useState("565");
+
+  // Hover interactivo en el gráfico
+  const [hoveredPoint, setHoveredPoint] = useState<WeightRecord | null>(null);
+  const [hoverX, setHoverX] = useState<number | null>(null);
+
+  // Paginación de tabla
+  const [tablePage, setTablePage] = useState(1);
+  const pageSize = 12;
+
+  // Filtrado de datos por rango temporal y season
+  const filteredRecords = useMemo(() => {
+    let result = [...records];
+
+    // Si hay una season activa y syncWithSeason está activo
+    if (syncWithSeason && activeSeason && activeSeasonId !== "all" && activeSeason.startTimestamp) {
+      const seasonStart = activeSeason.startTimestamp * 1000;
+      const seasonEnd = activeSeason.endTimestamp ? activeSeason.endTimestamp * 1000 : Infinity;
+      result = result.filter((r) => r.timestamp >= seasonStart && r.timestamp <= seasonEnd);
+    } else if (timeRange !== "all") {
+      const now = records.length > 0 ? records[records.length - 1].timestamp : Date.now();
+      let days = 90;
+      if (timeRange === "1M") days = 30;
+      else if (timeRange === "3M") days = 90;
+      else if (timeRange === "6M") days = 180;
+      else if (timeRange === "1A") days = 365;
+
+      const cutoff = now - days * 24 * 3600 * 1000;
+      result = result.filter((r) => r.timestamp >= cutoff);
+    }
+
+    return result.sort((a, b) => a.timestamp - b.timestamp);
+  }, [records, timeRange, syncWithSeason, activeSeason, activeSeasonId]);
+
+  // Resumen de Métricas Clave (KPIs)
+  const stats = useMemo(() => {
+    if (filteredRecords.length === 0) {
+      return {
+        latestWeight: 0,
+        latestFat: 0,
+        latestLean: 0,
+        latestFatKg: 0,
+        latestImp: 0,
+        latestImpLow: 0,
+        ma7Weight: 0,
+        ma7Fat: 0,
+        deltaWeightWeek: 0,
+        deltaFatWeek: 0,
+        deltaWeightTotal: 0,
+        deltaFatTotal: 0,
+        minWeight: 0,
+        maxWeight: 0,
+        count: 0,
+      };
+    }
+
+    const latest = filteredRecords[filteredRecords.length - 1];
+    const first = filteredRecords[0];
+
+    // Registro de hace ~7 días
+    const weekAgoTarget = latest.timestamp - 7 * 24 * 3600 * 1000;
+    const weekAgoRecord =
+      [...filteredRecords].reverse().find((r) => r.timestamp <= weekAgoTarget) || first;
+
+    const deltaWeightWeek = Math.round((latest.peso - weekAgoRecord.peso) * 100) / 100;
+    const deltaFatWeek = Math.round((latest.grasaPct - weekAgoRecord.grasaPct) * 10) / 10;
+    const deltaWeightTotal = Math.round((latest.peso - first.peso) * 100) / 100;
+    const deltaFatTotal = Math.round((latest.grasaPct - first.grasaPct) * 10) / 10;
+
+    const weights = filteredRecords.map((r) => r.peso);
+    const minWeight = Math.min(...weights);
+    const maxWeight = Math.max(...weights);
+
+    return {
+      latestWeight: latest.peso,
+      latestFat: latest.grasaPct,
+      latestLean: latest.masaMagraKg,
+      latestFatKg: latest.masaGrasaKg,
+      latestImp: latest.impedancia,
+      latestImpLow: latest.impedanciaLow,
+      ma7Weight: latest.ma7Peso || latest.peso,
+      ma7Fat: latest.ma7Grasa || latest.grasaPct,
+      deltaWeightWeek,
+      deltaFatWeek,
+      deltaWeightTotal,
+      deltaFatTotal,
+      minWeight,
+      maxWeight,
+      count: filteredRecords.length,
+    };
+  }, [filteredRecords]);
+
+  // Filtrado y ordenación de la tabla
+  const tableRecords = useMemo(() => {
+    let result = [...records];
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      result = result.filter(
+        (r) =>
+          r.fecha.includes(q) ||
+          r.hora.includes(q) ||
+          String(r.peso).includes(q) ||
+          String(r.grasaPct).includes(q)
+      );
+    }
+    result.sort((a, b) => (sortAsc ? a.timestamp - b.timestamp : b.timestamp - a.timestamp));
+    return result;
+  }, [records, searchTerm, sortAsc]);
+
+  const totalPages = Math.ceil(tableRecords.length / pageSize) || 1;
+  const paginatedTableRecords = useMemo(() => {
+    const start = (tablePage - 1) * pageSize;
+    return tableRecords.slice(start, start + pageSize);
+  }, [tableRecords, tablePage]);
+
+  // Manejo de CSV
+  const handleParseCsv = (text: string) => {
+    setCsvText(text);
+    if (!text.trim()) {
+      setCsvPreview(null);
+      return;
+    }
+    const res = parseWeightCsv(text);
+    setCsvPreview({
+      records: res.records,
+      errors: res.errors,
+      validCount: res.records.length,
+    });
+  };
+
+  const handleApplyCsv = () => {
+    if (csvPreview && csvPreview.records.length > 0) {
+      setRecords(csvPreview.records);
+      setCsvModalOpen(false);
+      setCsvText("");
+      setCsvPreview(null);
+    }
+  };
+
+  const handleLoadSampleCsv = () => {
+    const sample = getSampleCsvContent();
+    handleParseCsv(sample);
+  };
+
+  const handleAddManualEntry = (e: React.FormEvent) => {
+    e.preventDefault();
+    const p = parseFloat(newWeight.replace(",", "."));
+    const imp = parseFloat(newImp) || 520;
+    const impLow = parseFloat(newImpLow) || 565;
+
+    if (isNaN(p) || p <= 0) {
+      alert("Por favor introduce un peso válido en kg");
+      return;
+    }
+
+    const [y, m, d] = newDate.split("-").map(Number);
+    const [hh, mm] = newTime.split(":").map(Number);
+    const ts = new Date(y, m - 1, d, hh, mm).getTime();
+
+    const comp = estimateBodyComposition(p, imp, impLow);
+
+    const newRecord: WeightRecord = {
+      id: `manual-${Date.now()}`,
+      fecha: newDate,
+      hora: newTime,
+      timestamp: ts,
+      peso: Math.round(p * 10) / 10,
+      impedancia: imp,
+      impedanciaLow: impLow,
+      grasaPct: comp.grasaPct,
+      masaMagraKg: comp.masaMagraKg,
+      masaGrasaKg: comp.masaGrasaKg,
+      aguaPct: comp.aguaPct,
+      esValido: true,
+    };
+
+    const updated = enrichWithMovingAverages([...records, newRecord]);
+    setRecords(updated);
+    setManualEntryModalOpen(false);
+    setNewWeight("");
+  };
+
+  const handleResetMockup = () => {
+    if (confirm("¿Deseas restaurar el dataset mockup de simulación original?")) {
+      setRecords(generateMockWeightRecords());
+    }
+  };
+
+  const handleDeleteRecord = (id: string) => {
+    const updated = enrichWithMovingAverages(records.filter((r) => r.id !== id));
+    setRecords(updated);
+  };
+
+  // Dimensiones del gráfico SVG
+  const svgWidth = 1000;
+  const svgHeight = 360;
+  const padding = { top: 30, right: 60, bottom: 45, left: 60 };
+  const chartInnerWidth = svgWidth - padding.left - padding.right;
+  const chartInnerHeight = svgHeight - padding.top - padding.bottom;
+
+  // Escalas matemáticas para el gráfico
+  const chartScales = useMemo(() => {
+    if (filteredRecords.length === 0) return null;
+
+    const timestamps = filteredRecords.map((r) => r.timestamp);
+    const minTime = Math.min(...timestamps);
+    const maxTime = Math.max(...timestamps);
+    const timeSpan = maxTime - minTime || 1;
+
+    // Escala Peso (kg)
+    const weights = filteredRecords.map((r) => r.peso);
+    const maWeights = filteredRecords.map((r) => r.ma7Peso || r.peso);
+    const allWeightVals = [...weights, ...maWeights];
+    const rawMinW = Math.min(...allWeightVals);
+    const rawMaxW = Math.max(...allWeightVals);
+    const minWeight = Math.floor(rawMinW - 1);
+    const maxWeight = Math.ceil(rawMaxW + 1);
+    const weightSpan = maxWeight - minWeight || 1;
+
+    // Escala % Graso
+    const fats = filteredRecords.map((r) => r.grasaPct);
+    const maFats = filteredRecords.map((r) => r.ma7Grasa || r.grasaPct);
+    const allFatVals = [...fats, ...maFats];
+    const rawMinF = Math.min(...allFatVals);
+    const rawMaxF = Math.max(...allFatVals);
+    const minFat = Math.floor(rawMinF - 1);
+    const maxFat = Math.ceil(rawMaxF + 1);
+    const fatSpan = maxFat - minFat || 1;
+
+    // Escala Masa Magra / Grasa
+    const leans = filteredRecords.map((r) => r.masaMagraKg);
+    const fatKgs = filteredRecords.map((r) => r.masaGrasaKg);
+    const minLean = Math.floor(Math.min(...leans) - 1);
+    const maxLean = Math.ceil(Math.max(...leans) + 1);
+
+    const getX = (ts: number) => padding.left + ((ts - minTime) / timeSpan) * chartInnerWidth;
+    const getYWeight = (w: number) =>
+      padding.top + chartInnerHeight - ((w - minWeight) / weightSpan) * chartInnerHeight;
+    const getYFat = (f: number) =>
+      padding.top + chartInnerHeight - ((f - minFat) / fatSpan) * chartInnerHeight;
+
+    return {
+      minTime,
+      maxTime,
+      minWeight,
+      maxWeight,
+      minFat,
+      maxFat,
+      minLean,
+      maxLean,
+      getX,
+      getYWeight,
+      getYFat,
+    };
+  }, [filteredRecords, chartInnerWidth, chartInnerHeight, padding]);
+
+  // Generador de rutas SVG
+  const chartPaths = useMemo(() => {
+    if (!chartScales || filteredRecords.length === 0) return null;
+    const { getX, getYWeight, getYFat } = chartScales;
+
+    // Línea de Peso Diario
+    const weightPoints = filteredRecords.map((r) => `${getX(r.timestamp)},${getYWeight(r.peso)}`);
+    const weightLine = `M ${weightPoints.join(" L ")}`;
+
+    // Línea de Media Móvil 7D de Peso (suavizada)
+    const maWeightPoints = filteredRecords.map(
+      (r) => `${getX(r.timestamp)},${getYWeight(r.ma7Peso || r.peso)}`
+    );
+    const maWeightLine = `M ${maWeightPoints.join(" L ")}`;
+
+    // Área bajo la curva de peso
+    const firstX = getX(filteredRecords[0].timestamp);
+    const lastX = getX(filteredRecords[filteredRecords.length - 1].timestamp);
+    const bottomY = padding.top + chartInnerHeight;
+    const weightArea = `${weightLine} L ${lastX},${bottomY} L ${firstX},${bottomY} Z`;
+
+    // Línea de % Graso
+    const fatPoints = filteredRecords.map((r) => `${getX(r.timestamp)},${getYFat(r.grasaPct)}`);
+    const fatLine = `M ${fatPoints.join(" L ")}`;
+
+    // Línea de Media Móvil 7D de Grasa
+    const maFatPoints = filteredRecords.map(
+      (r) => `${getX(r.timestamp)},${getYFat(r.ma7Grasa || r.grasaPct)}`
+    );
+    const maFatLine = `M ${maFatPoints.join(" L ")}`;
+
+    // Área bajo la curva de grasa
+    const fatArea = `${fatLine} L ${lastX},${bottomY} L ${firstX},${bottomY} Z`;
+
+    return {
+      weightLine,
+      maWeightLine,
+      weightArea,
+      fatLine,
+      maFatLine,
+      fatArea,
+    };
+  }, [chartScales, filteredRecords, padding, chartInnerHeight]);
+
+  // Manejador del cursor sobre el SVG
+  const handleSvgMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!chartScales || filteredRecords.length === 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clientX = e.clientX - rect.left;
+    const svgX = (clientX / rect.width) * svgWidth;
+
+    // Encontrar el punto más cercano
+    let closest: WeightRecord | null = null;
+    let closestDist = Infinity;
+
+    for (const r of filteredRecords) {
+      const px = chartScales.getX(r.timestamp);
+      const dist = Math.abs(px - svgX);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = r;
+      }
+    }
+
+    if (closest) {
+      setHoveredPoint(closest);
+      setHoverX(chartScales.getX(closest.timestamp));
+    }
+  };
+
+  const handleSvgMouseLeave = () => {
+    setHoveredPoint(null);
+    setHoverX(null);
+  };
+
+  return (
+    <div className="py-6 space-y-6">
+      {/* 1. Header con Título, Estado y Botones de Acción */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-zinc-800/80">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center border shadow-sm"
+              style={{
+                backgroundColor: hexToRgba(seasonColor, 0.15),
+                borderColor: hexToRgba(seasonColor, 0.35),
+                color: seasonColor,
+              }}
+            >
+              <ScaleIcon className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-100">
+                  Seguimiento de Peso
+                </h1>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                  Fase de Diseño
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Evolución de peso corporal y % graso vía Bioimpedancia Dual (
+                <code className="text-zinc-300 font-mono text-[11px]">
+                  Fecha, hora, Impedancia, Impedancia Low, Peso
+                </code>
+                )
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setCsvModalOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-zinc-800/90 text-zinc-200 border border-zinc-700/80 hover:bg-zinc-750 hover:text-white transition-all shadow-sm cursor-pointer"
+            title="Importar archivo CSV"
+          >
+            <UploadCloudIcon className="w-4 h-4 text-accent-light" />
+            <span>Importar CSV</span>
+          </button>
+
+          <button
+            onClick={() => setManualEntryModalOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm cursor-pointer text-zinc-950 font-bold"
+            style={{
+              backgroundColor: seasonColor,
+              boxShadow: `0 0 14px ${hexToRgba(seasonColor, 0.3)}`,
+            }}
+          >
+            <PlusIcon className="w-4 h-4 stroke-[2.5]" />
+            <span>Nuevo Pesaje</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 2. Banner informativo sobre el Schema y la fase de diseño */}
+      <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 backdrop-blur-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-zinc-300">
+        <div className="flex items-center gap-3">
+          <div className="w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center shrink-0 text-blue-400">
+            <InfoIcon className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-semibold text-zinc-200">
+              Datos simulados conformes al esquema de tu báscula:
+            </span>{" "}
+            Los gráficos y KPIs se calculan dinámicamente a partir de la impedancia multifrecuencia (
+            <span className="text-zinc-400 font-mono text-[11px]">Z</span> y{" "}
+            <span className="text-zinc-400 font-mono text-[11px]">Z Low</span>). Puedes importar tu
+            CSV en cualquier momento para ver tus pesajes reales.
+          </div>
+        </div>
+
+        <button
+          onClick={handleResetMockup}
+          className="text-[11px] text-zinc-400 hover:text-zinc-200 underline whitespace-nowrap cursor-pointer ml-auto"
+        >
+          Restaurar simulación
+        </button>
+      </div>
+
+      {/* 3. Panel de Métricas / KPI Cards (5 Cards) */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
+        {/* KPI 1: Peso Actual */}
+        <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
+          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
+            <span className="flex items-center gap-1.5">
+              <ScaleIcon className="w-3.5 h-3.5" style={{ color: seasonColor }} />
+              Peso Actual
+            </span>
+            <span className="text-[10px] font-mono text-zinc-500">kg</span>
+          </div>
+
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl sm:text-3xl font-extrabold text-zinc-100 tracking-tight font-mono">
+              {stats.latestWeight.toFixed(1)}
+            </span>
+            <span className="text-xs text-zinc-400 font-normal">kg</span>
+          </div>
+
+          <div className="mt-2.5 flex items-center justify-between text-[11px]">
+            <div className="flex items-center gap-1 font-semibold">
+              {stats.deltaWeightWeek < 0 ? (
+                <span className="text-emerald-400 flex items-center gap-0.5">
+                  <TrendingDownIcon className="w-3 h-3" />
+                  {stats.deltaWeightWeek} kg
+                </span>
+              ) : stats.deltaWeightWeek > 0 ? (
+                <span className="text-amber-400 flex items-center gap-0.5">
+                  <TrendingUpIcon className="w-3 h-3" />+{stats.deltaWeightWeek} kg
+                </span>
+              ) : (
+                <span className="text-zinc-400">0.0 kg</span>
+              )}
+              <span className="text-zinc-500 font-normal">7d</span>
+            </div>
+            <span className="text-[10px] text-zinc-500 font-mono">
+              MA-7: {stats.ma7Weight.toFixed(1)}
+            </span>
+          </div>
+        </div>
+
+        {/* KPI 2: % Graso */}
+        <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
+          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
+            <span className="flex items-center gap-1.5">
+              <PercentIcon className="w-3.5 h-3.5 text-cyan-400" />
+              % Grasa Corporal
+            </span>
+            <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+              BIA
+            </span>
+          </div>
+
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl sm:text-3xl font-extrabold text-cyan-300 tracking-tight font-mono">
+              {stats.latestFat.toFixed(1)}
+            </span>
+            <span className="text-xs text-cyan-400/80 font-normal">%</span>
+          </div>
+
+          <div className="mt-2.5 flex items-center justify-between text-[11px]">
+            <div className="flex items-center gap-1 font-semibold">
+              {stats.deltaFatWeek < 0 ? (
+                <span className="text-emerald-400 flex items-center gap-0.5">
+                  <TrendingDownIcon className="w-3 h-3" />
+                  {stats.deltaFatWeek}%
+                </span>
+              ) : (
+                <span className="text-zinc-400">{stats.deltaFatWeek}%</span>
+              )}
+              <span className="text-zinc-500 font-normal">7d</span>
+            </div>
+            <span className="text-[10px] text-zinc-500">
+              Total: {stats.deltaFatTotal > 0 ? `+${stats.deltaFatTotal}` : stats.deltaFatTotal}%
+            </span>
+          </div>
+        </div>
+
+        {/* KPI 3: Masa Magra (FFM) */}
+        <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
+          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
+            <span className="flex items-center gap-1.5">
+              <ActivityIcon className="w-3.5 h-3.5 text-emerald-400" />
+              Masa Magra
+            </span>
+            <span className="text-[10px] font-mono text-zinc-500">FFM</span>
+          </div>
+
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl sm:text-3xl font-extrabold text-emerald-300 tracking-tight font-mono">
+              {stats.latestLean.toFixed(1)}
+            </span>
+            <span className="text-xs text-emerald-400/80 font-normal">kg</span>
+          </div>
+
+          <div className="mt-2.5 flex items-center justify-between text-[11px]">
+            <span className="text-emerald-400/90 font-medium">Musculatura preservada</span>
+            <span className="text-[10px] text-zinc-500 font-mono">
+              {((stats.latestLean / (stats.latestWeight || 1)) * 100).toFixed(0)}%
+            </span>
+          </div>
+        </div>
+
+        {/* KPI 4: Masa Grasa */}
+        <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
+          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
+            <span className="flex items-center gap-1.5">
+              <TrendingDownIcon className="w-3.5 h-3.5 text-rose-400" />
+              Masa Grasa
+            </span>
+            <span className="text-[10px] font-mono text-zinc-500">FAT</span>
+          </div>
+
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl sm:text-3xl font-extrabold text-rose-300 tracking-tight font-mono">
+              {stats.latestFatKg.toFixed(1)}
+            </span>
+            <span className="text-xs text-rose-400/80 font-normal">kg</span>
+          </div>
+
+          <div className="mt-2.5 flex items-center justify-between text-[11px]">
+            <span className="text-rose-400/90 font-medium">Tejido adiposo</span>
+            <span className="text-[10px] text-zinc-500 font-mono">
+              {((stats.latestFatKg / (stats.latestWeight || 1)) * 100).toFixed(0)}%
+            </span>
+          </div>
+        </div>
+
+        {/* KPI 5: Impedancia Dual */}
+        <div className="col-span-2 md:col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
+          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
+            <span className="flex items-center gap-1.5">
+              <ZapIcon className="w-3.5 h-3.5 text-amber-400" />
+              Impedancia Dual
+            </span>
+            <span className="text-[10px] font-mono text-zinc-500">Ω</span>
+          </div>
+
+          <div className="flex items-baseline gap-2">
+            <span className="text-xl sm:text-2xl font-extrabold text-amber-300 tracking-tight font-mono">
+              {stats.latestImp}{" "}
+              <span className="text-xs font-normal text-zinc-400">/ {stats.latestImpLow}</span>
+            </span>
+          </div>
+
+          <div className="mt-2.5 flex items-center justify-between text-[11px]">
+            <span className="text-zinc-400">Ratio ZLow / Z</span>
+            <span className="text-[10px] text-emerald-400 font-mono font-semibold">
+              {(stats.latestImpLow / (stats.latestImp || 1)).toFixed(3)} (Óptimo)
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Gráfico Principal Interactivo de Evolución */}
+      <div className="p-4 sm:p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 backdrop-blur-sm shadow-xl space-y-4">
+        {/* Barra de Controles del Gráfico */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-zinc-800/60">
+          {/* Selector de Métricas */}
+          <div className="flex items-center gap-1 bg-zinc-950/70 p-1 rounded-xl border border-zinc-800">
+            <button
+              onClick={() => setChartMode("combined")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                chartMode === "combined"
+                  ? "bg-zinc-800 text-zinc-100 font-bold shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Combinado (Peso + % Grasa)
+            </button>
+            <button
+              onClick={() => setChartMode("weight_only")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                chartMode === "weight_only"
+                  ? "bg-zinc-800 text-zinc-100 font-bold shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Solo Peso & MA-7
+            </button>
+            <button
+              onClick={() => setChartMode("fat_only")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                chartMode === "fat_only"
+                  ? "bg-zinc-800 text-zinc-100 font-bold shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Solo % Graso
+            </button>
+            <button
+              onClick={() => setChartMode("composition")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                chartMode === "composition"
+                  ? "bg-zinc-800 text-zinc-100 font-bold shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Masa Magra vs Grasa
+            </button>
+          </div>
+
+          {/* Filtros Temporales & Sincronización con Season */}
+          <div className="flex items-center gap-2">
+            {activeSeason && activeSeasonId !== "all" && (
+              <button
+                onClick={() => setSyncWithSeason(!syncWithSeason)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors cursor-pointer ${
+                  syncWithSeason
+                    ? "bg-zinc-800 text-zinc-100 border-zinc-700"
+                    : "bg-zinc-900/40 text-zinc-500 border-zinc-800 hover:text-zinc-300"
+                }`}
+                title="Filtrar por la temporada activa"
+              >
+                <div
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: syncWithSeason ? seasonColor : "#71717a" }}
+                />
+                <span>Season: {activeSeason.name}</span>
+              </button>
+            )}
+
+            <div className="flex items-center gap-0.5 bg-zinc-950/70 p-1 rounded-xl border border-zinc-800">
+              {(["1M", "3M", "6M", "1A", "all"] as TimeRange[]).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => {
+                    setTimeRange(r);
+                    if (syncWithSeason) setSyncWithSeason(false);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                    timeRange === r && !syncWithSeason
+                      ? "bg-zinc-800 text-zinc-100 font-bold"
+                      : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  {r === "all" ? "Todo" : r}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Canvas SVG */}
+        <div className="relative w-full overflow-hidden select-none">
+          {chartScales && chartPaths && filteredRecords.length > 0 ? (
+            <svg
+              viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+              className="w-full h-auto overflow-visible cursor-crosshair"
+              onMouseMove={handleSvgMouseMove}
+              onMouseLeave={handleSvgMouseLeave}
+            >
+              <defs>
+                {/* Degradado Peso */}
+                <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={seasonColor} stopOpacity="0.28" />
+                  <stop offset="100%" stopColor={seasonColor} stopOpacity="0.0" />
+                </linearGradient>
+
+                {/* Degradado Grasa */}
+                <linearGradient id="fatGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.0" />
+                </linearGradient>
+              </defs>
+
+              {/* Guías horizontales y Ejes */}
+              {[0, 0.25, 0.5, 0.75, 1].map((frac, idx) => {
+                const y = padding.top + chartInnerHeight * (1 - frac);
+                const weightVal = chartScales.minWeight + (chartScales.maxWeight - chartScales.minWeight) * frac;
+                const fatVal = chartScales.minFat + (chartScales.maxFat - chartScales.minFat) * frac;
+
+                return (
+                  <g key={idx}>
+                    <line
+                      x1={padding.left}
+                      y1={y}
+                      x2={svgWidth - padding.right}
+                      y2={y}
+                      stroke="rgba(63, 63, 70, 0.35)"
+                      strokeDasharray="4 4"
+                      strokeWidth="1"
+                    />
+
+                    {/* Etiquetas eje izquierdo (Peso) */}
+                    {(chartMode === "combined" || chartMode === "weight_only" || chartMode === "composition") && (
+                      <text
+                        x={padding.left - 12}
+                        y={y + 3.5}
+                        textAnchor="end"
+                        fontSize="11"
+                        fill="#a1a1aa"
+                        fontFamily="monospace"
+                      >
+                        {weightVal.toFixed(1)} kg
+                      </text>
+                    )}
+
+                    {/* Etiquetas eje derecho (% Grasa) */}
+                    {(chartMode === "combined" || chartMode === "fat_only") && (
+                      <text
+                        x={svgWidth - padding.right + 12}
+                        y={y + 3.5}
+                        textAnchor="start"
+                        fontSize="11"
+                        fill="#06b6d4"
+                        fontFamily="monospace"
+                      >
+                        {fatVal.toFixed(1)}%
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+
+              {/* 1. CURVAS DE PESO */}
+              {(chartMode === "combined" || chartMode === "weight_only") && (
+                <>
+                  {/* Área degradada de peso */}
+                  <path d={chartPaths.weightArea} fill="url(#weightGrad)" />
+
+                  {/* Línea de peso diario (puntos discretos) */}
+                  <path
+                    d={chartPaths.weightLine}
+                    fill="none"
+                    stroke={seasonColor}
+                    strokeWidth={chartMode === "weight_only" ? "1.5" : "2"}
+                    strokeOpacity={chartMode === "weight_only" ? "0.45" : "0.9"}
+                  />
+
+                  {/* Línea de Media Móvil 7D de Peso (suavizada y destacada) */}
+                  <path
+                    d={chartPaths.maWeightLine}
+                    fill="none"
+                    stroke={seasonColor}
+                    strokeWidth="2.5"
+                    strokeDasharray={chartMode === "weight_only" ? undefined : "3 3"}
+                  />
+
+                  {/* Puntos individuales de pesaje */}
+                  {filteredRecords.map((r) => {
+                    const cx = chartScales.getX(r.timestamp);
+                    const cy = chartScales.getYWeight(r.peso);
+                    const isHovered = hoveredPoint?.id === r.id;
+                    return (
+                      <circle
+                        key={r.id}
+                        cx={cx}
+                        cy={cy}
+                        r={isHovered ? 5 : 2.5}
+                        fill={isHovered ? "#ffffff" : seasonColor}
+                        stroke="#18181b"
+                        strokeWidth={isHovered ? 2 : 1}
+                        className="transition-all"
+                      />
+                    );
+                  })}
+                </>
+              )}
+
+              {/* 2. CURVAS DE % GRASO */}
+              {(chartMode === "combined" || chartMode === "fat_only") && (
+                <>
+                  {/* Área degradada de grasa */}
+                  <path d={chartPaths.fatArea} fill="url(#fatGrad)" />
+
+                  {/* Línea de % graso diario */}
+                  <path
+                    d={chartPaths.fatLine}
+                    fill="none"
+                    stroke="#06b6d4"
+                    strokeWidth={chartMode === "fat_only" ? "1.5" : "2"}
+                    strokeOpacity={chartMode === "fat_only" ? "0.45" : "0.9"}
+                  />
+
+                  {/* Línea de Media Móvil 7D de Grasa */}
+                  <path
+                    d={chartPaths.maFatLine}
+                    fill="none"
+                    stroke="#06b6d4"
+                    strokeWidth="2.5"
+                    strokeDasharray={chartMode === "fat_only" ? undefined : "3 3"}
+                  />
+
+                  {filteredRecords.map((r) => {
+                    const cx = chartScales.getX(r.timestamp);
+                    const cy = chartScales.getYFat(r.grasaPct);
+                    const isHovered = hoveredPoint?.id === r.id;
+                    return (
+                      <circle
+                        key={`f-${r.id}`}
+                        cx={cx}
+                        cy={cy}
+                        r={isHovered ? 5 : 2.5}
+                        fill={isHovered ? "#ffffff" : "#06b6d4"}
+                        stroke="#18181b"
+                        strokeWidth={isHovered ? 2 : 1}
+                        className="transition-all"
+                      />
+                    );
+                  })}
+                </>
+              )}
+
+              {/* 3. MODO COMPOSICIÓN CORPORAL (Masa Magra vs Grasa) */}
+              {chartMode === "composition" && (
+                <>
+                  {/* Curva Masa Magra */}
+                  {filteredRecords.map((r, i) => {
+                    const cx = chartScales.getX(r.timestamp);
+                    const cyLean = chartScales.getYWeight(r.masaMagraKg);
+                    const isHovered = hoveredPoint?.id === r.id;
+                    return (
+                      <circle
+                        key={`lean-${r.id}`}
+                        cx={cx}
+                        cy={cyLean}
+                        r={isHovered ? 5 : 2.5}
+                        fill="#10b981"
+                        stroke="#18181b"
+                        strokeWidth={1.5}
+                      />
+                    );
+                  })}
+                  <path
+                    d={`M ${filteredRecords.map((r) => `${chartScales.getX(r.timestamp)},${chartScales.getYWeight(r.masaMagraKg)}`).join(" L ")}`}
+                    fill="none"
+                    stroke="#10b981"
+                    strokeWidth="2.5"
+                  />
+
+                  {/* Curva Masa Grasa en kg */}
+                  {filteredRecords.map((r, i) => {
+                    const cx = chartScales.getX(r.timestamp);
+                    const cyFatKg = chartScales.getYWeight(r.masaGrasaKg);
+                    const isHovered = hoveredPoint?.id === r.id;
+                    return (
+                      <circle
+                        key={`fatkg-${r.id}`}
+                        cx={cx}
+                        cy={cyFatKg}
+                        r={isHovered ? 5 : 2.5}
+                        fill="#f43f5e"
+                        stroke="#18181b"
+                        strokeWidth={1.5}
+                      />
+                    );
+                  })}
+                  <path
+                    d={`M ${filteredRecords.map((r) => `${chartScales.getX(r.timestamp)},${chartScales.getYWeight(r.masaGrasaKg)}`).join(" L ")}`}
+                    fill="none"
+                    stroke="#f43f5e"
+                    strokeWidth="2.5"
+                  />
+                </>
+              )}
+
+              {/* Guía vertical de cursor (Crosshair) */}
+              {hoverX !== null && hoveredPoint && (
+                <g>
+                  <line
+                    x1={hoverX}
+                    y1={padding.top}
+                    x2={hoverX}
+                    y2={padding.top + chartInnerHeight}
+                    stroke="rgba(255, 255, 255, 0.45)"
+                    strokeWidth="1.25"
+                    strokeDasharray="3 3"
+                  />
+                </g>
+              )}
+
+              {/* Eje X: Fechas destacadas */}
+              {(() => {
+                const step = Math.max(1, Math.floor(filteredRecords.length / 6));
+                const samples: WeightRecord[] = [];
+                for (let i = 0; i < filteredRecords.length; i += step) {
+                  samples.push(filteredRecords[i]);
+                }
+                const last = filteredRecords[filteredRecords.length - 1];
+                if (!samples.includes(last)) samples.push(last);
+
+                return samples.map((r, i) => {
+                  const x = chartScales.getX(r.timestamp);
+                  return (
+                    <text
+                      key={i}
+                      x={x}
+                      y={svgHeight - 12}
+                      textAnchor="middle"
+                      fontSize="10"
+                      fill="#71717a"
+                      fontFamily="monospace"
+                    >
+                      {r.fecha.slice(5)}
+                    </text>
+                  );
+                });
+              })()}
+            </svg>
+          ) : (
+            <div className="py-20 text-center text-zinc-500 text-sm">
+              No hay datos para el rango seleccionado.
+            </div>
+          )}
+
+          {/* Tooltip flotante interactivo */}
+          {hoveredPoint && hoverX !== null && (
+            <div
+              className="absolute top-2 pointer-events-none z-20 bg-zinc-900/95 border border-zinc-700/80 rounded-xl p-3 shadow-2xl backdrop-blur-md text-xs space-y-1.5 min-w-[210px]"
+              style={{
+                left: Math.min(Math.max(20, (hoverX / svgWidth) * 100), 75) + "%",
+                transform: "translateX(-50%)",
+              }}
+            >
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-1 text-zinc-400 font-mono text-[11px]">
+                <span className="flex items-center gap-1 font-semibold text-zinc-200">
+                  <CalendarIcon className="w-3.5 h-3.5 text-zinc-400" />
+                  {hoveredPoint.fecha}
+                </span>
+                <span className="flex items-center gap-1">
+                  <ClockIcon className="w-3 h-3 text-zinc-500" />
+                  {hoveredPoint.hora}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-0.5">
+                <div>
+                  <span className="text-[10px] text-zinc-400 block">Peso</span>
+                  <span className="font-extrabold text-sm text-zinc-100 font-mono">
+                    {hoveredPoint.peso.toFixed(1)} kg
+                  </span>
+                  {hoveredPoint.deltaPeso !== undefined && (
+                    <span
+                      className={`text-[10px] ml-1 font-mono ${
+                        hoveredPoint.deltaPeso < 0
+                          ? "text-emerald-400"
+                          : hoveredPoint.deltaPeso > 0
+                          ? "text-rose-400"
+                          : "text-zinc-500"
+                      }`}
+                    >
+                      ({hoveredPoint.deltaPeso > 0 ? `+${hoveredPoint.deltaPeso}` : hoveredPoint.deltaPeso})
+                    </span>
+                  )}
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-zinc-400 block">% Graso</span>
+                  <span className="font-extrabold text-sm text-cyan-300 font-mono">
+                    {hoveredPoint.grasaPct.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-1 border-t border-zinc-800/80 grid grid-cols-2 gap-2 text-[10px]">
+                <div>
+                  <span className="text-zinc-500 block">Masa Magra:</span>
+                  <span className="font-semibold text-emerald-400 font-mono">
+                    {hoveredPoint.masaMagraKg.toFixed(1)} kg
+                  </span>
+                </div>
+                <div>
+                  <span className="text-zinc-500 block">Masa Grasa:</span>
+                  <span className="font-semibold text-rose-400 font-mono">
+                    {hoveredPoint.masaGrasaKg.toFixed(1)} kg
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-1 border-t border-zinc-800/60 flex items-center justify-between text-[10px] text-zinc-400 font-mono">
+                <span>Impedancia:</span>
+                <span className="text-amber-400 font-semibold">
+                  {hoveredPoint.impedancia} Ω ({hoveredPoint.impedanciaLow} Ω Low)
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Leyenda del gráfico */}
+        <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 pt-2 text-xs text-zinc-400 border-t border-zinc-800/60">
+          {(chartMode === "combined" || chartMode === "weight_only") && (
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-0.5 rounded-full" style={{ backgroundColor: seasonColor }} />
+              <span className="font-medium text-zinc-200">Peso Diario (kg)</span>
+            </div>
+          )}
+          {(chartMode === "combined" || chartMode === "weight_only") && (
+            <div className="flex items-center gap-2">
+              <span className="w-4 h-0.5 border-t border-dashed" style={{ borderColor: seasonColor }} />
+              <span>Media Móvil 7d (Tendencia)</span>
+            </div>
+          )}
+          {(chartMode === "combined" || chartMode === "fat_only") && (
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-0.5 bg-cyan-400 rounded-full" />
+              <span className="font-medium text-cyan-300">% Graso BIA</span>
+            </div>
+          )}
+          {chartMode === "composition" && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-0.5 bg-emerald-400 rounded-full" />
+                <span className="font-medium text-emerald-300">Masa Magra (kg)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-0.5 bg-rose-400 rounded-full" />
+                <span className="font-medium text-rose-300">Masa Grasa (kg)</span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 5. Tabla de Historial de Registros */}
+      <div className="p-4 sm:p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 backdrop-blur-sm shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800/80">
+          <div>
+            <h2 className="text-base font-bold text-zinc-100 flex items-center gap-2">
+              <span>Historial de Pesajes</span>
+              <span className="text-xs font-mono font-normal text-zinc-400 bg-zinc-800/80 px-2 py-0.5 rounded-full">
+                {tableRecords.length} registros
+              </span>
+            </h2>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              Valores brutos registrados por la báscula y métricas derivadas
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Buscador */}
+            <div className="relative">
+              <SearchIcon className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="text"
+                placeholder="Filtrar por fecha..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setTablePage(1);
+                }}
+                className="pl-8 pr-3 py-1.5 bg-zinc-950/80 border border-zinc-800 rounded-xl text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-zinc-600 w-44 sm:w-56"
+              />
+            </div>
+
+            {/* Ordenar */}
+            <button
+              onClick={() => setSortAsc(!sortAsc)}
+              className="p-1.5 rounded-xl bg-zinc-800/80 border border-zinc-700/80 text-zinc-300 hover:text-white text-xs font-medium cursor-pointer"
+              title={sortAsc ? "Más antiguo primero" : "Más reciente primero"}
+            >
+              {sortAsc ? "▲ Asc" : "▼ Desc"}
+            </button>
+          </div>
+        </div>
+
+        {/* Tabla Responsiva */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-zinc-800 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                <th className="py-2.5 px-3">Fecha y Hora</th>
+                <th className="py-2.5 px-3">Peso</th>
+                <th className="py-2.5 px-3">Δ Diario</th>
+                <th className="py-2.5 px-3">% Graso</th>
+                <th className="py-2.5 px-3">Masa Magra</th>
+                <th className="py-2.5 px-3">Masa Grasa</th>
+                <th className="py-2.5 px-3">Impedancia (Ω)</th>
+                <th className="py-2.5 px-3">Z Low (Ω)</th>
+                <th className="py-2.5 px-3 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/60 font-mono">
+              {paginatedTableRecords.length > 0 ? (
+                paginatedTableRecords.map((r) => (
+                  <tr key={r.id} className="hover:bg-zinc-850/40 transition-colors">
+                    <td className="py-3 px-3 text-zinc-300 font-sans">
+                      <div className="flex items-center gap-1.5 font-medium">
+                        <CalendarIcon className="w-3.5 h-3.5 text-zinc-500" />
+                        <span>{r.fecha}</span>
+                        <span className="text-zinc-500 text-[11px] font-mono">· {r.hora}</span>
+                      </div>
+                    </td>
+
+                    <td className="py-3 px-3 font-bold text-zinc-100 text-sm">
+                      {r.peso.toFixed(1)}{" "}
+                      <span className="text-[10px] text-zinc-500 font-normal">kg</span>
+                    </td>
+
+                    <td className="py-3 px-3">
+                      {r.deltaPeso !== undefined && r.deltaPeso !== 0 ? (
+                        <span
+                          className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${
+                            r.deltaPeso < 0 ? "text-emerald-400" : "text-rose-400"
+                          }`}
+                        >
+                          {r.deltaPeso < 0 ? "▼" : "▲"}{" "}
+                          {r.deltaPeso > 0 ? `+${r.deltaPeso.toFixed(2)}` : r.deltaPeso.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-600 text-[11px]">-</span>
+                      )}
+                    </td>
+
+                    <td className="py-3 px-3 font-semibold text-cyan-400">
+                      {r.grasaPct.toFixed(1)}%
+                    </td>
+
+                    <td className="py-3 px-3 text-emerald-400 font-medium">
+                      {r.masaMagraKg.toFixed(1)} kg
+                    </td>
+
+                    <td className="py-3 px-3 text-rose-400 font-medium">
+                      {r.masaGrasaKg.toFixed(1)} kg
+                    </td>
+
+                    <td className="py-3 px-3 text-amber-300 font-medium">{r.impedancia} Ω</td>
+
+                    <td className="py-3 px-3 text-zinc-400">{r.impedanciaLow} Ω</td>
+
+                    <td className="py-3 px-3 text-right">
+                      <button
+                        onClick={() => handleDeleteRecord(r.id)}
+                        className="p-1 rounded-lg hover:bg-rose-500/10 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
+                        title="Eliminar pesaje"
+                      >
+                        <TrashIcon className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={9} className="py-8 text-center text-zinc-500 font-sans">
+                    No se encontraron registros de pesaje.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Paginación */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between pt-3 border-t border-zinc-800 text-xs text-zinc-400">
+            <span>
+              Página {tablePage} de {totalPages} ({tableRecords.length} pesajes)
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setTablePage((p) => Math.max(1, p - 1))}
+                disabled={tablePage === 1}
+                className="px-2.5 py-1 rounded-lg bg-zinc-800 border border-zinc-700/80 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed text-zinc-200"
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => setTablePage((p) => Math.min(totalPages, p + 1))}
+                disabled={tablePage === totalPages}
+                className="px-2.5 py-1 rounded-lg bg-zinc-800 border border-zinc-700/80 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed text-zinc-200"
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 6. MODAL: Importar CSV */}
+      {csvModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-2xl bg-zinc-900 border border-zinc-700/80 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-accent-light">
+                  <UploadCloudIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-zinc-100">Importar Archivo CSV de Peso</h3>
+                  <p className="text-xs text-zinc-400">Esquema: Fecha, hora, Impedancia, Impedancia Low, Peso</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setCsvModalOpen(false);
+                  setCsvPreview(null);
+                }}
+                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-200 cursor-pointer"
+              >
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 text-xs text-zinc-300">
+                <span className="font-semibold text-zinc-200 block mb-1">Estructura esperada:</span>
+                <code className="text-accent-light font-mono text-[11px] block">
+                  Fecha, hora, Impedancia, Impedancia Low, Peso
+                </code>
+                <span className="text-zinc-400 text-[11px] block mt-1">
+                  Ejemplo: <code>2026-10-31, 07:45, 520, 565, 77.4</code>
+                </span>
+              </div>
+
+              {/* Zona de Pegar o Soltar */}
+              <div>
+                <label className="text-xs font-medium text-zinc-300 mb-1.5 flex items-center justify-between">
+                  <span>Pega el contenido de tu CSV o arrastra un archivo:</span>
+                  <button
+                    type="button"
+                    onClick={handleLoadSampleCsv}
+                    className="text-[11px] text-accent-light hover:underline cursor-pointer"
+                  >
+                    Cargar datos de ejemplo
+                  </button>
+                </label>
+                <textarea
+                  rows={6}
+                  value={csvText}
+                  onChange={(e) => handleParseCsv(e.target.value)}
+                  placeholder="Fecha, hora, Impedancia, Impedancia Low, Peso&#10;2026-10-28, 07:30, 520, 565, 77.8&#10;2026-10-29, 07:45, 522, 568, 77.6"
+                  className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-xs font-mono text-zinc-200 focus:outline-none focus:border-zinc-600 resize-y"
+                />
+              </div>
+
+              {/* Input file drop */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  accept=".csv,.txt"
+                  id="csv-file-input"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (evt) => {
+                        const content = evt.target?.result as string;
+                        handleParseCsv(content || "");
+                      };
+                      reader.readAsText(file);
+                    }
+                  }}
+                />
+                <label
+                  htmlFor="csv-file-input"
+                  className="px-3 py-2 rounded-xl bg-zinc-800/80 border border-zinc-700 text-xs font-medium text-zinc-200 hover:bg-zinc-750 transition-colors cursor-pointer flex items-center gap-2"
+                >
+                  <UploadCloudIcon className="w-4 h-4 text-zinc-400" />
+                  <span>Seleccionar archivo .csv del equipo</span>
+                </label>
+              </div>
+
+              {/* Vista previa de validación */}
+              {csvPreview && (
+                <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-zinc-200">
+                      Resultado del análisis:
+                    </span>
+                    <span className="font-mono text-emerald-400 font-bold">
+                      {csvPreview.validCount} pesajes válidos encontrados
+                    </span>
+                  </div>
+
+                  {csvPreview.errors.length > 0 && (
+                    <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[11px] max-h-24 overflow-y-auto">
+                      {csvPreview.errors.map((err, i) => (
+                        <div key={i}>{err}</div>
+                      ))}
+                    </div>
+                  )}
+
+                  {csvPreview.records.length > 0 && (
+                    <div className="text-[11px] text-zinc-400">
+                      Rango de fechas detectado:{" "}
+                      <span className="font-mono text-zinc-200">
+                        {csvPreview.records[0].fecha} → {csvPreview.records[csvPreview.records.length - 1].fecha}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-zinc-800">
+              <button
+                onClick={() => setCsvModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-zinc-200 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleApplyCsv}
+                disabled={!csvPreview || csvPreview.validCount === 0}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-accent-light text-zinc-950 hover:bg-accent transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-md"
+              >
+                Cargar en el Visualizador ({csvPreview ? csvPreview.validCount : 0})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. MODAL: Nuevo Pesaje Manual */}
+      {manualEntryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-zinc-900 border border-zinc-700/80 rounded-2xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2">
+                <ScaleIcon className="w-4 h-4 text-accent-light" />
+                <h3 className="text-base font-bold text-zinc-100">Registrar Nuevo Pesaje</h3>
+              </div>
+              <button
+                onClick={() => setManualEntryModalOpen(false)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-200 cursor-pointer"
+              >
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddManualEntry} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-zinc-400 block mb-1">Fecha</label>
+                  <input
+                    type="date"
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    required
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 focus:outline-none focus:border-zinc-600"
+                  />
+                </div>
+                <div>
+                  <label className="text-zinc-400 block mb-1">Hora</label>
+                  <input
+                    type="time"
+                    value={newTime}
+                    onChange={(e) => setNewTime(e.target.value)}
+                    required
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 focus:outline-none focus:border-zinc-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-zinc-400 block mb-1">Peso Corporal (kg)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder="ej. 77.4"
+                  value={newWeight}
+                  onChange={(e) => setNewWeight(e.target.value)}
+                  required
+                  autoFocus
+                  className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-base font-mono font-bold text-zinc-100 focus:outline-none focus:border-zinc-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-zinc-400 block mb-1">Impedancia (Ω)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    placeholder="520"
+                    value={newImp}
+                    onChange={(e) => setNewImp(e.target.value)}
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 font-mono focus:outline-none focus:border-zinc-600"
+                  />
+                </div>
+                <div>
+                  <label className="text-zinc-400 block mb-1">Impedancia Low (Ω)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    placeholder="565"
+                    value={newImpLow}
+                    onChange={(e) => setNewImpLow(e.target.value)}
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 font-mono focus:outline-none focus:border-zinc-600"
+                  />
+                </div>
+              </div>
+
+              <p className="text-[11px] text-zinc-500 italic">
+                El % graso, masa magra y agua se estimarán automáticamente según el índice de bioimpedancia.
+              </p>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setManualEntryModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl font-bold bg-accent-light text-zinc-950 hover:bg-accent transition-all cursor-pointer shadow-md"
+                >
+                  Guardar Pesaje
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

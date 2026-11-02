@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   DumbbellIcon,
+  ScaleIcon,
   TargetIcon,
   BookOpenIcon,
   SettingsIcon,
@@ -16,7 +17,7 @@ import {
 import { useSeason } from "@/lib/season-context";
 import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
 
-export type TabId = "explorer" | "goals" | "journal" | "settings" | "sync";
+export type TabId = "explorer" | "weight" | "goals" | "journal" | "settings" | "sync";
 
 interface HeaderProps {
   activeTab: TabId;
@@ -50,6 +51,7 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
 
   const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: "explorer", label: "Explorador", icon: DumbbellIcon },
+    { id: "weight", label: "Peso", icon: ScaleIcon },
     { id: "goals", label: "Objetivos", icon: TargetIcon },
     { id: "journal", label: "Diario", icon: BookOpenIcon },
     { id: "settings", label: "Configuración", icon: SettingsIcon },

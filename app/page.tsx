@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Header, TabId } from "@/components/Header";
 import { ExplorerTab } from "@/components/ExplorerTab";
+import { WeightTab } from "@/components/WeightTab";
 import { GoalsTab } from "@/components/GoalsTab";
 import { JournalTab } from "@/components/JournalTab";
 import { SettingsTab } from "@/components/SettingsTab";
@@ -66,6 +67,8 @@ function AppContent() {
             onGoToSync={() => setActiveTab("settings")}
           />
         )}
+
+        {activeTab === "weight" && <WeightTab />}
 
         {activeTab === "goals" && <GoalsTab />}
 
