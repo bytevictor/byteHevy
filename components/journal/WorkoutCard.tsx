@@ -39,9 +39,6 @@ export function formatRestTime(seconds?: number): string {
 
 export function formatVolume(volumeKg?: number): string {
   if (!volumeKg || volumeKg <= 0) return "-";
-  if (volumeKg >= 1000) {
-    return `${(volumeKg / 1000).toLocaleString("es-ES", { maximumFractionDigits: 1 })} ton`;
-  }
   return `${Math.round(volumeKg).toLocaleString("es-ES")} kg`;
 }
 
@@ -418,3 +415,4 @@ export function WorkoutCard({
     </div>
   );
 }
+
