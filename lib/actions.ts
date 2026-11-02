@@ -1,7 +1,12 @@
 import { getDb, ensureSchema } from "./db";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import { getExerciseMedia } from "./exercise-media";
 import { ExerciseMedia, MuscleGroup } from "@/types/exercise-media";
+import { WeightRecord, enrichWithMovingAverages, parseWeightCsv } from "./mock-weight-data";
+
+export type { WeightRecord };
 
 export interface Season {
   id: string;
@@ -2104,6 +2109,237 @@ export async function clearDatabase() {
     "DELETE FROM workout_exercises;",
     "DELETE FROM workouts;",
     "DELETE FROM exercises;",
+    "DELETE FROM weight_records;",
   ], "write");
   return { success: true };
+}
+
+export async function getWeightRecords(): Promise<WeightRecord[]> {
+  const db = getDb();
+  await ensureSchema(db);
+
+  const res = await db.execute(`
+    SELECT * FROM weight_records
+    ORDER BY timestamp ASC
+  `);
+
+  if (res.rows.length === 0) {
+    try {
+      const csvPath = path.join(process.cwd(), "data", "zepp_life_weight.csv");
+      if (fs.existsSync(csvPath)) {
+        const content = fs.readFileSync(csvPath, "utf-8");
+        const parsed = parseWeightCsv(content);
+        if (parsed.success && parsed.records.length > 0) {
+          await bulkInsertWeightRecords(parsed.records);
+          return enrichWithMovingAverages(parsed.records);
+        }
+      }
+    } catch (e) {
+      console.warn("Could not auto-seed weight records from csv:", e);
+    }
+  }
+
+  const records: WeightRecord[] = res.rows.map((r) => ({
+    id: String(r.id),
+    fecha: String(r.date),
+    hora: String(r.time),
+    timestamp: Number(r.timestamp),
+    peso: Number(r.weight),
+    impedancia: r.impedance !== null && r.impedance !== undefined ? Number(r.impedance) : null,
+    impedanciaLow: r.impedance_low !== null && r.impedance_low !== undefined ? Number(r.impedance_low) : null,
+    grasaPct: r.fat_rate !== null && r.fat_rate !== undefined ? Number(r.fat_rate) : null,
+    masaMagraKg: r.lean_mass_kg !== null && r.lean_mass_kg !== undefined ? Number(r.lean_mass_kg) : null,
+    masaGrasaKg: r.fat_mass_kg !== null && r.fat_mass_kg !== undefined ? Number(r.fat_mass_kg) : null,
+    aguaPct: r.body_water_rate !== null && r.body_water_rate !== undefined ? Number(r.body_water_rate) : null,
+    bmi: r.bmi !== null && r.bmi !== undefined ? Number(r.bmi) : null,
+    ffmi: r.ffmi !== null && r.ffmi !== undefined ? Number(r.ffmi) : null,
+    altura: r.height !== null && r.height !== undefined ? Number(r.height) : null,
+    boneMass: r.bone_mass !== null && r.bone_mass !== undefined ? Number(r.bone_mass) : null,
+    metabolism: r.metabolism !== null && r.metabolism !== undefined ? Number(r.metabolism) : null,
+    muscleRate: r.muscle_rate !== null && r.muscle_rate !== undefined ? Number(r.muscle_rate) : null,
+    visceralFat: r.visceral_fat !== null && r.visceral_fat !== undefined ? Number(r.visceral_fat) : null,
+    source: r.source ? String(r.source) : "zepp_life",
+    notes: r.notes ? String(r.notes) : null,
+    esValido: true,
+  }));
+
+  return enrichWithMovingAverages(records);
+}
+
+export async function createWeightRecord(record: Partial<WeightRecord>): Promise<WeightRecord> {
+  const db = getDb();
+  await ensureSchema(db);
+
+  const id = record.id || `w-${crypto.randomUUID()}`;
+  const now = Date.now();
+  const timestamp = record.timestamp || now;
+  const date = record.fecha || new Date(timestamp).toISOString().split("T")[0];
+  const time = record.hora || new Date(timestamp).toTimeString().substring(0, 5);
+
+  await db.execute({
+    sql: `INSERT INTO weight_records (
+      id, date, time, timestamp, weight, impedance, impedance_low, height, bmi,
+      fat_rate, body_water_rate, bone_mass, metabolism, muscle_rate, visceral_fat,
+      lean_mass_kg, fat_mass_kg, ffmi, source, notes
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      id,
+      date,
+      time,
+      timestamp,
+      record.peso ?? 0,
+      record.impedancia ?? null,
+      record.impedanciaLow ?? null,
+      record.altura ?? null,
+      record.bmi ?? null,
+      record.grasaPct ?? null,
+      record.aguaPct ?? null,
+      record.boneMass ?? null,
+      record.metabolism ?? null,
+      record.muscleRate ?? null,
+      record.visceralFat ?? null,
+      record.masaMagraKg ?? null,
+      record.masaGrasaKg ?? null,
+      record.ffmi ?? null,
+      record.source || "manual",
+      record.notes || null,
+    ],
+  });
+
+  return {
+    id,
+    fecha: date,
+    hora: time,
+    timestamp,
+    peso: record.peso ?? 0,
+    impedancia: record.impedancia ?? null,
+    impedanciaLow: record.impedanciaLow ?? null,
+    grasaPct: record.grasaPct ?? null,
+    masaMagraKg: record.masaMagraKg ?? null,
+    masaGrasaKg: record.masaGrasaKg ?? null,
+    aguaPct: record.aguaPct ?? null,
+    bmi: record.bmi ?? null,
+    ffmi: record.ffmi ?? null,
+    altura: record.altura ?? null,
+    boneMass: record.boneMass ?? null,
+    metabolism: record.metabolism ?? null,
+    muscleRate: record.muscleRate ?? null,
+    visceralFat: record.visceralFat ?? null,
+    source: record.source || "manual",
+    notes: record.notes || null,
+    esValido: true,
+  };
+}
+
+export async function updateWeightRecord(id: string, record: Partial<WeightRecord>): Promise<boolean> {
+  const db = getDb();
+  await ensureSchema(db);
+
+  await db.execute({
+    sql: `UPDATE weight_records SET
+      date = COALESCE(?, date),
+      time = COALESCE(?, time),
+      timestamp = COALESCE(?, timestamp),
+      weight = COALESCE(?, weight),
+      impedance = ?,
+      impedance_low = ?,
+      height = COALESCE(?, height),
+      bmi = ?,
+      fat_rate = ?,
+      body_water_rate = ?,
+      bone_mass = ?,
+      metabolism = ?,
+      muscle_rate = ?,
+      visceral_fat = ?,
+      lean_mass_kg = ?,
+      fat_mass_kg = ?,
+      ffmi = ?,
+      notes = ?
+    WHERE id = ?`,
+    args: [
+      record.fecha ?? null,
+      record.hora ?? null,
+      record.timestamp ?? null,
+      record.peso ?? null,
+      record.impedancia ?? null,
+      record.impedanciaLow ?? null,
+      record.altura ?? null,
+      record.bmi ?? null,
+      record.grasaPct ?? null,
+      record.aguaPct ?? null,
+      record.boneMass ?? null,
+      record.metabolism ?? null,
+      record.muscleRate ?? null,
+      record.visceralFat ?? null,
+      record.masaMagraKg ?? null,
+      record.masaGrasaKg ?? null,
+      record.ffmi ?? null,
+      record.notes ?? null,
+      id,
+    ],
+  });
+
+  return true;
+}
+
+export async function deleteWeightRecord(id: string): Promise<boolean> {
+  const db = getDb();
+  await ensureSchema(db);
+  await db.execute({
+    sql: "DELETE FROM weight_records WHERE id = ?",
+    args: [id],
+  });
+  return true;
+}
+
+export async function clearWeightRecords(): Promise<boolean> {
+  const db = getDb();
+  await ensureSchema(db);
+  await db.execute("DELETE FROM weight_records;");
+  return true;
+}
+
+export async function bulkInsertWeightRecords(records: WeightRecord[]): Promise<number> {
+  const db = getDb();
+  await ensureSchema(db);
+
+  if (records.length === 0) return 0;
+
+  const batchSize = 100;
+  for (let i = 0; i < records.length; i += batchSize) {
+    const chunk = records.slice(i, i + batchSize);
+    const statements = chunk.map((r) => ({
+      sql: `INSERT OR REPLACE INTO weight_records (
+        id, date, time, timestamp, weight, impedance, impedance_low, height, bmi,
+        fat_rate, body_water_rate, bone_mass, metabolism, muscle_rate, visceral_fat,
+        lean_mass_kg, fat_mass_kg, ffmi, source, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        r.id,
+        r.fecha,
+        r.hora,
+        r.timestamp,
+        r.peso,
+        r.impedancia ?? null,
+        r.impedanciaLow ?? null,
+        r.altura ?? null,
+        r.bmi ?? null,
+        r.grasaPct ?? null,
+        r.aguaPct ?? null,
+        r.boneMass ?? null,
+        r.metabolism ?? null,
+        r.muscleRate ?? null,
+        r.visceralFat ?? null,
+        r.masaMagraKg ?? null,
+        r.masaGrasaKg ?? null,
+        r.ffmi ?? null,
+        r.source || "zepp_life",
+        r.notes ?? null,
+      ],
+    }));
+
+    await db.batch(statements, "write");
+  }
+
+  return records.length;
 }

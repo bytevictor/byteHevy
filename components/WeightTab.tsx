@@ -27,6 +27,8 @@ import {
   SmoothLineIcon,
   FlowLineIcon,
   UserIcon,
+  RefreshCwIcon,
+  DatabaseIcon,
 } from "./Icons";
 import { useSeason } from "@/lib/season-context";
 import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
@@ -145,22 +147,60 @@ export function WeightTab() {
   const seasonColor = getSeasonColor(activeSeason);
   const { profile, calculateBmi, getBmiCategory, calculateFfmi, getIdealWeightRange } = useUserProfile();
 
-  // Estado de registros de peso (iniciado con mock data usando el perfil del usuario)
-  const [records, setRecords] = useState<WeightRecord[]>(() => generateMockWeightRecords(profile));
+  // Estado de registros de peso (cargados desde la base de datos SQLite)
+  const [records, setRecords] = useState<WeightRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Cargar registros desde /api/weight
+  const loadRecords = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/weight");
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        setRecords(json.data);
+      }
+    } catch (err) {
+      console.error("Error al cargar pesajes desde la base de datos:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRecords();
+  }, [loadRecords]);
 
   // Recalcular BMI y composición cuando cambie el perfil de altura/edad en Configuración
   useEffect(() => {
     setRecords((prev) =>
       enrichWithMovingAverages(
         prev.map((r) => {
-          const comp = estimateBodyComposition(r.peso, r.impedancia, r.impedanciaLow, profile);
+          const newBmi = profile.alturaCm > 0 ? calculateBmi(r.peso) : r.bmi;
+          if (r.source === "zepp_life" && typeof r.grasaPct === "number") {
+            const ffmiData =
+              r.masaMagraKg && profile.alturaCm > 0
+                ? calculateFfmi(r.masaMagraKg)
+                : null;
+            return {
+              ...r,
+              bmi: newBmi || r.bmi,
+              ffmi: ffmiData ? ffmiData.ffmi : r.ffmi,
+            };
+          }
+          const comp = estimateBodyComposition(
+            r.peso,
+            r.impedancia || 520,
+            r.impedanciaLow || 565,
+            profile
+          );
           return {
             ...r,
             grasaPct: comp.grasaPct,
             masaMagraKg: comp.masaMagraKg,
             masaGrasaKg: comp.masaGrasaKg,
             aguaPct: comp.aguaPct,
-            bmi: comp.bmi,
+            bmi: newBmi || comp.bmi,
             ffmi: comp.ffmi,
           };
         })
@@ -171,8 +211,8 @@ export function WeightTab() {
   // Filtros y vistas
   const [chartMode, setChartMode] = useState<WeightChartMode>("combined");
   const [curveType, setCurveType] = useState<CurveType>("smooth");
-  const [timeRange, setTimeRange] = useState<TimeRange>("3M");
-  const [syncWithSeason, setSyncWithSeason] = useState<boolean>(true);
+  const [timeRange, setTimeRange] = useState<TimeRange>("all");
+  const [syncWithSeason, setSyncWithSeason] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortAsc, setSortAsc] = useState(false);
 
@@ -208,7 +248,7 @@ export function WeightTab() {
 
   // Paginación de tabla
   const [tablePage, setTablePage] = useState(1);
-  const pageSize = 12;
+  const pageSize = 15;
 
   // Abrir modal de edición con los datos del registro seleccionado
   const handleOpenEdit = useCallback((record: WeightRecord) => {
@@ -216,19 +256,19 @@ export function WeightTab() {
     setEditDate(record.fecha);
     setEditTime(record.hora);
     setEditWeight(String(record.peso));
-    setEditImp(String(record.impedancia));
-    setEditImpLow(String(record.impedanciaLow));
+    setEditImp(record.impedancia !== null && record.impedancia !== undefined ? String(Math.round(record.impedancia)) : "");
+    setEditImpLow(record.impedanciaLow !== null && record.impedanciaLow !== undefined ? String(Math.round(record.impedanciaLow)) : "");
     setDeleteConfirmOpen(false);
   }, []);
 
   // Guardar cambios del registro editado
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingRecord) return;
 
     const p = parseFloat(editWeight.replace(",", "."));
-    const imp = parseFloat(editImp) || 520;
-    const impLow = parseFloat(editImpLow) || 565;
+    const imp = editImp ? parseFloat(editImp) : null;
+    const impLow = editImpLow ? parseFloat(editImpLow) : null;
 
     if (isNaN(p) || p <= 0) {
       alert("Por favor introduce un peso válido en kg");
@@ -237,9 +277,22 @@ export function WeightTab() {
 
     const [y, m, d] = editDate.split("-").map(Number);
     const [hh, mm] = editTime.split(":").map(Number);
-    const ts = new Date(y, m - 1, d, hh, mm).getTime();
+    const ts = new Date(y, (m || 1) - 1, d || 1, hh || 8, mm || 0).getTime();
 
-    const comp = estimateBodyComposition(p, imp, impLow, profile);
+    let comp = {
+      grasaPct: editingRecord.grasaPct,
+      masaMagraKg: editingRecord.masaMagraKg,
+      masaGrasaKg: editingRecord.masaGrasaKg,
+      aguaPct: editingRecord.aguaPct,
+      bmi: editingRecord.bmi,
+      ffmi: editingRecord.ffmi,
+    };
+
+    if (editingRecord.source !== "zepp_life" || comp.grasaPct === null) {
+      comp = estimateBodyComposition(p, imp || 520, impLow || 565, profile);
+    } else {
+      comp.bmi = profile.alturaCm > 0 ? calculateBmi(p) : editingRecord.bmi;
+    }
 
     const updatedRecord: WeightRecord = {
       ...editingRecord,
@@ -257,38 +310,62 @@ export function WeightTab() {
       ffmi: comp.ffmi,
     };
 
-    const updatedList = records.map((r) => (r.id === editingRecord.id ? updatedRecord : r));
-    setRecords(enrichWithMovingAverages(updatedList));
+    setRecords((prev) => enrichWithMovingAverages(prev.map((r) => (r.id === editingRecord.id ? updatedRecord : r))));
     setEditingRecord(null);
+
+    try {
+      await fetch("/api/weight", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedRecord),
+      });
+    } catch (err) {
+      console.error("Error al actualizar pesaje:", err);
+    }
   };
 
   // Eliminar el registro en edición
-  const handleDeleteCurrentEditing = () => {
+  const handleDeleteCurrentEditing = async () => {
     if (!editingRecord) return;
-    const updated = enrichWithMovingAverages(records.filter((r) => r.id !== editingRecord.id));
-    setRecords(updated);
+    const idToDelete = editingRecord.id;
+    setRecords((prev) => enrichWithMovingAverages(prev.filter((r) => r.id !== idToDelete)));
     setEditingRecord(null);
     setDeleteConfirmOpen(false);
-    if (hoveredPoint?.id === editingRecord.id) {
+    if (hoveredPoint?.id === idToDelete) {
       setHoveredPoint(null);
       setHoverX(null);
+    }
+
+    try {
+      await fetch(`/api/weight?id=${encodeURIComponent(idToDelete)}`, {
+        method: "DELETE",
+      });
+    } catch (err) {
+      console.error("Error al eliminar pesaje:", err);
     }
   };
 
   // Eliminar directamente desde la tabla
-  const handleDeleteRecord = (id: string, e?: React.MouseEvent) => {
+  const handleDeleteRecord = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const target = records.find((r) => r.id === id);
     const msg = target
       ? `¿Eliminar el pesaje del ${target.fecha} (${target.peso} kg)?`
       : "¿Eliminar este pesaje?";
     if (confirm(msg)) {
-      const updated = enrichWithMovingAverages(records.filter((r) => r.id !== id));
-      setRecords(updated);
+      setRecords((prev) => enrichWithMovingAverages(prev.filter((r) => r.id !== id)));
       if (editingRecord?.id === id) setEditingRecord(null);
       if (hoveredPoint?.id === id) {
         setHoveredPoint(null);
         setHoverX(null);
+      }
+
+      try {
+        await fetch(`/api/weight?id=${encodeURIComponent(id)}`, {
+          method: "DELETE",
+        });
+      } catch (err) {
+        console.error("Error al eliminar pesaje:", err);
       }
     }
   };
@@ -346,9 +423,23 @@ export function WeightTab() {
       [...filteredRecords].reverse().find((r) => r.timestamp <= weekAgoTarget) || first;
 
     const deltaWeightWeek = Math.round((latest.peso - weekAgoRecord.peso) * 100) / 100;
-    const deltaFatWeek = Math.round((latest.grasaPct - weekAgoRecord.grasaPct) * 10) / 10;
     const deltaWeightTotal = Math.round((latest.peso - first.peso) * 100) / 100;
-    const deltaFatTotal = Math.round((latest.grasaPct - first.grasaPct) * 10) / 10;
+
+    const latestFatRecord =
+      [...filteredRecords].reverse().find((r) => typeof r.grasaPct === "number" && !isNaN(r.grasaPct)) || latest;
+    const firstFatRecord =
+      filteredRecords.find((r) => typeof r.grasaPct === "number" && !isNaN(r.grasaPct)) || first;
+    const weekAgoFatRecord =
+      [...filteredRecords].reverse().find((r) => r.timestamp <= weekAgoTarget && typeof r.grasaPct === "number") || firstFatRecord;
+
+    const deltaFatWeek =
+      typeof latestFatRecord.grasaPct === "number" && typeof weekAgoFatRecord.grasaPct === "number"
+        ? Math.round((latestFatRecord.grasaPct - weekAgoFatRecord.grasaPct) * 10) / 10
+        : 0;
+    const deltaFatTotal =
+      typeof latestFatRecord.grasaPct === "number" && typeof firstFatRecord.grasaPct === "number"
+        ? Math.round((latestFatRecord.grasaPct - firstFatRecord.grasaPct) * 10) / 10
+        : 0;
 
     const weights = filteredRecords.map((r) => r.peso);
     const minWeight = Math.min(...weights);
@@ -356,13 +447,13 @@ export function WeightTab() {
 
     return {
       latestWeight: latest.peso,
-      latestFat: latest.grasaPct,
-      latestLean: latest.masaMagraKg,
-      latestFatKg: latest.masaGrasaKg,
-      latestImp: latest.impedancia,
-      latestImpLow: latest.impedanciaLow,
+      latestFat: latestFatRecord.grasaPct ?? 0,
+      latestLean: latestFatRecord.masaMagraKg ?? 0,
+      latestFatKg: latestFatRecord.masaGrasaKg ?? 0,
+      latestImp: latestFatRecord.impedancia ?? 0,
+      latestImpLow: latestFatRecord.impedanciaLow ?? 0,
       ma7Weight: latest.ma7Peso || latest.peso,
-      ma7Fat: latest.ma7Grasa || latest.grasaPct,
+      ma7Fat: latest.ma7Grasa ?? latestFatRecord.grasaPct ?? 0,
       deltaWeightWeek,
       deltaFatWeek,
       deltaWeightTotal,
@@ -411,12 +502,24 @@ export function WeightTab() {
     });
   };
 
-  const handleApplyCsv = () => {
+  const handleApplyCsv = async () => {
     if (csvPreview && csvPreview.records.length > 0) {
-      setRecords(csvPreview.records);
+      const toInsert = csvPreview.records;
+      setRecords(toInsert);
       setCsvModalOpen(false);
       setCsvText("");
       setCsvPreview(null);
+
+      try {
+        await fetch("/api/weight", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "bulk", records: toInsert }),
+        });
+        await loadRecords();
+      } catch (err) {
+        console.error("Error al importar pesajes:", err);
+      }
     }
   };
 
@@ -425,11 +528,11 @@ export function WeightTab() {
     handleParseCsv(sample);
   };
 
-  const handleAddManualEntry = (e: React.FormEvent) => {
+  const handleAddManualEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     const p = parseFloat(newWeight.replace(",", "."));
-    const imp = parseFloat(newImp) || 520;
-    const impLow = parseFloat(newImpLow) || 565;
+    const imp = newImp ? parseFloat(newImp) : null;
+    const impLow = newImpLow ? parseFloat(newImpLow) : null;
 
     if (isNaN(p) || p <= 0) {
       alert("Por favor introduce un peso válido en kg");
@@ -438,12 +541,12 @@ export function WeightTab() {
 
     const [y, m, d] = newDate.split("-").map(Number);
     const [hh, mm] = newTime.split(":").map(Number);
-    const ts = new Date(y, m - 1, d, hh, mm).getTime();
+    const ts = new Date(y, (m || 1) - 1, d || 1, hh || 8, mm || 0).getTime();
 
-    const comp = estimateBodyComposition(p, imp, impLow, profile);
+    const comp = estimateBodyComposition(p, imp || 520, impLow || 565, profile);
 
     const newRecord: WeightRecord = {
-      id: `manual-${Date.now()}`,
+      id: `w-${Date.now()}`,
       fecha: newDate,
       hora: newTime,
       timestamp: ts,
@@ -456,19 +559,29 @@ export function WeightTab() {
       aguaPct: comp.aguaPct,
       bmi: comp.bmi,
       ffmi: comp.ffmi,
+      altura: profile.alturaCm,
+      source: "manual",
       esValido: true,
     };
 
-    const updated = enrichWithMovingAverages([...records, newRecord]);
-    setRecords(updated);
+    setRecords((prev) => enrichWithMovingAverages([...prev, newRecord]));
     setManualEntryModalOpen(false);
     setNewWeight("");
+
+    try {
+      await fetch("/api/weight", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newRecord),
+      });
+      await loadRecords();
+    } catch (err) {
+      console.error("Error al registrar nuevo pesaje:", err);
+    }
   };
 
-  const handleResetMockup = () => {
-    if (confirm("¿Deseas restaurar el dataset mockup de simulación original?")) {
-      setRecords(generateMockWeightRecords(profile));
-    }
+  const handleReloadFromDb = () => {
+    loadRecords();
   };
 
   // Dimensiones del gráfico SVG
@@ -498,11 +611,15 @@ export function WeightTab() {
     const weightSpan = maxWeight - minWeight || 1;
 
     // Escala % Graso
-    const fats = filteredRecords.map((r) => r.grasaPct);
-    const maFats = filteredRecords.map((r) => r.ma7Grasa || r.grasaPct);
+    const fats = filteredRecords
+      .map((r) => r.grasaPct)
+      .filter((f): f is number => typeof f === "number" && !isNaN(f));
+    const maFats = filteredRecords
+      .map((r) => r.ma7Grasa)
+      .filter((f): f is number => typeof f === "number" && !isNaN(f));
     const allFatVals = [...fats, ...maFats];
-    const rawMinF = Math.min(...allFatVals);
-    const rawMaxF = Math.max(...allFatVals);
+    const rawMinF = allFatVals.length > 0 ? Math.min(...allFatVals) : 15;
+    const rawMaxF = allFatVals.length > 0 ? Math.max(...allFatVals) : 25;
     const minFat = Math.floor(rawMinF - 1);
     const maxFat = Math.ceil(rawMaxF + 1);
     const fatSpan = maxFat - minFat || 1;
@@ -550,30 +667,44 @@ export function WeightTab() {
     const maWeightLine = buildPath(maWeightPoints, curveType, padding.top, bottomY);
 
     // 3. Puntos de % Graso
-    const fatPoints = filteredRecords.map((r) => ({
+    const validFatRecords = filteredRecords.filter(
+      (r) => typeof r.grasaPct === "number" && !isNaN(r.grasaPct!)
+    );
+    const fatPoints = validFatRecords.map((r) => ({
       x: getX(r.timestamp),
-      y: getYFat(r.grasaPct),
+      y: getYFat(r.grasaPct!),
     }));
     const fatLine = buildPath(fatPoints, curveType, padding.top, bottomY);
-    const fatArea = `${fatLine} L ${lastX.toFixed(1)} ${bottomY} L ${firstX.toFixed(1)} ${bottomY} Z`;
+    const fatFirstX = validFatRecords.length > 0 ? getX(validFatRecords[0].timestamp) : firstX;
+    const fatLastX = validFatRecords.length > 0 ? getX(validFatRecords[validFatRecords.length - 1].timestamp) : lastX;
+    const fatArea = `${fatLine} L ${fatLastX.toFixed(1)} ${bottomY} L ${fatFirstX.toFixed(1)} ${bottomY} Z`;
 
     // 4. Puntos de Media Móvil 7D de Grasa
-    const maFatPoints = filteredRecords.map((r) => ({
+    const validMaFatRecords = filteredRecords.filter(
+      (r) => typeof (r.ma7Grasa ?? r.grasaPct) === "number"
+    );
+    const maFatPoints = validMaFatRecords.map((r) => ({
       x: getX(r.timestamp),
-      y: getYFat(r.ma7Grasa || r.grasaPct),
+      y: getYFat(r.ma7Grasa ?? r.grasaPct!),
     }));
     const maFatLine = buildPath(maFatPoints, curveType, padding.top, bottomY);
 
     // 5. Modo Composición (Masa Magra y Masa Grasa)
-    const leanPoints = filteredRecords.map((r) => ({
+    const validLeanRecords = filteredRecords.filter(
+      (r) => typeof r.masaMagraKg === "number" && !isNaN(r.masaMagraKg!)
+    );
+    const leanPoints = validLeanRecords.map((r) => ({
       x: getX(r.timestamp),
-      y: getYWeight(r.masaMagraKg),
+      y: getYWeight(r.masaMagraKg!),
     }));
     const leanLine = buildPath(leanPoints, curveType, padding.top, bottomY);
 
-    const fatKgPoints = filteredRecords.map((r) => ({
+    const validFatKgRecords = filteredRecords.filter(
+      (r) => typeof r.masaGrasaKg === "number" && !isNaN(r.masaGrasaKg!)
+    );
+    const fatKgPoints = validFatKgRecords.map((r) => ({
       x: getX(r.timestamp),
-      y: getYWeight(r.masaGrasaKg),
+      y: getYWeight(r.masaGrasaKg!),
     }));
     const fatKgLine = buildPath(fatKgPoints, curveType, padding.top, bottomY);
 
@@ -660,8 +791,9 @@ export function WeightTab() {
                 <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-100">
                   Seguimiento de Peso
                 </h1>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                  Fase de Diseño
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                  <DatabaseIcon className="w-3 h-3 text-emerald-400" />
+                  <span>SQLite Conectado ({records.length} pesajes)</span>
                 </span>
               </div>
               <p className="text-xs text-zinc-400 mt-0.5">
@@ -673,6 +805,16 @@ export function WeightTab() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={handleReloadFromDb}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-900 border border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all cursor-pointer shadow-sm"
+            title="Recargar datos desde la base de datos"
+          >
+            <RefreshCwIcon className={`w-3.5 h-3.5 ${loading ? "animate-spin text-accent-light" : "text-zinc-400"}`} />
+            <span>{loading ? "Cargando..." : "Recargar"}</span>
+          </button>
+
           <button
             onClick={() => setCsvModalOpen(true)}
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-zinc-800/90 text-zinc-200 border border-zinc-700/80 hover:bg-zinc-750 hover:text-white transition-all shadow-sm cursor-pointer"
@@ -703,21 +845,18 @@ export function WeightTab() {
             <InfoIcon className="w-4 h-4" />
           </div>
           <div>
-            <span className="font-semibold text-zinc-200">Interactividad completa:</span> Puedes
-            hacer clic sobre cualquier punto de la gráfica o en el historial para{" "}
-            <span className="text-amber-400 font-medium">editar sus valores o eliminarlo</span>.
-            Utiliza el selector de trazado para alternar entre{" "}
-            <span className="text-zinc-200 font-medium">Líneas Rectas</span>,{" "}
-            <span className="text-zinc-200 font-medium">Curvas</span> o{" "}
-            <span className="text-zinc-200 font-medium">Completamente Suavizadas (Fluida)</span>.
+            <span className="font-semibold text-zinc-200">Base de datos de pesajes sincronizada:</span>{" "}
+            Soporta datos directos de báscula (peso e impedancia) o importaciones de Zepp Life.
+            Haz clic en cualquier punto o fila para <span className="text-amber-400 font-medium">editar o eliminar</span>.
           </div>
         </div>
 
         <button
-          onClick={handleResetMockup}
-          className="text-[11px] text-zinc-400 hover:text-zinc-200 underline whitespace-nowrap cursor-pointer ml-auto"
+          onClick={handleReloadFromDb}
+          className="flex items-center gap-1.5 text-[11px] text-zinc-400 hover:text-zinc-200 cursor-pointer whitespace-nowrap ml-auto"
         >
-          Restaurar simulación
+          <RefreshCwIcon className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
+          <span>Sincronizar BD</span>
         </button>
       </div>
 
@@ -1210,29 +1349,31 @@ export function WeightTab() {
                     strokeDasharray={chartMode === "fat_only" ? undefined : "3 3"}
                   />
 
-                  {filteredRecords.map((r) => {
-                    const cx = chartScales.getX(r.timestamp);
-                    const cy = chartScales.getYFat(r.grasaPct);
-                    const isHovered = hoveredPoint?.id === r.id;
-                    const isFlow = curveType === "flow";
+                  {filteredRecords
+                    .filter((r): r is typeof r & { grasaPct: number } => typeof r.grasaPct === "number")
+                    .map((r) => {
+                      const cx = chartScales.getX(r.timestamp);
+                      const cy = chartScales.getYFat(r.grasaPct);
+                      const isHovered = hoveredPoint?.id === r.id;
+                      const isFlow = curveType === "flow";
 
-                    return (
-                      <circle
-                        key={`f-${r.id}`}
-                        cx={cx}
-                        cy={cy}
-                        r={isHovered ? 6 : isFlow ? 1.5 : 3}
-                        fill={isHovered ? "#ffffff" : "#06b6d4"}
-                        stroke="#18181b"
-                        strokeWidth={isHovered ? 2.5 : 1}
-                        className="transition-all cursor-pointer hover:r-[6px]"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenEdit(r);
-                        }}
-                      />
-                    );
-                  })}
+                      return (
+                        <circle
+                          key={`f-${r.id}`}
+                          cx={cx}
+                          cy={cy}
+                          r={isHovered ? 6 : isFlow ? 1.5 : 3}
+                          fill={isHovered ? "#ffffff" : "#06b6d4"}
+                          stroke="#18181b"
+                          strokeWidth={isHovered ? 2.5 : 1}
+                          className="transition-all cursor-pointer hover:r-[6px]"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEdit(r);
+                          }}
+                        />
+                      );
+                    })}
                 </>
               )}
 
@@ -1242,49 +1383,53 @@ export function WeightTab() {
                   <path d={chartPaths.leanLine} fill="none" stroke="#10b981" strokeWidth="2.5" />
                   <path d={chartPaths.fatKgLine} fill="none" stroke="#f43f5e" strokeWidth="2.5" />
 
-                  {filteredRecords.map((r) => {
-                    const cx = chartScales.getX(r.timestamp);
-                    const cyLean = chartScales.getYWeight(r.masaMagraKg);
-                    const isHovered = hoveredPoint?.id === r.id;
-                    return (
-                      <circle
-                        key={`lean-${r.id}`}
-                        cx={cx}
-                        cy={cyLean}
-                        r={isHovered ? 6 : 3}
-                        fill="#10b981"
-                        stroke="#18181b"
-                        strokeWidth={1.5}
-                        className="cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenEdit(r);
-                        }}
-                      />
-                    );
-                  })}
+                  {filteredRecords
+                    .filter((r): r is typeof r & { masaMagraKg: number } => typeof r.masaMagraKg === "number")
+                    .map((r) => {
+                      const cx = chartScales.getX(r.timestamp);
+                      const cyLean = chartScales.getYWeight(r.masaMagraKg);
+                      const isHovered = hoveredPoint?.id === r.id;
+                      return (
+                        <circle
+                          key={`lean-${r.id}`}
+                          cx={cx}
+                          cy={cyLean}
+                          r={isHovered ? 6 : 3}
+                          fill="#10b981"
+                          stroke="#18181b"
+                          strokeWidth={1.5}
+                          className="cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEdit(r);
+                          }}
+                        />
+                      );
+                    })}
 
-                  {filteredRecords.map((r) => {
-                    const cx = chartScales.getX(r.timestamp);
-                    const cyFatKg = chartScales.getYWeight(r.masaGrasaKg);
-                    const isHovered = hoveredPoint?.id === r.id;
-                    return (
-                      <circle
-                        key={`fatkg-${r.id}`}
-                        cx={cx}
-                        cy={cyFatKg}
-                        r={isHovered ? 6 : 3}
-                        fill="#f43f5e"
-                        stroke="#18181b"
-                        strokeWidth={1.5}
-                        className="cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenEdit(r);
-                        }}
-                      />
-                    );
-                  })}
+                  {filteredRecords
+                    .filter((r): r is typeof r & { masaGrasaKg: number } => typeof r.masaGrasaKg === "number")
+                    .map((r) => {
+                      const cx = chartScales.getX(r.timestamp);
+                      const cyFatKg = chartScales.getYWeight(r.masaGrasaKg);
+                      const isHovered = hoveredPoint?.id === r.id;
+                      return (
+                        <circle
+                          key={`fatkg-${r.id}`}
+                          cx={cx}
+                          cy={cyFatKg}
+                          r={isHovered ? 6 : 3}
+                          fill="#f43f5e"
+                          stroke="#18181b"
+                          strokeWidth={1.5}
+                          className="cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEdit(r);
+                          }}
+                        />
+                      );
+                    })}
                 </>
               )}
 
@@ -1383,7 +1528,7 @@ export function WeightTab() {
                 <div>
                   <span className="text-[10px] text-zinc-400 block">% Graso</span>
                   <span className="font-extrabold text-sm text-cyan-300 font-mono">
-                    {hoveredPoint.grasaPct.toFixed(1)}%
+                    {typeof hoveredPoint.grasaPct === "number" ? `${hoveredPoint.grasaPct.toFixed(1)}%` : "—"}
                   </span>
                 </div>
 
@@ -1399,13 +1544,13 @@ export function WeightTab() {
                 <div>
                   <span className="text-zinc-500 block">Masa Magra:</span>
                   <span className="font-semibold text-emerald-400 font-mono">
-                    {hoveredPoint.masaMagraKg.toFixed(1)} kg
+                    {typeof hoveredPoint.masaMagraKg === "number" ? `${hoveredPoint.masaMagraKg.toFixed(1)} kg` : "—"}
                   </span>
                 </div>
                 <div>
                   <span className="text-zinc-500 block">Masa Grasa:</span>
                   <span className="font-semibold text-rose-400 font-mono">
-                    {hoveredPoint.masaGrasaKg.toFixed(1)} kg
+                    {typeof hoveredPoint.masaGrasaKg === "number" ? `${hoveredPoint.masaGrasaKg.toFixed(1)} kg` : "—"}
                   </span>
                 </div>
                 <div>
@@ -1421,6 +1566,29 @@ export function WeightTab() {
                   })()}
                 </div>
               </div>
+
+              {(hoveredPoint.muscleRate || hoveredPoint.boneMass || hoveredPoint.metabolism) && (
+                <div className="pt-1 border-t border-zinc-800/80 grid grid-cols-3 gap-1.5 text-[9px] text-zinc-400 font-mono">
+                  {hoveredPoint.muscleRate && (
+                    <div>
+                      <span className="text-zinc-500 block text-[8px]">Músculo</span>
+                      <span className="text-cyan-400 font-semibold">{hoveredPoint.muscleRate.toFixed(1)} kg</span>
+                    </div>
+                  )}
+                  {hoveredPoint.boneMass && (
+                    <div>
+                      <span className="text-zinc-500 block text-[8px]">Masa Ósea</span>
+                      <span className="text-zinc-300 font-semibold">{hoveredPoint.boneMass.toFixed(2)} kg</span>
+                    </div>
+                  )}
+                  {hoveredPoint.metabolism && (
+                    <div>
+                      <span className="text-zinc-500 block text-[8px]">BMR</span>
+                      <span className="text-amber-400 font-semibold">{Math.round(hoveredPoint.metabolism)} kcal</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="pt-1.5 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-accent-light font-medium">
                 <span>Clic para editar o borrar</span>
@@ -1579,20 +1747,24 @@ export function WeightTab() {
                     </td>
 
                     <td className="py-3 px-3 font-semibold text-cyan-400">
-                      {r.grasaPct.toFixed(1)}%
+                      {typeof r.grasaPct === "number" ? `${r.grasaPct.toFixed(1)}%` : <span className="text-zinc-600">—</span>}
                     </td>
 
                     <td className="py-3 px-3 text-emerald-400 font-medium">
-                      {r.masaMagraKg.toFixed(1)} kg
+                      {typeof r.masaMagraKg === "number" ? `${r.masaMagraKg.toFixed(1)} kg` : <span className="text-zinc-600">—</span>}
                     </td>
 
                     <td className="py-3 px-3 text-rose-400 font-medium">
-                      {r.masaGrasaKg.toFixed(1)} kg
+                      {typeof r.masaGrasaKg === "number" ? `${r.masaGrasaKg.toFixed(1)} kg` : <span className="text-zinc-600">—</span>}
                     </td>
 
-                    <td className="py-3 px-3 text-amber-300 font-medium">{r.impedancia} Ω</td>
+                    <td className="py-3 px-3 text-amber-300 font-medium">
+                      {typeof r.impedancia === "number" ? `${Math.round(r.impedancia)} Ω` : <span className="text-zinc-600">—</span>}
+                    </td>
 
-                    <td className="py-3 px-3 text-zinc-400">{r.impedanciaLow} Ω</td>
+                    <td className="py-3 px-3 text-zinc-400">
+                      {typeof r.impedanciaLow === "number" ? `${Math.round(r.impedanciaLow)} Ω` : <span className="text-zinc-600">—</span>}
+                    </td>
 
                     <td className="py-3 px-3 text-right">
                       <div
@@ -1862,7 +2034,7 @@ export function WeightTab() {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-zinc-100">Importar Archivo CSV de Peso</h3>
-                  <p className="text-xs text-zinc-400">Esquema: Fecha, hora, Impedancia, Impedancia Low, Peso</p>
+                  <p className="text-xs text-zinc-400">Soporta Zepp Life / Mi Fit y Báscula BIA (Peso e Impedancia)</p>
                 </div>
               </div>
               <button
@@ -1878,13 +2050,15 @@ export function WeightTab() {
 
             <div className="space-y-3">
               <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 text-xs text-zinc-300">
-                <span className="font-semibold text-zinc-200 block mb-1">Estructura esperada:</span>
-                <code className="text-accent-light font-mono text-[11px] block">
-                  Fecha, hora, Impedancia, Impedancia Low, Peso
-                </code>
-                <span className="text-zinc-400 text-[11px] block mt-1">
-                  Ejemplo: <code>2026-10-31, 07:45, 520, 565, 77.4</code>
-                </span>
+                <span className="font-semibold text-zinc-200 block mb-1">Formatos compatibles automáticamente:</span>
+                <div className="space-y-1 font-mono text-[11px]">
+                  <div className="text-accent-light">
+                    1. Zepp Life / Mi Fit: <code>time, weight, height, bmi, fatRate, bodyWaterRate...</code>
+                  </div>
+                  <div className="text-emerald-400">
+                    2. Báscula BIA Directa: <code>Fecha, hora, Impedancia, Impedancia Low, Peso</code>
+                  </div>
+                </div>
               </div>
 
               {/* Zona de Pegar o Soltar */}

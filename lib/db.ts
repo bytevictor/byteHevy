@@ -212,6 +212,31 @@ export async function ensureSchema(db: Client) {
       data_json TEXT NOT NULL,
       updated_at INTEGER DEFAULT (strftime('%s', 'now'))
     );`,
+    `CREATE TABLE IF NOT EXISTS weight_records (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL,
+      time TEXT NOT NULL,
+      timestamp INTEGER NOT NULL,
+      weight REAL NOT NULL,
+      impedance REAL,
+      impedance_low REAL,
+      height REAL,
+      bmi REAL,
+      fat_rate REAL,
+      body_water_rate REAL,
+      bone_mass REAL,
+      metabolism REAL,
+      muscle_rate REAL,
+      visceral_fat REAL,
+      lean_mass_kg REAL,
+      fat_mass_kg REAL,
+      ffmi REAL,
+      source TEXT DEFAULT 'zepp_life',
+      notes TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_weight_records_date ON weight_records(date);`,
+    `CREATE INDEX IF NOT EXISTS idx_weight_records_timestamp ON weight_records(timestamp);`,
   ]);
 
   // Migration for seasons: ensure color column exists

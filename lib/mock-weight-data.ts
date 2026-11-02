@@ -20,14 +20,21 @@ export interface WeightRecord {
   hora: string;          // HH:mm (ej: "07:45")
   timestamp: number;     // Epoch ms
   peso: number;          // kg (ej: 77.4)
-  impedancia: number;    // Ohmios Ω (alta frecuencia / 50kHz)
-  impedanciaLow: number; // Ohmios Ω (baja frecuencia / 5kHz)
-  grasaPct: number;      // % grasa corporal estimado
-  masaMagraKg: number;   // kg masa libre de grasa (FFM)
-  masaGrasaKg: number;   // kg masa grasa
-  aguaPct: number;       // % agua corporal total estimada
-  bmi?: number;          // Índice de masa corporal (kg/m²)
-  ffmi?: number;         // Fat-Free Mass Index
+  impedancia?: number | null;    // Ohmios Ω (alta frecuencia / 50kHz)
+  impedanciaLow?: number | null; // Ohmios Ω (baja frecuencia / 5kHz)
+  grasaPct: number | null;       // % grasa corporal estimado
+  masaMagraKg: number | null;    // kg masa libre de grasa (FFM)
+  masaGrasaKg: number | null;    // kg masa grasa
+  aguaPct: number | null;        // % agua corporal total estimada
+  bmi?: number | null;           // Índice de masa corporal (kg/m²)
+  ffmi?: number | null;          // Fat-Free Mass Index
+  altura?: number | null;        // Altura en cm
+  boneMass?: number | null;      // Masa ósea en kg (Zepp Life)
+  metabolism?: number | null;    // Tasa metabólica basal en kcal (Zepp Life)
+  muscleRate?: number | null;    // Masa muscular en kg o % (Zepp Life)
+  visceralFat?: number | null;   // Nivel de grasa visceral 1-30 (Zepp Life)
+  source?: string;               // 'zepp_life' | 'scale_bia' | 'manual'
+  notes?: string | null;
   deltaPeso?: number;    // Diferencia con respecto al registro anterior
   deltaGrasa?: number;   // Diferencia de % graso con el registro anterior
   ma7Peso?: number;      // Media móvil de 7 días de peso
@@ -109,10 +116,14 @@ export function enrichWithMovingAverages(records: WeightRecord[], windowDays = 7
     if (i > 0) {
       const prev = sorted[i - 1];
       cur.deltaPeso = Math.round((cur.peso - prev.peso) * 100) / 100;
-      cur.deltaGrasa = Math.round((cur.grasaPct - prev.grasaPct) * 10) / 10;
+      if (typeof cur.grasaPct === "number" && typeof prev.grasaPct === "number") {
+        cur.deltaGrasa = Math.round((cur.grasaPct - prev.grasaPct) * 10) / 10;
+      } else {
+        cur.deltaGrasa = undefined;
+      }
     } else {
       cur.deltaPeso = 0;
-      cur.deltaGrasa = 0;
+      cur.deltaGrasa = undefined;
     }
 
     // Ventana de los últimos N días
@@ -121,12 +132,20 @@ export function enrichWithMovingAverages(records: WeightRecord[], windowDays = 7
 
     if (windowPoints.length > 0) {
       const avgPeso = windowPoints.reduce((sum, p) => sum + p.peso, 0) / windowPoints.length;
-      const avgGrasa = windowPoints.reduce((sum, p) => sum + p.grasaPct, 0) / windowPoints.length;
       cur.ma7Peso = Math.round(avgPeso * 100) / 100;
-      cur.ma7Grasa = Math.round(avgGrasa * 10) / 10;
+
+      const fatPoints = windowPoints.filter(
+        (p) => typeof p.grasaPct === "number" && !isNaN(p.grasaPct)
+      );
+      if (fatPoints.length > 0) {
+        const avgGrasa = fatPoints.reduce((sum, p) => sum + (p.grasaPct || 0), 0) / fatPoints.length;
+        cur.ma7Grasa = Math.round(avgGrasa * 10) / 10;
+      } else {
+        cur.ma7Grasa = cur.grasaPct !== null ? cur.grasaPct : undefined;
+      }
     } else {
       cur.ma7Peso = cur.peso;
-      cur.ma7Grasa = cur.grasaPct;
+      cur.ma7Grasa = cur.grasaPct !== null ? cur.grasaPct : undefined;
     }
   }
 
@@ -221,8 +240,9 @@ export function generateMockWeightRecords(
 }
 
 /**
- * Parser para el CSV del usuario según el esquema:
- * Fecha, hora, Impedancia, Impedancia Low, Peso
+ * Parser universal para CSV de peso:
+ * Soporta formato Zepp Life / Mi Fit (time, weight, height, bmi, fatRate, bodyWaterRate, boneMass, metabolism, muscleRate, visceralFat)
+ * y formato nativo de báscula BIA (Fecha, Hora, Impedancia, Impedancia Low, Peso).
  */
 export function parseWeightCsv(
   csvText: string,
@@ -241,87 +261,210 @@ export function parseWeightCsv(
     };
   }
 
-  // Detectar separador (, o ;)
-  const headerLine = lines[0];
+  // Detectar separador (, o ;) y limpiar BOM UTF-8
+  const headerLine = lines[0].replace(/^\uFEFF/, "");
   const separator = headerLine.includes(";") ? ";" : ",";
-  const rawHeaders = headerLine.split(separator).map((h) => h.trim().toLowerCase());
+  const rawHeaders = headerLine
+    .split(separator)
+    .map((h) => h.trim().toLowerCase().replace(/[^a-z0-9_]/g, ""));
 
-  // Encontrar índices de columnas
-  let fechaIdx = rawHeaders.findIndex((h) => h.includes("fecha") || h.includes("date"));
-  let horaIdx = rawHeaders.findIndex((h) => h.includes("hora") || h.includes("time"));
-  let impLowIdx = rawHeaders.findIndex((h) => h.includes("low") || h.includes("baja"));
-  let impIdx = rawHeaders.findIndex(
-    (h, idx) => idx !== impLowIdx && (h.includes("impedancia") || h.includes("impedance") || h.includes("resistencia"))
-  );
-  let pesoIdx = rawHeaders.findIndex((h) => h.includes("peso") || h.includes("weight") || h.includes("kg"));
-
-  // Si no se detectaron por nombre, asignar por posición por defecto:
-  // Fecha (0), hora (1), Impedancia (2), Impedancia Low (3), Peso (4)
-  if (fechaIdx === -1 && lines.length > 1) fechaIdx = 0;
-  if (horaIdx === -1) horaIdx = 1;
-  if (impIdx === -1) impIdx = 2;
-  if (impLowIdx === -1) impLowIdx = 3;
-  if (pesoIdx === -1) pesoIdx = 4;
+  const isZeppLife =
+    rawHeaders.includes("fatrate") ||
+    rawHeaders.includes("bodywaterrate") ||
+    rawHeaders.includes("musclerate") ||
+    (rawHeaders.includes("time") && rawHeaders.includes("weight") && rawHeaders.includes("height"));
 
   const parsedRecords: WeightRecord[] = [];
   const errors: string[] = [];
 
-  for (let i = 1; i < lines.length; i++) {
-    const row = lines[i].split(separator).map((cell) => cell.trim());
-    if (row.length < 3) continue;
+  if (isZeppLife) {
+    const timeIdx = rawHeaders.findIndex((h) => h === "time" || h.includes("time"));
+    const weightIdx = rawHeaders.findIndex((h) => h === "weight" || h.includes("peso"));
+    const heightIdx = rawHeaders.findIndex((h) => h === "height" || h.includes("altura"));
+    const bmiIdx = rawHeaders.findIndex((h) => h === "bmi" || h.includes("imc"));
+    const fatIdx = rawHeaders.findIndex((h) => h.includes("fatrate") || h.includes("fat"));
+    const waterIdx = rawHeaders.findIndex((h) => h.includes("bodywater") || h.includes("water"));
+    const boneIdx = rawHeaders.findIndex((h) => h.includes("bone"));
+    const metIdx = rawHeaders.findIndex((h) => h.includes("metabolism") || h.includes("bmr"));
+    const muscleIdx = rawHeaders.findIndex((h) => h.includes("muscle"));
+    const viscIdx = rawHeaders.findIndex((h) => h.includes("visceral"));
 
-    try {
-      const fechaStr = row[fechaIdx] || "";
-      const horaStr = row[horaIdx] || "08:00";
-      const impRaw = row[impIdx] ? parseFloat(row[impIdx].replace(",", ".")) : 0;
-      const impLowRaw = row[impLowIdx] ? parseFloat(row[impLowIdx].replace(",", ".")) : 0;
-      const pesoRaw = row[pesoIdx] ? parseFloat(row[pesoIdx].replace(",", ".")) : 0;
+    for (let i = 1; i < lines.length; i++) {
+      const row = lines[i].split(separator).map((c) => c.trim());
+      if (row.length < 2) continue;
 
-      if (!fechaStr || isNaN(pesoRaw) || pesoRaw <= 0) {
-        errors.push(`Fila ${i + 1}: Fecha o Peso inválidos.`);
-        continue;
-      }
+      try {
+        const timeRaw = row[timeIdx] || "";
+        const wRaw = row[weightIdx] ? parseFloat(row[weightIdx].replace(",", ".")) : NaN;
+        const hRaw = row[heightIdx] ? parseFloat(row[heightIdx].replace(",", ".")) : (profile.alturaCm || 181);
+        const bmiRaw = row[bmiIdx] && row[bmiIdx] !== "null" ? parseFloat(row[bmiIdx].replace(",", ".")) : null;
 
-      // Normalizar fecha (soporta YYYY-MM-DD o DD/MM/YYYY)
-      let normalizedDate = fechaStr;
-      if (fechaStr.includes("/")) {
-        const parts = fechaStr.split("/");
-        if (parts.length === 3) {
-          if (parts[2].length === 4) {
-            normalizedDate = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
-          } else if (parts[0].length === 4) {
-            normalizedDate = `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`;
+        if (!timeRaw || isNaN(wRaw) || wRaw <= 0) {
+          errors.push(`Fila ${i + 1}: Fecha/Hora o Peso inválidos.`);
+          continue;
+        }
+
+        // Extracción de fecha y hora del formato ISO "YYYY-MM-DD HH:mm:ss+0000"
+        let fechaStr = "";
+        let horaStr = "08:00";
+        let ts = 0;
+
+        if (timeRaw.includes(" ") || timeRaw.includes("T")) {
+          const delim = timeRaw.includes("T") ? "T" : " ";
+          const parts = timeRaw.split(delim);
+          fechaStr = parts[0];
+          const timePart = parts[1] || "";
+          horaStr = timePart.split("+")[0].split("-")[0].substring(0, 5) || "08:00";
+          ts = new Date(timeRaw.replace(" ", "T")).getTime();
+        } else {
+          fechaStr = timeRaw;
+          ts = new Date(timeRaw).getTime();
+        }
+
+        if (isNaN(ts) || ts <= 0) {
+          const [y, m, d] = fechaStr.split("-").map(Number);
+          ts = new Date(y, (m || 1) - 1, d || 1).getTime();
+        }
+
+        const parseOptional = (idx: number) => {
+          if (idx === -1 || !row[idx] || row[idx].toLowerCase() === "null") return null;
+          const val = parseFloat(row[idx].replace(",", "."));
+          return isNaN(val) ? null : val;
+        };
+
+        const fatRate = parseOptional(fatIdx);
+        const waterRate = parseOptional(waterIdx);
+        const boneMass = parseOptional(boneIdx);
+        const metabolism = parseOptional(metIdx);
+        const muscleRate = parseOptional(muscleIdx);
+        const visceralFat = parseOptional(viscIdx);
+
+        const h = hRaw > 0 ? hRaw : (profile.alturaCm || 181);
+        const bmi = bmiRaw !== null ? Math.round(bmiRaw * 10) / 10 : calculateBmi(wRaw, h);
+
+        let leanMassKg: number | null = null;
+        let fatMassKg: number | null = null;
+        let ffmi: number | null = null;
+        let estImpedance: number | null = null;
+        let estImpedanceLow: number | null = null;
+
+        if (fatRate !== null) {
+          fatMassKg = Math.round((wRaw * (fatRate / 100)) * 100) / 100;
+          leanMassKg = Math.round((wRaw - fatMassKg) * 100) / 100;
+          const ffmiData = calculateFfmi(leanMassKg, h);
+          ffmi = ffmiData.ffmi;
+
+          // Estimación inversa de impedancia a partir del agua corporal
+          if (waterRate !== null) {
+            const tbwL = wRaw * (waterRate / 100);
+            const denom = tbwL - (0.12 * wRaw) - 4.5;
+            if (denom > 0) {
+              estImpedance = Math.round(((0.386 * (h * h)) / denom) * 10) / 10;
+              estImpedanceLow = Math.round(estImpedance * 1.085);
+            }
           }
         }
+
+        parsedRecords.push({
+          id: `csv-zepp-${i}`,
+          fecha: fechaStr,
+          hora: horaStr,
+          timestamp: ts,
+          peso: Math.round(wRaw * 10) / 10,
+          impedancia: estImpedance,
+          impedanciaLow: estImpedanceLow,
+          grasaPct: fatRate !== null ? Math.round(fatRate * 10) / 10 : null,
+          masaMagraKg: leanMassKg,
+          masaGrasaKg: fatMassKg,
+          aguaPct: waterRate !== null ? Math.round(waterRate * 10) / 10 : null,
+          bmi,
+          ffmi,
+          altura: h,
+          boneMass,
+          metabolism,
+          muscleRate,
+          visceralFat,
+          source: "zepp_life",
+          esValido: true,
+        });
+      } catch (err: any) {
+        errors.push(`Fila ${i + 1}: ${err?.message || "Error al procesar fila"}`);
       }
+    }
+  } else {
+    // Formato estándar de Báscula BIA (Fecha, Hora, Impedancia, Impedancia Low, Peso)
+    let fechaIdx = rawHeaders.findIndex((h) => h.includes("fecha") || h.includes("date"));
+    let horaIdx = rawHeaders.findIndex((h) => h.includes("hora") || h.includes("time"));
+    let impLowIdx = rawHeaders.findIndex((h) => h.includes("low") || h.includes("baja"));
+    let impIdx = rawHeaders.findIndex(
+      (h, idx) => idx !== impLowIdx && (h.includes("impedancia") || h.includes("impedance") || h.includes("resistencia"))
+    );
+    let pesoIdx = rawHeaders.findIndex((h) => h.includes("peso") || h.includes("weight") || h.includes("kg"));
 
-      const [y, m, d] = normalizedDate.split("-").map(Number);
-      const [hh, mm] = horaStr.split(":").map(Number);
-      const ts = new Date(y, (m || 1) - 1, d || 1, hh || 8, mm || 0).getTime();
+    if (fechaIdx === -1 && lines.length > 1) fechaIdx = 0;
+    if (horaIdx === -1) horaIdx = 1;
+    if (impIdx === -1) impIdx = 2;
+    if (impLowIdx === -1) impLowIdx = 3;
+    if (pesoIdx === -1) pesoIdx = 4;
 
-      const impedancia = isNaN(impRaw) || impRaw <= 0 ? 520 : impRaw;
-      const impedanciaLow = isNaN(impLowRaw) || impLowRaw <= 0 ? Math.round(impedancia * 1.08) : impLowRaw;
+    for (let i = 1; i < lines.length; i++) {
+      const row = lines[i].split(separator).map((cell) => cell.trim());
+      if (row.length < 3) continue;
 
-      const comp = estimateBodyComposition(pesoRaw, impedancia, impedanciaLow, profile);
+      try {
+        const fechaStr = row[fechaIdx] || "";
+        const horaStr = row[horaIdx] || "08:00";
+        const impRaw = row[impIdx] ? parseFloat(row[impIdx].replace(",", ".")) : 0;
+        const impLowRaw = row[impLowIdx] ? parseFloat(row[impLowIdx].replace(",", ".")) : 0;
+        const pesoRaw = row[pesoIdx] ? parseFloat(row[pesoIdx].replace(",", ".")) : 0;
 
-      parsedRecords.push({
-        id: `csv-${i}`,
-        fecha: normalizedDate,
-        hora: horaStr,
-        timestamp: ts,
-        peso: Math.round(pesoRaw * 10) / 10,
-        impedancia,
-        impedanciaLow,
-        grasaPct: comp.grasaPct,
-        masaMagraKg: comp.masaMagraKg,
-        masaGrasaKg: comp.masaGrasaKg,
-        aguaPct: comp.aguaPct,
-        bmi: comp.bmi,
-        ffmi: comp.ffmi,
-        esValido: true,
-      });
-    } catch (e: any) {
-      errors.push(`Fila ${i + 1}: ${e?.message || "Error de formato"}`);
+        if (!fechaStr || isNaN(pesoRaw) || pesoRaw <= 0) {
+          errors.push(`Fila ${i + 1}: Fecha o Peso inválidos.`);
+          continue;
+        }
+
+        let normalizedDate = fechaStr;
+        if (fechaStr.includes("/")) {
+          const parts = fechaStr.split("/");
+          if (parts.length === 3) {
+            if (parts[2].length === 4) {
+              normalizedDate = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+            } else if (parts[0].length === 4) {
+              normalizedDate = `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`;
+            }
+          }
+        }
+
+        const [y, m, d] = normalizedDate.split("-").map(Number);
+        const [hh, mm] = horaStr.split(":").map(Number);
+        const ts = new Date(y, (m || 1) - 1, d || 1, hh || 8, mm || 0).getTime();
+
+        const impedancia = isNaN(impRaw) || impRaw <= 0 ? 520 : impRaw;
+        const impedanciaLow = isNaN(impLowRaw) || impLowRaw <= 0 ? Math.round(impedancia * 1.08) : impLowRaw;
+
+        const comp = estimateBodyComposition(pesoRaw, impedancia, impedanciaLow, profile);
+
+        parsedRecords.push({
+          id: `csv-bia-${i}`,
+          fecha: normalizedDate,
+          hora: horaStr,
+          timestamp: ts,
+          peso: Math.round(pesoRaw * 10) / 10,
+          impedancia,
+          impedanciaLow,
+          grasaPct: comp.grasaPct,
+          masaMagraKg: comp.masaMagraKg,
+          masaGrasaKg: comp.masaGrasaKg,
+          aguaPct: comp.aguaPct,
+          bmi: comp.bmi,
+          ffmi: comp.ffmi,
+          altura: profile.alturaCm,
+          source: "scale_bia",
+          esValido: true,
+        });
+      } catch (e: any) {
+        errors.push(`Fila ${i + 1}: ${e?.message || "Error de formato"}`);
+      }
     }
   }
 
