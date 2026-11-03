@@ -2125,14 +2125,29 @@ export async function getWeightRecords(): Promise<WeightRecord[]> {
 
   if (res.rows.length === 0) {
     try {
-      const csvPath = path.join(process.cwd(), "data", "zepp_life_weight.csv");
-      if (fs.existsSync(csvPath)) {
-        const content = fs.readFileSync(csvPath, "utf-8");
+      const allRecords: WeightRecord[] = [];
+      const zeppPath = path.join(process.cwd(), "data", "zepp_life_weight.csv");
+      if (fs.existsSync(zeppPath)) {
+        const content = fs.readFileSync(zeppPath, "utf-8");
         const parsed = parseWeightCsv(content);
         if (parsed.success && parsed.records.length > 0) {
-          await bulkInsertWeightRecords(parsed.records);
-          return enrichWithMovingAverages(parsed.records);
+          allRecords.push(...parsed.records);
         }
+      }
+
+      const xiaomiPath = path.join(process.cwd(), "data", "xiaomi_mi_home_raw.csv");
+      if (fs.existsSync(xiaomiPath)) {
+        const content = fs.readFileSync(xiaomiPath, "utf-8");
+        const parsed = parseWeightCsv(content);
+        if (parsed.success && parsed.records.length > 0) {
+          allRecords.push(...parsed.records);
+        }
+      }
+
+      if (allRecords.length > 0) {
+        allRecords.sort((a, b) => a.timestamp - b.timestamp);
+        await bulkInsertWeightRecords(allRecords);
+        return enrichWithMovingAverages(allRecords);
       }
     } catch (e) {
       console.warn("Could not auto-seed weight records from csv:", e);

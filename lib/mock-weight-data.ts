@@ -793,6 +793,15 @@ export function parseWeightCsv(
     rawHeaders.includes("musclerate") ||
     (rawHeaders.includes("time") && rawHeaders.includes("weight") && rawHeaders.includes("height"));
 
+  const isXiaomiMiHome =
+    rawHeaders.includes("timestamp_ms") ||
+    rawHeaders.includes("timestampms") ||
+    rawHeaders.includes("bodyfat_pct") ||
+    rawHeaders.includes("bodyfatpct") ||
+    rawHeaders.includes("skeletalmusclemass_kg") ||
+    rawHeaders.includes("skeletalmusclemasskg") ||
+    rawHeaders.includes("basalmetabolism_kcal");
+
   const parsedRecords: WeightRecord[] = [];
   const errors: string[] = [];
 
@@ -904,6 +913,160 @@ export function parseWeightCsv(
           muscleRate,
           visceralFat,
           source: "zepp_life",
+          esValido: true,
+        });
+      } catch (err: any) {
+        errors.push(`Fila ${i + 1}: ${err?.message || "Error al procesar fila"}`);
+      }
+    }
+  } else if (isXiaomiMiHome) {
+    const dateIdx = rawHeaders.findIndex((h) => h === "date" || h === "fecha");
+    const tsIdx = rawHeaders.findIndex((h) => h.includes("timestamp"));
+    const weightIdx = rawHeaders.findIndex((h) => h.includes("weight") || h.includes("peso"));
+    const bmiIdx = rawHeaders.findIndex((h) => h === "bmi" || h.includes("imc"));
+    const fatIdx = rawHeaders.findIndex((h) => h.includes("bodyfat") || h.includes("fat"));
+    const waterIdx = rawHeaders.findIndex((h) => h.includes("bodywater") || h.includes("water"));
+    const boneIdx = rawHeaders.findIndex((h) => h.includes("bonemass") || h.includes("bone"));
+    const muscleIdx = rawHeaders.findIndex((h) => h.includes("musclemass") || h.includes("muscle"));
+    const proteinIdx = rawHeaders.findIndex((h) => h.includes("protein"));
+    const skeletalIdx = rawHeaders.findIndex((h) => h.includes("skeletal"));
+    const viscIdx = rawHeaders.findIndex((h) => h.includes("visceral"));
+    const metAgeIdx = rawHeaders.findIndex((h) => h.includes("metabolicage"));
+    const bmrIdx = rawHeaders.findIndex((h) => h.includes("basal") || h.includes("metabolism") || h.includes("bmr"));
+    const scoreIdx = rawHeaders.findIndex((h) => h.includes("bodyscore") || h.includes("score"));
+    const hrIdx = rawHeaders.findIndex((h) => h.includes("heartrate") || h.includes("bpm"));
+    const heightIdx = rawHeaders.findIndex((h) => h.includes("height") || h.includes("altura"));
+
+    for (let i = 1; i < lines.length; i++) {
+      const row = lines[i].split(separator).map((c) => c.trim());
+      if (row.length < 2) continue;
+
+      try {
+        const dateRaw = row[dateIdx] || "";
+        const wRaw = row[weightIdx] ? parseFloat(row[weightIdx].replace(",", ".")) : NaN;
+        const hRaw = row[heightIdx] ? parseFloat(row[heightIdx].replace(",", ".")) : (profile.alturaCm || 180);
+        const bmiRaw = row[bmiIdx] && row[bmiIdx] !== "null" ? parseFloat(row[bmiIdx].replace(",", ".")) : null;
+
+        if (!dateRaw || isNaN(wRaw) || wRaw <= 0) {
+          errors.push(`Fila ${i + 1}: Fecha/Hora o Peso inválidos.`);
+          continue;
+        }
+
+        let fechaStr = "";
+        let horaStr = "08:00";
+        if (dateRaw.includes(" ") || dateRaw.includes("T")) {
+          const delim = dateRaw.includes("T") ? "T" : " ";
+          const parts = dateRaw.split(delim);
+          fechaStr = parts[0];
+          const timePart = parts[1] || "";
+          horaStr = timePart.substring(0, 5) || "08:00";
+        } else {
+          fechaStr = dateRaw;
+        }
+
+        let ts = tsIdx !== -1 && row[tsIdx] ? parseInt(row[tsIdx], 10) : NaN;
+        if (isNaN(ts) || ts <= 0) {
+          ts = new Date(dateRaw.replace(" ", "T")).getTime();
+        }
+        if (isNaN(ts) || ts <= 0) {
+          const [y, m, d] = fechaStr.split("-").map(Number);
+          ts = new Date(y, (m || 1) - 1, d || 1).getTime();
+        }
+
+        const parseOptional = (idx: number) => {
+          if (idx === -1 || !row[idx] || row[idx].toLowerCase() === "null") return null;
+          const val = parseFloat(row[idx].replace(",", "."));
+          return isNaN(val) ? null : val;
+        };
+
+        const fatVal = parseOptional(fatIdx);
+        // En Xiaomi Mi Home / Yunmai, 0.0 indica pesaje simple sin medición de impedancia
+        const fatRate = fatVal !== null && fatVal > 0 ? fatVal : null;
+
+        const waterVal = parseOptional(waterIdx);
+        const waterRate = waterVal !== null && waterVal > 0 ? waterVal : null;
+
+        const boneVal = parseOptional(boneIdx);
+        const boneMass = boneVal !== null && boneVal > 0 ? boneVal : null;
+
+        const muscleVal = parseOptional(muscleIdx);
+        const muscleRate = muscleVal !== null && muscleVal > 0 ? muscleVal : null;
+
+        const viscVal = parseOptional(viscIdx);
+        const visceralFat = viscVal !== null && viscVal > 0 ? viscVal : null;
+
+        const bmrVal = parseOptional(bmrIdx);
+        const metabolism = bmrVal !== null && bmrVal > 0 ? bmrVal : null;
+
+        const proteinVal = parseOptional(proteinIdx);
+        const proteinMass = proteinVal !== null && proteinVal > 0 ? proteinVal : null;
+
+        const skeletalVal = parseOptional(skeletalIdx);
+        const skeletalMass = skeletalVal !== null && skeletalVal > 0 ? skeletalVal : null;
+
+        const metAgeVal = parseOptional(metAgeIdx);
+        const metabolicAge = metAgeVal !== null && metAgeVal > 0 ? metAgeVal : null;
+
+        const scoreVal = parseOptional(scoreIdx);
+        const bodyScore = scoreVal !== null && scoreVal > 0 ? scoreVal : null;
+
+        const hrVal = parseOptional(hrIdx);
+        const heartRate = hrVal !== null && hrVal > 0 ? hrVal : null;
+
+        const h = hRaw > 0 ? hRaw : (profile.alturaCm || 180);
+        const bmi = bmiRaw !== null && bmiRaw > 0 ? Math.round(bmiRaw * 10) / 10 : calculateBmi(wRaw, h);
+
+        let leanMassKg: number | null = null;
+        let fatMassKg: number | null = null;
+        let ffmi: number | null = null;
+        let estImpedance: number | null = null;
+        let estImpedanceLow: number | null = null;
+
+        if (fatRate !== null) {
+          fatMassKg = Math.round((wRaw * (fatRate / 100)) * 100) / 100;
+          leanMassKg = Math.round((wRaw - fatMassKg) * 100) / 100;
+          const ffmiData = calculateFfmi(leanMassKg, h);
+          ffmi = ffmiData.ffmi;
+
+          if (waterRate !== null) {
+            const tbwL = wRaw * (waterRate / 100);
+            const denom = tbwL - (0.12 * wRaw) - 4.5;
+            if (denom > 0) {
+              estImpedance = Math.round(((0.386 * (h * h)) / denom) * 10) / 10;
+              estImpedanceLow = Math.round(estImpedance * 1.085);
+            }
+          }
+        }
+
+        const notesParts: string[] = [];
+        if (heartRate) notesParts.push(`FC: ${heartRate} bpm`);
+        if (proteinMass) notesParts.push(`Proteína: ${proteinMass} kg`);
+        if (skeletalMass) notesParts.push(`M. esquelético: ${skeletalMass} kg`);
+        if (metabolicAge) notesParts.push(`Edad metabólica: ${metabolicAge} a`);
+        if (bodyScore) notesParts.push(`Puntuación: ${bodyScore}/100`);
+        const notes = notesParts.length > 0 ? notesParts.join(" | ") : null;
+
+        parsedRecords.push({
+          id: `mihome-${ts}`,
+          fecha: fechaStr,
+          hora: horaStr,
+          timestamp: ts,
+          peso: Math.round(wRaw * 10) / 10,
+          impedancia: estImpedance,
+          impedanciaLow: estImpedanceLow,
+          grasaPct: fatRate !== null ? Math.round(fatRate * 10) / 10 : null,
+          masaMagraKg: leanMassKg,
+          masaGrasaKg: fatMassKg,
+          aguaPct: waterRate !== null ? Math.round(waterRate * 10) / 10 : null,
+          bmi,
+          ffmi,
+          altura: h,
+          boneMass,
+          metabolism,
+          muscleRate,
+          visceralFat,
+          source: "xiaomi_mi_home",
+          notes,
           esValido: true,
         });
       } catch (err: any) {
