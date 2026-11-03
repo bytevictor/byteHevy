@@ -80,7 +80,7 @@ export interface ProjectionData {
 }
 
 export interface YearSegmentOption {
-  id: string; // "YTD" | "1A" | "2026" | "2025" | ...
+  id: string; // "1A" | "2026" | "2025" | ...
   label: string;
   shortLabel: string;
   subLabel: string;
@@ -92,7 +92,6 @@ export interface YearSegmentOption {
 
 /**
  * Genera los tramos anuales navegables para iterar por año:
- * - "YTD": Desde el 1 de Enero del año actual hasta la última toma/hoy.
  * - "1A": Los últimos 365 días continuos desde la última toma.
  * - "2026", "2025", ...: Años naturales completos (1 Ene a 31 Dic).
  */
@@ -109,25 +108,7 @@ export function buildYearSegments(records: WeightRecord[]): YearSegmentOption[] 
 
   const segments: YearSegmentOption[] = [];
 
-  // 1. YTD (Year To Date): Desde el 1 de Enero del año más reciente hasta hoy / última medida
-  const ytdStart = new Date(latestYear, 0, 1, 0, 0, 0, 0).getTime();
-  const ytdEnd = maxTs + 86400000;
-  segments.push({
-    id: "YTD",
-    label: "YTD",
-    shortLabel: "YTD",
-    subLabel: `01/01/${latestYear} – ${latestDate.toLocaleDateString("es-ES", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    })}`,
-    startTimestamp: ytdStart,
-    endTimestamp: ytdEnd,
-    isLatest: true,
-    isHistorical: false,
-  });
-
-  // 2. 1A (Último Año continuo): Los últimos 365 días continuos desde la última toma
+  // 1. 1A (Último Año continuo): Los últimos 365 días continuos desde la última toma
   const oneYearAgoTs = new Date(
     latestDate.getFullYear() - 1,
     latestDate.getMonth(),
@@ -156,7 +137,7 @@ export function buildYearSegments(records: WeightRecord[]): YearSegmentOption[] 
     isHistorical: false,
   });
 
-  // 3. Años naturales completos: latestYear, latestYear - 1, ..., earliestYear
+  // 2. Años naturales completos: latestYear (año en curso), latestYear - 1, ..., earliestYear
   for (let y = latestYear; y >= earliestYear; y--) {
     const startTs = new Date(y, 0, 1, 0, 0, 0, 0).getTime();
     const endTs = new Date(y, 11, 31, 23, 59, 59, 999).getTime();
@@ -420,7 +401,7 @@ export function WeightTab() {
   const [isTrendMode, setIsTrendMode] = useState<boolean>(false);
   const [curveType, setCurveType] = useState<CurveType>("smooth");
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
-  const [selectedYearId, setSelectedYearId] = useState<string>("YTD");
+  const [selectedYearId, setSelectedYearId] = useState<string>("1A");
   const [yearDropdownOpen, setYearDropdownOpen] = useState<boolean>(false);
   const [projectionHorizon, setProjectionHorizon] = useState<ProjectionHorizon>("none");
   const [projectionDropdownOpen, setProjectionDropdownOpen] = useState<boolean>(false);
@@ -470,8 +451,10 @@ export function WeightTab() {
       }
 
       const savedYear = localStorage.getItem("bytehevy_weight_selected_year");
-      if (savedYear) {
+      if (savedYear && savedYear !== "YTD") {
         setSelectedYearId(savedYear);
+      } else {
+        setSelectedYearId("1A");
       }
 
       const savedGrouping = localStorage.getItem("bytehevy_weight_grouping_mode");
@@ -870,7 +853,7 @@ export function WeightTab() {
 
   const handlePrevYear = () => {
     if (timeRange !== "year") {
-      // Si el usuario estaba en 1M/3M/6M/all y pulsa <, cambia al modo anual comenzando por el año anterior a YTD (o el primero disponible)
+      // Si el usuario estaba en 1M/3M/6M/all y pulsa <, cambia al modo anual comenzando por el año en curso (o el primero disponible)
       if (yearSegments.length > 1) {
         handleSelectYear(yearSegments[1].id);
       } else if (yearSegments.length > 0) {
@@ -2321,7 +2304,7 @@ export function WeightTab() {
               {/* Separador vertical sutil */}
               <div className="w-[1px] h-3.5 bg-zinc-800 mx-0.5" />
 
-              {/* Iterador de Años: < [ YTD / Año ▾ ] > */}
+              {/* Iterador de Años: < [ 1A / Año ▾ ] > */}
               <div className="inline-flex items-center">
                 {/* Botón Año Anterior (< hacia el pasado) */}
                 <button
@@ -2361,7 +2344,7 @@ export function WeightTab() {
                     <ChevronDownIcon className="w-3 h-3 text-zinc-400" />
                   </button>
 
-                  {/* Menú Dropdown con YTD, 2026, 2025... */}
+                  {/* Menú Dropdown con Último año (1A), Año 2026, Año 2025... */}
                   {yearDropdownOpen && (
                     <>
                       <div
