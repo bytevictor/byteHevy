@@ -54,6 +54,30 @@ import {
 export type WeightChartMode = "combined" | "weight_only" | "fat_only" | "trend" | "composition";
 export type TimeRange = "1M" | "3M" | "6M" | "1A" | "all";
 export type CurveType = "linear" | "smooth" | "flow";
+export type ProjectionHorizon = "none" | "2W" | "1M" | "2M" | "3M" | "6M";
+
+export interface ProjectionData {
+  horizon: ProjectionHorizon;
+  days: number;
+  targetTimestamp: number;
+  targetDateLabel: string;
+  currentWeight: number;
+  projectedWeight: number;
+  deltaWeight: number;
+  kgPerWeek: number;
+  hasFat: boolean;
+  currentFatPct: number;
+  projectedFatPct: number;
+  deltaFatPct: number;
+  fatPerWeek: number;
+  currentLeanKg: number;
+  projectedLeanKg: number;
+  currentFatKg: number;
+  projectedFatKg: number;
+  confidence: "high" | "medium" | "low";
+  sampleCount: number;
+  windowDays: number;
+}
 
 export interface DateSegmentOption {
   offset: number;
@@ -530,6 +554,8 @@ export function WeightTab() {
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
   const [dateSegmentOffset, setDateSegmentOffset] = useState<number>(0);
   const [segmentDropdownOpen, setSegmentDropdownOpen] = useState<boolean>(false);
+  const [projectionHorizon, setProjectionHorizon] = useState<ProjectionHorizon>("none");
+  const [projectionDropdownOpen, setProjectionDropdownOpen] = useState<boolean>(false);
   const [groupingMode, setGroupingMode] = useState<WeightGroupingMode>("auto");
   const [syncWithSeason, setSyncWithSeason] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -539,12 +565,12 @@ export function WeightTab() {
   const chartMode: WeightChartMode = isTrendMode
     ? "trend"
     : showWeight && showFat
-      ? "combined"
-      : showWeight
-        ? "weight_only"
-        : showFat
-          ? "fat_only"
-          : "combined";
+    ? "combined"
+    : showWeight
+    ? "weight_only"
+    : showFat
+    ? "fat_only"
+    : "combined";
 
   // Cargar persistencia de opciones del gráfico desde localStorage
   useEffect(() => {
@@ -575,7 +601,19 @@ export function WeightTab() {
 
       const savedSyncSeason = localStorage.getItem("bytehevy_weight_sync_season");
       if (savedSyncSeason !== null) setSyncWithSeason(savedSyncSeason === "true");
-    } catch { }
+
+      const savedProj = localStorage.getItem("bytehevy_weight_projection_horizon");
+      if (
+        savedProj === "none" ||
+        savedProj === "2W" ||
+        savedProj === "1M" ||
+        savedProj === "2M" ||
+        savedProj === "3M" ||
+        savedProj === "6M"
+      ) {
+        setProjectionHorizon(savedProj);
+      }
+    } catch {}
   }, []);
 
   const handleToggleWeight = () => {
@@ -583,13 +621,13 @@ export function WeightTab() {
       setIsTrendMode(false);
       try {
         localStorage.setItem("bytehevy_weight_is_trend", "false");
-      } catch { }
+      } catch {}
     }
     setShowWeight((prev) => {
       const next = !prev;
       try {
         localStorage.setItem("bytehevy_weight_show_weight", String(next));
-      } catch { }
+      } catch {}
       return next;
     });
   };
@@ -599,13 +637,13 @@ export function WeightTab() {
       setIsTrendMode(false);
       try {
         localStorage.setItem("bytehevy_weight_is_trend", "false");
-      } catch { }
+      } catch {}
     }
     setShowFat((prev) => {
       const next = !prev;
       try {
         localStorage.setItem("bytehevy_weight_show_fat", String(next));
-      } catch { }
+      } catch {}
       return next;
     });
   };
@@ -615,7 +653,7 @@ export function WeightTab() {
       const next = !prev;
       try {
         localStorage.setItem("bytehevy_weight_is_trend", String(next));
-      } catch { }
+      } catch {}
       return next;
     });
   };
@@ -624,7 +662,7 @@ export function WeightTab() {
     setCurveType(c);
     try {
       localStorage.setItem("bytehevy_weight_curve_type", c);
-    } catch { }
+    } catch {}
   };
 
   const handleTimeRangeChange = (r: TimeRange) => {
@@ -632,21 +670,29 @@ export function WeightTab() {
     setDateSegmentOffset(0);
     try {
       localStorage.setItem("bytehevy_weight_time_range", r);
-    } catch { }
+    } catch {}
   };
 
   const handleGroupingModeChange = (m: WeightGroupingMode) => {
     setGroupingMode(m);
     try {
       localStorage.setItem("bytehevy_weight_grouping_mode", m);
-    } catch { }
+    } catch {}
   };
 
   const handleSyncSeasonChange = (val: boolean) => {
     setSyncWithSeason(val);
     try {
       localStorage.setItem("bytehevy_weight_sync_season", String(val));
-    } catch { }
+    } catch {}
+  };
+
+  const handleProjectionChange = (h: ProjectionHorizon) => {
+    setProjectionHorizon(h);
+    setProjectionDropdownOpen(false);
+    try {
+      localStorage.setItem("bytehevy_weight_projection_horizon", h);
+    } catch {}
   };
 
   // Modales
@@ -1284,6 +1330,130 @@ export function WeightTab() {
     };
   }, [filteredRecords]);
 
+  // Proyección de peso y grasa según la tendencia del momento
+  const projectionData = useMemo<ProjectionData | null>(() => {
+    if (projectionHorizon === "none") return null;
+    if (!currentSegment || currentSegment.isLatest === false) return null;
+    if (chartRecords.length < 2) return null;
+
+    let days = 30;
+    if (projectionHorizon === "2W") days = 14;
+    else if (projectionHorizon === "1M") days = 30;
+    else if (projectionHorizon === "2M") days = 60;
+    else if (projectionHorizon === "3M") days = 90;
+    else if (projectionHorizon === "6M") days = 180;
+
+    // Calculamos la "tendencia del momento" sobre la ventana más reciente (últimos 45 días o 60 días)
+    const sortedRaw = [...records].sort((a, b) => a.timestamp - b.timestamp);
+    if (sortedRaw.length < 2) return null;
+
+    const maxTs = sortedRaw[sortedRaw.length - 1].timestamp;
+    let windowDays = 45;
+    let recentRaw = sortedRaw.filter((r) => r.timestamp >= maxTs - windowDays * 86400000);
+
+    if (recentRaw.length < 4) {
+      windowDays = 90;
+      recentRaw = sortedRaw.filter((r) => r.timestamp >= maxTs - windowDays * 86400000);
+    }
+    if (recentRaw.length < 2) {
+      recentRaw = sortedRaw.slice(-10);
+    }
+
+    // Regresión lineal de peso
+    const validWeights = recentRaw.filter((r) => typeof r.peso === "number" && r.peso > 0);
+    if (validWeights.length < 2) return null;
+
+    const nW = validWeights.length;
+    let sumXW = 0, sumYW = 0, sumXYW = 0, sumXXW = 0;
+    for (let i = 0; i < nW; i++) {
+      const x = validWeights[i].timestamp;
+      const y = validWeights[i].peso;
+      sumXW += x;
+      sumYW += y;
+      sumXYW += x * y;
+      sumXXW += x * x;
+    }
+    const denomW = nW * sumXXW - sumXW * sumXW;
+    const slopeW = denomW !== 0 ? (nW * sumXYW - sumXW * sumYW) / denomW : 0;
+    const kgPerWeek = Math.round(slopeW * (7 * 86400000) * 100) / 100;
+
+    // Punto de partida de peso (MA-7 o último)
+    const latestRecord = validWeights[validWeights.length - 1];
+    const currentWeight = Math.round((latestRecord.ma7Peso || latestRecord.peso) * 10) / 10;
+    const rawProjWeight = currentWeight + (kgPerWeek / 7) * days;
+    const projectedWeight = Math.round(Math.max(30, Math.min(250, rawProjWeight)) * 10) / 10;
+    const deltaWeight = Math.round((projectedWeight - currentWeight) * 10) / 10;
+
+    // Regresión lineal de grasa
+    const validFats = recentRaw.filter((r) => typeof r.grasaPct === "number" && !isNaN(r.grasaPct) && r.grasaPct > 0);
+    const hasFat = validFats.length >= 2;
+    let currentFatPct = 0;
+    let projectedFatPct = 0;
+    let deltaFatPct = 0;
+    let fatPerWeek = 0;
+
+    if (hasFat) {
+      const nF = validFats.length;
+      let sumXF = 0, sumYF = 0, sumXYF = 0, sumXXF = 0;
+      for (let i = 0; i < nF; i++) {
+        const x = validFats[i].timestamp;
+        const y = validFats[i].grasaPct!;
+        sumXF += x;
+        sumYF += y;
+        sumXYF += x * y;
+        sumXXF += x * x;
+      }
+      const denomF = nF * sumXXF - sumXF * sumXF;
+      const slopeF = denomF !== 0 ? (nF * sumXYF - sumXF * sumYF) / denomF : 0;
+      fatPerWeek = Math.round(slopeF * (7 * 86400000) * 100) / 100;
+
+      const latestFat = validFats[validFats.length - 1];
+      currentFatPct = Math.round((latestFat.ma7Grasa || latestFat.grasaPct!) * 10) / 10;
+      const rawProjFat = currentFatPct + (fatPerWeek / 7) * days;
+      projectedFatPct = Math.round(Math.max(3, Math.min(60, rawProjFat)) * 10) / 10;
+      deltaFatPct = Math.round((projectedFatPct - currentFatPct) * 10) / 10;
+    }
+
+    // Composición corporal proyectada
+    const currentFatKg = hasFat ? Math.round(currentWeight * (currentFatPct / 100) * 10) / 10 : 0;
+    const currentLeanKg = hasFat ? Math.round((currentWeight - currentFatKg) * 10) / 10 : 0;
+    const projectedFatKg = hasFat ? Math.round(projectedWeight * (projectedFatPct / 100) * 10) / 10 : 0;
+    const projectedLeanKg = hasFat ? Math.round((projectedWeight - projectedFatKg) * 10) / 10 : 0;
+
+    const targetTimestamp = maxTs + days * 86400000;
+    const targetDateLabel = new Date(targetTimestamp).toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+
+    const confidence: "high" | "medium" | "low" =
+      validWeights.length >= 10 ? "high" : validWeights.length >= 4 ? "medium" : "low";
+
+    return {
+      horizon: projectionHorizon,
+      days,
+      targetTimestamp,
+      targetDateLabel,
+      currentWeight,
+      projectedWeight,
+      deltaWeight,
+      kgPerWeek,
+      hasFat,
+      currentFatPct,
+      projectedFatPct,
+      deltaFatPct,
+      fatPerWeek,
+      currentLeanKg,
+      projectedLeanKg,
+      currentFatKg,
+      projectedFatKg,
+      confidence,
+      sampleCount: validWeights.length,
+      windowDays,
+    };
+  }, [projectionHorizon, currentSegment, records, chartRecords]);
+
   // Escalas matemáticas para el gráfico
   const chartScales = useMemo(() => {
     if (chartRecords.length === 0) return null;
@@ -1298,6 +1468,11 @@ export function WeightTab() {
       minTime = currentSegment.startTimestamp;
       maxTime = currentSegment.endTimestamp;
     }
+
+    // Si hay proyección activa, expandir maxTime hasta la fecha objetivo
+    if (projectionData) {
+      maxTime = Math.max(maxTime, projectionData.targetTimestamp);
+    }
     const timeSpan = maxTime - minTime || 1;
 
     // Escala Peso (kg) - En modo trend incluimos los puntos de la nube para ajuste exacto
@@ -1306,6 +1481,9 @@ export function WeightTab() {
       : chartRecords.map((r) => r.peso);
     const maWeights = chartRecords.map((r) => r.ma7Peso || r.peso);
     const allWeightVals = [...weights, ...maWeights];
+    if (projectionData) {
+      allWeightVals.push(projectionData.projectedWeight);
+    }
     const rawMinW = Math.min(...allWeightVals);
     const rawMaxW = Math.max(...allWeightVals);
     const minWeight = Math.floor(rawMinW - 1);
@@ -1320,6 +1498,9 @@ export function WeightTab() {
       .map((r) => r.ma7Grasa)
       .filter((f): f is number => typeof f === "number" && !isNaN(f));
     const allFatVals = [...fats, ...maFats];
+    if (projectionData && projectionData.hasFat) {
+      allFatVals.push(projectionData.projectedFatPct);
+    }
     const rawMinF = allFatVals.length > 0 ? Math.min(...allFatVals) : 15;
     const rawMaxF = allFatVals.length > 0 ? Math.max(...allFatVals) : 25;
     const minFat = Math.floor(rawMinF - 1);
@@ -1343,7 +1524,7 @@ export function WeightTab() {
       getYWeight,
       getYFat,
     };
-  }, [chartRecords, filteredRecords, chartInnerWidth, chartInnerHeight, padding, chartMode, trendAnalysis, currentSegment, timeRange]);
+  }, [chartRecords, filteredRecords, chartInnerWidth, chartInnerHeight, padding, chartMode, trendAnalysis, currentSegment, timeRange, projectionData]);
 
   // Generador de rutas SVG respetando curveType ("linear" | "smooth" | "flow")
   const chartPaths = useMemo(() => {
@@ -1797,10 +1978,11 @@ export function WeightTab() {
                     setXiaomiAutoStartQr(!xiaomiConnected);
                     setXiaomiModalOpen(true);
                   }}
-                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border flex items-center gap-1.5 transition-all cursor-pointer ${xiaomiConnected
+                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border flex items-center gap-1.5 transition-all cursor-pointer ${
+                    xiaomiConnected
                       ? "bg-orange-500/10 text-orange-400 border-orange-500/30 hover:bg-orange-500/20"
                       : "bg-zinc-800/80 text-zinc-400 border-zinc-700/80 hover:bg-zinc-700/60 hover:text-zinc-200"
-                    }`}
+                  }`}
                   title={
                     xiaomiConnected
                       ? `Conectado a Xiaomi Cloud${xiaomiUserId ? ` (${xiaomiUserId})` : ""}. Última sinc: ${xiaomiLastSync || "reciente"}`
@@ -1834,10 +2016,11 @@ export function WeightTab() {
             type="button"
             onClick={handleXiaomiQuickSync}
             disabled={xiaomiSyncing}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-sm ${xiaomiConnected
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-sm ${
+              xiaomiConnected
                 ? "bg-orange-500/10 border-orange-500/30 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300"
                 : "bg-zinc-900 border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-              } disabled:opacity-50`}
+            } disabled:opacity-50`}
             title={
               xiaomiConnected
                 ? "Sincronizar pesajes con Xiaomi Cloud de forma incremental"
@@ -1855,8 +2038,8 @@ export function WeightTab() {
               {xiaomiSyncing
                 ? "Sincronizando..."
                 : xiaomiConnected
-                  ? "Sincronizar Xiaomi"
-                  : "Conectar Xiaomi"}
+                ? "Sincronizar Xiaomi"
+                : "Conectar Xiaomi"}
             </span>
           </button>
 
@@ -1887,10 +2070,11 @@ export function WeightTab() {
       {/* Banner de notificación de Xiaomi Cloud */}
       {xiaomiToast && (
         <div
-          className={`p-3 rounded-xl border flex items-center justify-between text-xs animate-in fade-in duration-200 ${xiaomiToast.type === "success"
+          className={`p-3 rounded-xl border flex items-center justify-between text-xs animate-in fade-in duration-200 ${
+            xiaomiToast.type === "success"
               ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
               : "bg-rose-500/10 border-rose-500/30 text-rose-300"
-            }`}
+          }`}
         >
           <div className="flex items-center gap-2">
             {xiaomiToast.type === "success" ? (
@@ -2060,10 +2244,11 @@ export function WeightTab() {
             <button
               type="button"
               onClick={handleToggleWeight}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${!isTrendMode && showWeight
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                !isTrendMode && showWeight
                   ? "bg-blue-500/15 text-blue-200 border border-blue-500/40 shadow-xs"
                   : "text-zinc-500 hover:text-zinc-300 border border-transparent"
-                }`}
+              }`}
               title={
                 !isTrendMode && showWeight
                   ? "Desactivar visualización de Peso y Media Móvil"
@@ -2071,10 +2256,11 @@ export function WeightTab() {
               }
             >
               <span
-                className={`w-2 h-2 rounded-full transition-all ${!isTrendMode && showWeight
+                className={`w-2 h-2 rounded-full transition-all ${
+                  !isTrendMode && showWeight
                     ? "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]"
                     : "bg-zinc-600"
-                  }`}
+                }`}
               />
               <span>Peso</span>
             </button>
@@ -2082,10 +2268,11 @@ export function WeightTab() {
             <button
               type="button"
               onClick={handleToggleFat}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${!isTrendMode && showFat
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                !isTrendMode && showFat
                   ? "bg-yellow-500/15 text-yellow-200 border border-yellow-500/40 shadow-xs"
                   : "text-zinc-500 hover:text-zinc-300 border border-transparent"
-                }`}
+              }`}
               title={
                 !isTrendMode && showFat
                   ? "Desactivar visualización de % Grasa"
@@ -2093,10 +2280,11 @@ export function WeightTab() {
               }
             >
               <span
-                className={`w-2 h-2 rounded-full transition-all ${!isTrendMode && showFat
+                className={`w-2 h-2 rounded-full transition-all ${
+                  !isTrendMode && showFat
                     ? "bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]"
                     : "bg-zinc-600"
-                  }`}
+                }`}
               />
               <span>% Grasa</span>
             </button>
@@ -2106,10 +2294,11 @@ export function WeightTab() {
             <button
               type="button"
               onClick={handleToggleTrend}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${isTrendMode
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                isTrendMode
                   ? "bg-sky-500/20 text-sky-200 border border-sky-500/40 shadow-xs"
                   : "text-zinc-400 hover:text-zinc-200 border border-transparent"
-                }`}
+              }`}
               title="Modo Tendencia: convierte la nube de tomas en una trayectoria suavizada con canal de dispersión"
             >
               <TrendingDownIcon className={`w-3.5 h-3.5 ${isTrendMode ? "text-sky-300" : "text-zinc-400"}`} />
@@ -2124,10 +2313,11 @@ export function WeightTab() {
               <button
                 type="button"
                 onClick={() => handleCurveChange("linear")}
-                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${curveType === "linear"
+                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
+                  curveType === "linear"
                     ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
                     : "text-zinc-500 hover:text-zinc-200"
-                  }`}
+                }`}
                 title="Líneas rectas directas entre puntos"
                 aria-label="Rectas"
               >
@@ -2137,10 +2327,11 @@ export function WeightTab() {
               <button
                 type="button"
                 onClick={() => handleCurveChange("smooth")}
-                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${curveType === "smooth"
+                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
+                  curveType === "smooth"
                     ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
                     : "text-zinc-500 hover:text-zinc-200"
-                  }`}
+                }`}
                 title="Curvas naturales (spline cúbico)"
                 aria-label="Curvas"
               >
@@ -2150,10 +2341,11 @@ export function WeightTab() {
               <button
                 type="button"
                 onClick={() => handleCurveChange("flow")}
-                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${curveType === "flow"
+                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
+                  curveType === "flow"
                     ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
                     : "text-zinc-500 hover:text-zinc-200"
-                  }`}
+                }`}
                 title="Completamente suavizadas (línea continua fluida)"
                 aria-label="Fluida"
               >
@@ -2165,10 +2357,11 @@ export function WeightTab() {
             {activeSeason && activeSeasonId !== "all" && (
               <button
                 onClick={() => handleSyncSeasonChange(!syncWithSeason)}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-colors cursor-pointer ${syncWithSeason
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-colors cursor-pointer ${
+                  syncWithSeason
                     ? "bg-zinc-800 text-zinc-100 border-zinc-700"
                     : "bg-zinc-900/40 text-zinc-500 border-zinc-800 hover:text-zinc-300"
-                  }`}
+                }`}
                 title="Filtrar por la temporada activa"
               >
                 <div
@@ -2188,10 +2381,11 @@ export function WeightTab() {
                     handleTimeRangeChange(r);
                     if (syncWithSeason) handleSyncSeasonChange(false);
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${timeRange === r && !syncWithSeason
+                  className={`px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${
+                    timeRange === r && !syncWithSeason
                       ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
                       : "text-zinc-400 hover:text-zinc-200"
-                    }`}
+                  }`}
                 >
                   {r === "all" ? "Todo" : r}
                 </button>
@@ -2222,10 +2416,11 @@ export function WeightTab() {
                   <button
                     type="button"
                     onClick={() => setSegmentDropdownOpen((prev) => !prev)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${dateSegmentOffset > 0
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                      dateSegmentOffset > 0
                         ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold"
                         : "bg-zinc-800/90 text-zinc-200 border border-zinc-700/60 font-semibold"
-                      }`}
+                    }`}
                     title={
                       currentSegment.subLabel
                         ? `${currentSegment.label} (${currentSegment.subLabel})`
@@ -2261,10 +2456,11 @@ export function WeightTab() {
                                   setDateSegmentOffset(s.offset);
                                   setSegmentDropdownOpen(false);
                                 }}
-                                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${isSelected
+                                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                                  isSelected
                                     ? "bg-zinc-800 text-white font-bold"
                                     : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
-                                  }`}
+                                }`}
                               >
                                 <div className="flex flex-col">
                                   <span className="flex items-center gap-1.5">
@@ -2321,6 +2517,97 @@ export function WeightTab() {
               </button>
             )}
 
+            {/* Selector de Proyección de Tendencia (Plazo estimado) */}
+            {(!currentSegment || currentSegment.isLatest) && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setProjectionDropdownOpen((prev) => !prev)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                    projectionHorizon !== "none"
+                      ? "bg-purple-500/15 text-purple-300 border-purple-500/40 shadow-xs shadow-purple-500/10 font-bold"
+                      : "bg-zinc-950/90 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:bg-zinc-900"
+                  }`}
+                  title="Proyectar peso y grasa hacia el futuro según la tendencia del momento"
+                >
+                  <SparklesIcon
+                    className={`w-3.5 h-3.5 ${
+                      projectionHorizon !== "none" ? "text-purple-400 animate-pulse" : "text-zinc-500"
+                    }`}
+                  />
+                  <span>
+                    {projectionHorizon === "none"
+                      ? "Proyección"
+                      : projectionHorizon === "2W"
+                      ? "Proy: +2 Sem"
+                      : projectionHorizon === "1M"
+                      ? "Proy: +1 Mes"
+                      : projectionHorizon === "2M"
+                      ? "Proy: +2 Meses"
+                      : projectionHorizon === "3M"
+                      ? "Proy: +3 Meses"
+                      : "Proy: +6 Meses"}
+                  </span>
+                  <ChevronDownIcon className="w-3 h-3 text-zinc-500" />
+                </button>
+
+                {/* Dropdown Menu de Selección de Plazo */}
+                {projectionDropdownOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setProjectionDropdownOpen(false)}
+                    />
+                    <div className="absolute right-0 sm:left-0 mt-1.5 z-50 min-w-[240px] bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-1 animate-in fade-in zoom-in-95 duration-150">
+                      <div className="px-2.5 py-1.5 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider border-b border-zinc-800/80 flex items-center justify-between">
+                        <span>Plazo de Proyección</span>
+                        <span className="text-purple-400 font-mono">Tendencia</span>
+                      </div>
+                      <div className="py-1 space-y-0.5">
+                        {(
+                          [
+                            { id: "none", label: "Desactivada", desc: "Ver únicamente mediciones reales registradas" },
+                            { id: "2W", label: "+2 Semanas (14 días)", desc: "Estimación a corto plazo según el ritmo actual" },
+                            { id: "1M", label: "+1 Mes (30 días)", desc: "Objetivo mensual de evolución corporal" },
+                            { id: "2M", label: "+2 Meses (60 días)", desc: "Proyección bimestral de tendencia" },
+                            { id: "3M", label: "+3 Meses (90 días)", desc: "Proyección trimestral (fin de temporada)" },
+                            { id: "6M", label: "+6 Meses (180 días)", desc: "Horizonte semestral a largo plazo" },
+                          ] as { id: ProjectionHorizon; label: string; desc: string }[]
+                        ).map((opt) => {
+                          const isSelected = opt.id === projectionHorizon;
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => handleProjectionChange(opt.id)}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                                isSelected
+                                  ? "bg-purple-950/60 text-purple-200 font-bold border border-purple-500/30"
+                                  : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                              }`}
+                            >
+                              <div className="flex flex-col">
+                                <span className="font-semibold flex items-center gap-1.5">
+                                  {opt.id !== "none" && isSelected && (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                                  )}
+                                  <span>{opt.label}</span>
+                                </span>
+                                <span className="text-[10px] text-zinc-500 font-normal leading-tight mt-0.5">
+                                  {opt.desc}
+                                </span>
+                              </div>
+                              {isSelected && <CheckIcon className="w-3.5 h-3.5 text-purple-400 shrink-0 ml-2" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Control de Agrupación (Fórmula anti-amontonamiento) */}
             <div className="inline-flex items-center p-0.5 rounded-xl bg-zinc-950/90 border border-zinc-800 shadow-inner">
               <span className="text-[10px] text-zinc-500 font-medium pl-2 pr-1 hidden sm:inline">
@@ -2338,10 +2625,11 @@ export function WeightTab() {
                   key={m.id}
                   type="button"
                   onClick={() => handleGroupingModeChange(m.id)}
-                  className={`px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${groupingMode === m.id
+                  className={`px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                    groupingMode === m.id
                       ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
                       : "text-zinc-400 hover:text-zinc-200"
-                    }`}
+                  }`}
                   title={m.title}
                 >
                   {m.label}
@@ -2359,12 +2647,13 @@ export function WeightTab() {
                 <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
                 <span className="font-semibold text-blue-200">Ritmo de Tendencia:</span>
                 <span
-                  className={`font-mono font-bold ${trendAnalysis.kgPerWeek < 0
+                  className={`font-mono font-bold ${
+                    trendAnalysis.kgPerWeek < 0
                       ? "text-emerald-400"
                       : trendAnalysis.kgPerWeek > 0
-                        ? "text-amber-400"
-                        : "text-zinc-300"
-                    }`}
+                      ? "text-amber-400"
+                      : "text-zinc-300"
+                  }`}
                 >
                   {trendAnalysis.kgPerWeek > 0 ? `+${trendAnalysis.kgPerWeek}` : trendAnalysis.kgPerWeek} kg/semana
                 </span>
@@ -2383,6 +2672,152 @@ export function WeightTab() {
             <span className="text-[11px] font-mono text-blue-300/80">
               {trendAnalysis.n} tomas en la nube
             </span>
+          </div>
+        )}
+
+        {/* Panel Resumen de Proyección Estimada */}
+        {projectionData && (
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/40 via-indigo-950/20 to-zinc-900 border border-purple-500/30 shadow-lg space-y-3 animate-in fade-in duration-200">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-purple-500/20 pb-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shadow-sm">
+                  <SparklesIcon className="w-4 h-4 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs font-bold text-zinc-100">
+                      Proyección a {projectionData.days} días ({projectionData.horizon === "2W" ? "2 semanas" : projectionData.horizon === "1M" ? "1 mes" : projectionData.horizon === "2M" ? "2 meses" : projectionData.horizon === "3M" ? "3 meses" : "6 meses"})
+                    </h3>
+                    <span className="text-[10px] font-mono text-purple-300 font-bold px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/30">
+                      🎯 {projectionData.targetDateLabel}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Estimación calculada según la tendencia del momento en los últimos {projectionData.windowDays} días ({projectionData.sampleCount} pesajes)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleProjectionChange("none")}
+                  className="text-[11px] font-semibold text-zinc-400 hover:text-zinc-200 px-2.5 py-1 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer border border-zinc-700/60"
+                >
+                  Desactivar Proyección
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              {/* 1. Peso Proyectado */}
+              <div className="p-3 rounded-xl bg-zinc-950/60 border border-blue-500/25 space-y-1">
+                <span className="text-[11px] text-zinc-400 flex items-center gap-1 font-medium">
+                  <ScaleIcon className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Peso Estimado</span>
+                </span>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xl font-mono font-extrabold text-blue-400">
+                    {projectionData.projectedWeight.toFixed(1)}
+                  </span>
+                  <span className="text-[10px] text-blue-400/80 font-normal">kg</span>
+                  <span
+                    className={`text-[11px] font-mono font-bold ml-1.5 ${
+                      projectionData.deltaWeight > 0
+                        ? "text-amber-400"
+                        : projectionData.deltaWeight < 0
+                        ? "text-emerald-400"
+                        : "text-zinc-400"
+                    }`}
+                  >
+                    {projectionData.deltaWeight > 0 ? `+${projectionData.deltaWeight}` : projectionData.deltaWeight} kg
+                  </span>
+                </div>
+                <span className="text-[10px] text-zinc-500 block font-mono">
+                  Ritmo: {projectionData.kgPerWeek > 0 ? `+${projectionData.kgPerWeek}` : projectionData.kgPerWeek} kg/sem
+                </span>
+              </div>
+
+              {/* 2. Grasa Proyectada */}
+              <div className="p-3 rounded-xl bg-zinc-950/60 border border-yellow-500/25 space-y-1">
+                <span className="text-[11px] text-zinc-400 flex items-center gap-1 font-medium">
+                  <PercentIcon className="w-3.5 h-3.5 text-yellow-400" />
+                  <span>% Grasa Estimado</span>
+                </span>
+                {projectionData.hasFat ? (
+                  <>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-xl font-mono font-extrabold text-yellow-400">
+                        {projectionData.projectedFatPct.toFixed(1)}
+                      </span>
+                      <span className="text-[10px] text-yellow-400/80 font-normal">%</span>
+                      <span
+                        className={`text-[11px] font-mono font-bold ml-1.5 ${
+                          projectionData.deltaFatPct > 0
+                            ? "text-amber-400"
+                            : projectionData.deltaFatPct < 0
+                            ? "text-emerald-400"
+                            : "text-zinc-400"
+                        }`}
+                      >
+                        {projectionData.deltaFatPct > 0 ? `+${projectionData.deltaFatPct}` : projectionData.deltaFatPct}%
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500 block font-mono">
+                      Ritmo: {projectionData.fatPerWeek > 0 ? `+${projectionData.fatPerWeek}` : projectionData.fatPerWeek}%/sem
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-xs text-zinc-500 block pt-1">Sin tomas suficientes</span>
+                )}
+              </div>
+
+              {/* 3. Masa Magra Proyectada */}
+              <div className="p-3 rounded-xl bg-zinc-950/60 border border-emerald-500/25 space-y-1">
+                <span className="text-[11px] text-zinc-400 flex items-center gap-1 font-medium">
+                  <ZapIcon className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Masa Magra Estimada</span>
+                </span>
+                {projectionData.hasFat ? (
+                  <>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-xl font-mono font-extrabold text-emerald-400">
+                        {projectionData.projectedLeanKg.toFixed(1)}
+                      </span>
+                      <span className="text-[10px] text-emerald-400/80 font-normal">kg</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500 block font-mono">
+                      Actual: {projectionData.currentLeanKg.toFixed(1)} kg
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-xs text-zinc-500 block pt-1">—</span>
+                )}
+              </div>
+
+              {/* 4. Masa Grasa Proyectada */}
+              <div className="p-3 rounded-xl bg-zinc-950/60 border border-purple-500/25 space-y-1">
+                <span className="text-[11px] text-zinc-400 flex items-center gap-1 font-medium">
+                  <ActivityIcon className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Masa Grasa Estimada</span>
+                </span>
+                {projectionData.hasFat ? (
+                  <>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-xl font-mono font-extrabold text-purple-300">
+                        {projectionData.projectedFatKg.toFixed(1)}
+                      </span>
+                      <span className="text-[10px] text-purple-300/80 font-normal">kg</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500 block font-mono">
+                      Actual: {projectionData.currentFatKg.toFixed(1)} kg
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-xs text-zinc-500 block pt-1">—</span>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -2438,6 +2873,12 @@ export function WeightTab() {
                 <linearGradient id="fatGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#eab308" stopOpacity="0.25" />
                   <stop offset="100%" stopColor="#eab308" stopOpacity="0.0" />
+                </linearGradient>
+
+                {/* Degradado Zona de Proyección Futura */}
+                <linearGradient id="futureZoneGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.02" />
+                  <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.14" />
                 </linearGradient>
               </defs>
 
@@ -2755,6 +3196,192 @@ export function WeightTab() {
                 </>
               )}
 
+              {/* 4. TRAZADO DE PROYECCIÓN FUTURA SEGÚN TENDENCIA ACTUAL */}
+              {projectionData && chartScales && chartRecords.length > 0 && (
+                <g pointerEvents="none">
+                  {/* Zona sombreada de Proyección Futura */}
+                  <rect
+                    x={chartScales.getX(chartRecords[chartRecords.length - 1].timestamp)}
+                    y={padding.top}
+                    width={Math.max(
+                      0,
+                      chartScales.getX(projectionData.targetTimestamp) -
+                        chartScales.getX(chartRecords[chartRecords.length - 1].timestamp)
+                    )}
+                    height={chartInnerHeight}
+                    fill="url(#futureZoneGrad)"
+                  />
+
+                  {/* Línea vertical divisoria: Ahora / Inicio de Proyección */}
+                  <line
+                    x1={chartScales.getX(chartRecords[chartRecords.length - 1].timestamp)}
+                    y1={padding.top}
+                    x2={chartScales.getX(chartRecords[chartRecords.length - 1].timestamp)}
+                    y2={padding.top + chartInnerHeight}
+                    stroke="#a855f7"
+                    strokeWidth={1.5}
+                    strokeDasharray="3 3"
+                    strokeOpacity={0.65}
+                  />
+
+                  {/* Línea vertical meta en la fecha proyectada */}
+                  <line
+                    x1={chartScales.getX(projectionData.targetTimestamp)}
+                    y1={padding.top}
+                    x2={chartScales.getX(projectionData.targetTimestamp)}
+                    y2={padding.top + chartInnerHeight}
+                    stroke="#a855f7"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 4"
+                    strokeOpacity={0.6}
+                  />
+
+                  {/* Etiqueta superior sobre la fecha objetivo */}
+                  <text
+                    x={chartScales.getX(projectionData.targetTimestamp)}
+                    y={padding.top - 8}
+                    textAnchor="middle"
+                    fontSize="10"
+                    fontWeight="700"
+                    fill="#c084fc"
+                    fontFamily="monospace"
+                  >
+                    🎯 +{projectionData.days}d ({projectionData.targetDateLabel})
+                  </text>
+
+                  {/* Línea de proyección de PESO (azul cielo con guiones) */}
+                  {(showWeight || isTrendMode) && (
+                    <>
+                      <line
+                        x1={chartScales.getX(chartRecords[chartRecords.length - 1].timestamp)}
+                        y1={chartScales.getYWeight(projectionData.currentWeight)}
+                        x2={chartScales.getX(projectionData.targetTimestamp)}
+                        y2={chartScales.getYWeight(projectionData.projectedWeight)}
+                        stroke="#60a5fa"
+                        strokeWidth={2.5}
+                        strokeDasharray="6 4"
+                        strokeLinecap="round"
+                        className="drop-shadow-sm"
+                      />
+                      {/* Círculo meta proyectado de peso */}
+                      <circle
+                        cx={chartScales.getX(projectionData.targetTimestamp)}
+                        cy={chartScales.getYWeight(projectionData.projectedWeight)}
+                        r={7.5}
+                        fill="#1e3a8a"
+                        stroke="#93c5fd"
+                        strokeWidth={2.5}
+                        className="animate-pulse"
+                      />
+                      <circle
+                        cx={chartScales.getX(projectionData.targetTimestamp)}
+                        cy={chartScales.getYWeight(projectionData.projectedWeight)}
+                        r={3}
+                        fill="#ffffff"
+                      />
+                      {/* Badge flotante con el valor proyectado */}
+                      <g
+                        transform={`translate(${Math.min(
+                          svgWidth - padding.right - 72,
+                          chartScales.getX(projectionData.targetTimestamp) + 12
+                        )}, ${Math.max(
+                          padding.top + 14,
+                          Math.min(padding.top + chartInnerHeight - 14, chartScales.getYWeight(projectionData.projectedWeight))
+                        )})`}
+                      >
+                        <rect
+                          x={-4}
+                          y={-11}
+                          width={72}
+                          height={20}
+                          rx={6}
+                          fill="#0f172a"
+                          stroke="#3b82f6"
+                          strokeWidth={1}
+                          opacity={0.94}
+                        />
+                        <text
+                          x={32}
+                          y={3}
+                          textAnchor="middle"
+                          fontSize="10"
+                          fontWeight="bold"
+                          fill="#93c5fd"
+                          fontFamily="monospace"
+                        >
+                          {projectionData.projectedWeight.toFixed(1)} kg
+                        </text>
+                      </g>
+                    </>
+                  )}
+
+                  {/* Línea de proyección de GRASA (amarilla con guiones) */}
+                  {showFat && !isTrendMode && projectionData.hasFat && (
+                    <>
+                      <line
+                        x1={chartScales.getX(chartRecords[chartRecords.length - 1].timestamp)}
+                        y1={chartScales.getYFat(projectionData.currentFatPct)}
+                        x2={chartScales.getX(projectionData.targetTimestamp)}
+                        y2={chartScales.getYFat(projectionData.projectedFatPct)}
+                        stroke="#facc15"
+                        strokeWidth={2}
+                        strokeDasharray="4 3"
+                        strokeLinecap="round"
+                      />
+                      {/* Círculo meta proyectado de grasa */}
+                      <circle
+                        cx={chartScales.getX(projectionData.targetTimestamp)}
+                        cy={chartScales.getYFat(projectionData.projectedFatPct)}
+                        r={6.5}
+                        fill="#713f12"
+                        stroke="#fde047"
+                        strokeWidth={2}
+                        className="animate-pulse"
+                      />
+                      <circle
+                        cx={chartScales.getX(projectionData.targetTimestamp)}
+                        cy={chartScales.getYFat(projectionData.projectedFatPct)}
+                        r={2.5}
+                        fill="#ffffff"
+                      />
+                      {/* Badge flotante con el valor proyectado */}
+                      <g
+                        transform={`translate(${Math.min(
+                          svgWidth - padding.right - 62,
+                          chartScales.getX(projectionData.targetTimestamp) + 12
+                        )}, ${Math.max(
+                          padding.top + 14,
+                          Math.min(padding.top + chartInnerHeight - 14, chartScales.getYFat(projectionData.projectedFatPct))
+                        )})`}
+                      >
+                        <rect
+                          x={-4}
+                          y={-11}
+                          width={60}
+                          height={20}
+                          rx={6}
+                          fill="#0f172a"
+                          stroke="#eab308"
+                          strokeWidth={1}
+                          opacity={0.94}
+                        />
+                        <text
+                          x={26}
+                          y={3}
+                          textAnchor="middle"
+                          fontSize="10"
+                          fontWeight="bold"
+                          fill="#fde047"
+                          fontFamily="monospace"
+                        >
+                          {projectionData.projectedFatPct.toFixed(1)}%
+                        </text>
+                      </g>
+                    </>
+                  )}
+                </g>
+              )}
+
               {/* Guía vertical de cursor (Crosshair) */}
               {hoverX !== null && hoveredPoint && (
                 <g pointerEvents="none">
@@ -2886,8 +3513,8 @@ export function WeightTab() {
                     {hoveredPoint.periodType === "weekly"
                       ? `Media semanal (${hoveredPoint.measurements.length} tomas)`
                       : hoveredPoint.periodType === "monthly"
-                        ? `Media mensual (${hoveredPoint.measurements.length} tomas)`
-                        : `Media diaria (${hoveredPoint.measurements.length} tomas)`}
+                      ? `Media mensual (${hoveredPoint.measurements.length} tomas)`
+                      : `Media diaria (${hoveredPoint.measurements.length} tomas)`}
                   </span>
                 ) : (
                   <span className="flex items-center gap-1">
@@ -2903,22 +3530,23 @@ export function WeightTab() {
                     {hoveredPoint.periodType === "weekly"
                       ? "Peso Semanal"
                       : hoveredPoint.periodType === "monthly"
-                        ? "Peso Mensual"
-                        : hoveredPoint.measurements && hoveredPoint.measurements.length > 1
-                          ? "Peso Medio"
-                          : "Peso"}
+                      ? "Peso Mensual"
+                      : hoveredPoint.measurements && hoveredPoint.measurements.length > 1
+                      ? "Peso Medio"
+                      : "Peso"}
                   </span>
                   <span className="font-extrabold text-sm text-blue-400 font-mono">
                     {hoveredPoint.peso.toFixed(1)} kg
                   </span>
                   {hoveredPoint.deltaPeso !== undefined && (
                     <span
-                      className={`text-[10px] ml-1 font-mono ${hoveredPoint.deltaPeso < 0
+                      className={`text-[10px] ml-1 font-mono ${
+                        hoveredPoint.deltaPeso < 0
                           ? "text-emerald-400"
                           : hoveredPoint.deltaPeso > 0
-                            ? "text-rose-400"
-                            : "text-zinc-500"
-                        }`}
+                          ? "text-rose-400"
+                          : "text-zinc-500"
+                      }`}
                     >
                       ({hoveredPoint.deltaPeso > 0 ? `+${hoveredPoint.deltaPeso}` : hoveredPoint.deltaPeso})
                     </span>
@@ -2930,10 +3558,10 @@ export function WeightTab() {
                     {hoveredPoint.periodType === "weekly"
                       ? "% Grasa Semanal"
                       : hoveredPoint.periodType === "monthly"
-                        ? "% Grasa Mensual"
-                        : hoveredPoint.measurements && hoveredPoint.measurements.length > 1
-                          ? "% Grasa Media"
-                          : "% Graso"}
+                      ? "% Grasa Mensual"
+                      : hoveredPoint.measurements && hoveredPoint.measurements.length > 1
+                      ? "% Grasa Media"
+                      : "% Graso"}
                   </span>
                   <span className="font-extrabold text-sm text-yellow-400 font-mono">
                     {typeof hoveredPoint.grasaPct === "number" ? `${hoveredPoint.grasaPct.toFixed(1)}%` : "—"}
@@ -3106,10 +3734,11 @@ export function WeightTab() {
                 setTableGroupByDay(!tableGroupByDay);
                 setTablePage(1);
               }}
-              className={`px-2.5 py-1.5 rounded-xl border text-xs font-medium cursor-pointer transition-colors flex items-center gap-1.5 ${tableGroupByDay
+              className={`px-2.5 py-1.5 rounded-xl border text-xs font-medium cursor-pointer transition-colors flex items-center gap-1.5 ${
+                tableGroupByDay
                   ? "bg-cyan-500/15 border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25"
                   : "bg-zinc-800/80 border-zinc-700/80 text-zinc-300 hover:text-white"
-                }`}
+              }`}
               title={
                 tableGroupByDay
                   ? "Modo: Agrupado por día (medias). Haz clic para ver todas las tomas individuales"
@@ -3177,8 +3806,9 @@ export function WeightTab() {
                             handleOpenEdit(r.measurements?.[0] || r);
                           }
                         }}
-                        className={`hover:bg-zinc-850/70 transition-colors cursor-pointer group ${isExpanded ? "bg-zinc-850/40" : ""
-                          }`}
+                        className={`hover:bg-zinc-850/70 transition-colors cursor-pointer group ${
+                          isExpanded ? "bg-zinc-850/40" : ""
+                        }`}
                       >
                         <td className="py-3 px-3 text-zinc-300 font-sans">
                           <div className="flex flex-wrap items-center gap-2 font-medium">
@@ -3202,8 +3832,9 @@ export function WeightTab() {
                               >
                                 <span>{r.measurements?.length} medidas</span>
                                 <ChevronDownIcon
-                                  className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""
-                                    }`}
+                                  className={`w-3 h-3 transition-transform duration-200 ${
+                                    isExpanded ? "rotate-180" : ""
+                                  }`}
                                 />
                               </button>
                             )}
@@ -3223,8 +3854,9 @@ export function WeightTab() {
                         <td className="py-3 px-3">
                           {r.deltaPeso !== undefined && r.deltaPeso !== 0 ? (
                             <span
-                              className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${r.deltaPeso < 0 ? "text-emerald-400" : "text-rose-400"
-                                }`}
+                              className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${
+                                r.deltaPeso < 0 ? "text-emerald-400" : "text-rose-400"
+                              }`}
                             >
                               {r.deltaPeso < 0 ? "▼" : "▲"}{" "}
                               {r.deltaPeso > 0 ? `+${r.deltaPeso.toFixed(2)}` : r.deltaPeso.toFixed(2)}
@@ -3970,8 +4602,8 @@ export function WeightTab() {
                       {selectedDayModal.periodType === "weekly"
                         ? `Semana: ${selectedDayModal.periodLabel || selectedDayModal.fecha}`
                         : selectedDayModal.periodType === "monthly"
-                          ? `Mes: ${selectedDayModal.periodLabel || selectedDayModal.fecha}`
-                          : `Medidas del ${selectedDayModal.fecha}`}
+                        ? `Mes: ${selectedDayModal.periodLabel || selectedDayModal.fecha}`
+                        : `Medidas del ${selectedDayModal.fecha}`}
                     </span>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30">
                       {selectedDayModal.measurements?.length || 1} tomas
@@ -3981,8 +4613,8 @@ export function WeightTab() {
                     {selectedDayModal.periodType === "weekly"
                       ? "En la gráfica se muestra la media semanal calculada para este período."
                       : selectedDayModal.periodType === "monthly"
-                        ? "En la gráfica se muestra la media mensual calculada para este período."
-                        : "En la gráfica general se muestra la media diaria de este conjunto de medidas."}
+                      ? "En la gráfica se muestra la media mensual calculada para este período."
+                      : "En la gráfica general se muestra la media diaria de este conjunto de medidas."}
                   </p>
                 </div>
               </div>
@@ -4001,8 +4633,8 @@ export function WeightTab() {
                   {selectedDayModal.periodType === "weekly"
                     ? "Media Semanal"
                     : selectedDayModal.periodType === "monthly"
-                      ? "Media Mensual"
-                      : "Peso Medio"}
+                    ? "Media Mensual"
+                    : "Peso Medio"}
                 </span>
                 <span className="text-base font-extrabold text-blue-400">{selectedDayModal.peso.toFixed(1)} kg</span>
               </div>
@@ -4060,21 +4692,22 @@ export function WeightTab() {
                             <ClockIcon className="w-3 h-3" />
                             {m.hora}
                           </span>
-                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-sans ${m.source === "home_assistant"
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-sans ${
+                            m.source === "home_assistant"
                               ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/30"
                               : m.source === "xiaomi_mi_home"
-                                ? "bg-orange-500/15 text-orange-300 border border-orange-500/30"
-                                : "bg-zinc-800 text-zinc-400"
-                            }`}>
+                              ? "bg-orange-500/15 text-orange-300 border border-orange-500/30"
+                              : "bg-zinc-800 text-zinc-400"
+                          }`}>
                             {m.source === "home_assistant"
                               ? "Home Assistant"
                               : m.source === "xiaomi_mi_home"
-                                ? "Xiaomi Mi Home"
-                                : m.source === "scale_bia"
-                                  ? "Báscula BIA"
-                                  : m.source === "manual"
-                                    ? "Manual"
-                                    : "Zepp Life"}
+                              ? "Xiaomi Mi Home"
+                              : m.source === "scale_bia"
+                              ? "Báscula BIA"
+                              : m.source === "manual"
+                              ? "Manual"
+                              : "Zepp Life"}
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px] text-zinc-400 font-mono">
