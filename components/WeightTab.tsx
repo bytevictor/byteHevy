@@ -2756,8 +2756,14 @@ export function WeightTab() {
                                         <td className="py-1.5 px-2 text-yellow-400">
                                           {typeof sub.masaGrasaKg === "number" ? `${sub.masaGrasaKg.toFixed(1)} kg` : "—"}
                                         </td>
-                                        <td className="py-1.5 px-2 text-zinc-500 text-[10px] font-sans">
-                                          {sub.source || "zepp_life"}
+                                        <td className="py-1.5 px-2 text-[10px] font-sans">
+                                          {sub.source === "home_assistant" ? (
+                                            <span className="text-cyan-400 font-medium">Home Assistant</span>
+                                          ) : sub.source === "xiaomi_mi_home" ? (
+                                            <span className="text-orange-400 font-medium">Xiaomi Home</span>
+                                          ) : (
+                                            <span className="text-zinc-500">{sub.source || "zepp_life"}</span>
+                                          )}
                                         </td>
                                         <td className="py-1.5 px-2 text-right font-sans">
                                           <div className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -3399,8 +3405,22 @@ export function WeightTab() {
                             <ClockIcon className="w-3 h-3" />
                             {m.hora}
                           </span>
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 font-sans">
-                            {m.source || "zepp_life"}
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-sans ${
+                            m.source === "home_assistant"
+                              ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/30"
+                              : m.source === "xiaomi_mi_home"
+                              ? "bg-orange-500/15 text-orange-300 border border-orange-500/30"
+                              : "bg-zinc-800 text-zinc-400"
+                          }`}>
+                            {m.source === "home_assistant"
+                              ? "Home Assistant"
+                              : m.source === "xiaomi_mi_home"
+                              ? "Xiaomi Mi Home"
+                              : m.source === "scale_bia"
+                              ? "Báscula BIA"
+                              : m.source === "manual"
+                              ? "Manual"
+                              : "Zepp Life"}
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px] text-zinc-400 font-mono">

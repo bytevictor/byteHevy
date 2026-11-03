@@ -94,15 +94,46 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, records: parseResult.records });
     }
 
-    // Registro individual
-    if (!body.peso || isNaN(Number(body.peso)) || Number(body.peso) <= 0) {
+    // Registro individual (compatible con Home Assistant, ESPHome, curl y llamadas manuales)
+    const rawPeso = body.peso ?? body.weight ?? body.weight_kg;
+    const peso = typeof rawPeso === "string" ? parseFloat(rawPeso.replace(",", ".")) : Number(rawPeso);
+
+    if (isNaN(peso) || peso <= 0) {
       return NextResponse.json(
-        { success: false, error: "El peso es obligatorio y debe ser un valor numérico positivo." },
+        { success: false, error: "El peso es obligatorio y debe ser un número positivo (claves aceptadas: peso, weight, weight_kg)." },
         { status: 400 }
       );
     }
 
-    const newRecord = await createWeightRecord(body);
+    const rawImp = body.impedancia ?? body.impedance ?? body.bia;
+    const impedancia = rawImp !== undefined && rawImp !== null && rawImp !== ""
+      ? (typeof rawImp === "string" ? parseFloat(rawImp.replace(",", ".")) : Number(rawImp))
+      : null;
+
+    const rawImpLow = body.impedanciaLow ?? body.impedance_low ?? body.impedanceLow ?? body.low_impedance;
+    const impedanciaLow = rawImpLow !== undefined && rawImpLow !== null && rawImpLow !== ""
+      ? (typeof rawImpLow === "string" ? parseFloat(rawImpLow.replace(",", ".")) : Number(rawImpLow))
+      : null;
+
+    const rawAltura = body.altura ?? body.height ?? body.height_cm;
+    const altura = rawAltura !== undefined && rawAltura !== null && rawAltura !== ""
+      ? (typeof rawAltura === "string" ? parseFloat(rawAltura.replace(",", ".")) : Number(rawAltura))
+      : 180;
+
+    const fecha = body.fecha || body.date;
+    const hora = body.hora || body.time;
+    const source = body.source || ((impedancia || impedanciaLow) ? "home_assistant" : "manual");
+
+    const newRecord = await createWeightRecord({
+      ...body,
+      peso,
+      impedancia,
+      impedanciaLow,
+      altura,
+      fecha,
+      hora,
+      source,
+    });
     return NextResponse.json({ success: true, data: newRecord });
   } catch (error: any) {
     console.error("Failed to process weight POST request:", error);

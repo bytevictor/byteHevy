@@ -9,7 +9,7 @@ import {
   DEFAULT_USER_PROFILE,
   calculateBmi,
   calculateFfmi,
-} from "./user-profile-context";
+} from "./biometrics";
 
 export type { UserBiometricProfile };
 export { DEFAULT_USER_PROFILE };

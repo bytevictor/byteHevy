@@ -4,7 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { getExerciseMedia } from "./exercise-media";
 import { ExerciseMedia, MuscleGroup } from "@/types/exercise-media";
-import { WeightRecord, enrichWithMovingAverages, parseWeightCsv } from "./mock-weight-data";
+import { WeightRecord, enrichWithMovingAverages, parseWeightCsv, estimateBodyComposition } from "./mock-weight-data";
+import { calculateBmi } from "./biometrics";
 
 export type { WeightRecord };
 
@@ -2185,62 +2186,132 @@ export async function createWeightRecord(record: Partial<WeightRecord>): Promise
   const db = getDb();
   await ensureSchema(db);
 
-  const id = record.id || `w-${crypto.randomUUID()}`;
   const now = Date.now();
   const timestamp = record.timestamp || now;
   const date = record.fecha || new Date(timestamp).toISOString().split("T")[0];
   const time = record.hora || new Date(timestamp).toTimeString().substring(0, 5);
+  const peso = record.peso ?? 0;
+  const altura = record.altura && record.altura > 0 ? record.altura : 180;
+  const impedancia = record.impedancia ?? null;
+  const impedanciaLow = record.impedanciaLow ?? null;
+  const source = record.source || "manual";
 
-  await db.execute({
-    sql: `INSERT INTO weight_records (
-      id, date, time, timestamp, weight, impedance, impedance_low, height, bmi,
-      fat_rate, body_water_rate, bone_mass, metabolism, muscle_rate, visceral_fat,
-      lean_mass_kg, fat_mass_kg, ffmi, source, notes
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [
-      id,
-      date,
-      time,
-      timestamp,
-      record.peso ?? 0,
-      record.impedancia ?? null,
-      record.impedanciaLow ?? null,
-      record.altura ?? null,
-      record.bmi ?? null,
-      record.grasaPct ?? null,
-      record.aguaPct ?? null,
-      record.boneMass ?? null,
-      record.metabolism ?? null,
-      record.muscleRate ?? null,
-      record.visceralFat ?? null,
-      record.masaMagraKg ?? null,
-      record.masaGrasaKg ?? null,
-      record.ffmi ?? null,
-      record.source || "manual",
-      record.notes || null,
-    ],
+  let grasaPct = record.grasaPct ?? null;
+  let masaMagraKg = record.masaMagraKg ?? null;
+  let masaGrasaKg = record.masaGrasaKg ?? null;
+  let aguaPct = record.aguaPct ?? null;
+  let bmi = record.bmi ?? null;
+  let ffmi = record.ffmi ?? null;
+
+  // Si se dispone de bioimpedancia y peso pero no de composición calculada (ej. Home Assistant dual BIA),
+  // estimar clínicamente la composición corporal completa
+  if (peso > 0 && impedancia !== null && impedancia > 0 && (grasaPct === null || masaMagraKg === null)) {
+    const comp = estimateBodyComposition(peso, impedancia, impedanciaLow || Math.round(impedancia * 1.085), {
+      alturaCm: altura,
+      edad: 26,
+      sexo: "male",
+    });
+    grasaPct = comp.grasaPct;
+    masaMagraKg = comp.masaMagraKg;
+    masaGrasaKg = comp.masaGrasaKg;
+    aguaPct = comp.aguaPct;
+    bmi = comp.bmi;
+    ffmi = comp.ffmi;
+  } else if (bmi === null && peso > 0 && altura > 0) {
+    bmi = calculateBmi(peso, altura);
+  }
+
+  // Deduplicación / Debounce inteligente (útil para automatizaciones de Home Assistant / IoT):
+  // Si llega una medición de la misma fuente en una ventana de ±90 segundos, actualizarla para no duplicar
+  const existingRecent = await db.execute({
+    sql: `SELECT id FROM weight_records 
+          WHERE source = ? AND ABS(timestamp - ?) <= 90000 
+          LIMIT 1`,
+    args: [source, timestamp],
   });
 
+  const recordId = existingRecent.rows.length > 0 ? String(existingRecent.rows[0].id) : (record.id || `w-${crypto.randomUUID()}`);
+  const isUpdate = existingRecent.rows.length > 0;
+
+  if (isUpdate) {
+    await db.execute({
+      sql: `UPDATE weight_records SET
+        weight = ?, impedance = ?, impedance_low = ?, height = ?, bmi = ?,
+        fat_rate = ?, body_water_rate = ?, bone_mass = ?, metabolism = ?,
+        muscle_rate = ?, visceral_fat = ?, lean_mass_kg = ?, fat_mass_kg = ?,
+        ffmi = ?, notes = ?
+        WHERE id = ?`,
+      args: [
+        peso,
+        impedancia,
+        impedanciaLow,
+        altura,
+        bmi,
+        grasaPct,
+        aguaPct,
+        record.boneMass ?? null,
+        record.metabolism ?? null,
+        record.muscleRate ?? null,
+        record.visceralFat ?? null,
+        masaMagraKg,
+        masaGrasaKg,
+        ffmi,
+        record.notes || null,
+        recordId,
+      ],
+    });
+  } else {
+    await db.execute({
+      sql: `INSERT INTO weight_records (
+        id, date, time, timestamp, weight, impedance, impedance_low, height, bmi,
+        fat_rate, body_water_rate, bone_mass, metabolism, muscle_rate, visceral_fat,
+        lean_mass_kg, fat_mass_kg, ffmi, source, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        recordId,
+        date,
+        time,
+        timestamp,
+        peso,
+        impedancia,
+        impedanciaLow,
+        altura,
+        bmi,
+        grasaPct,
+        aguaPct,
+        record.boneMass ?? null,
+        record.metabolism ?? null,
+        record.muscleRate ?? null,
+        record.visceralFat ?? null,
+        masaMagraKg,
+        masaGrasaKg,
+        ffmi,
+        source,
+        record.notes || null,
+      ],
+    });
+  }
+
   return {
-    id,
+    id: recordId,
     fecha: date,
     hora: time,
     timestamp,
-    peso: record.peso ?? 0,
-    impedancia: record.impedancia ?? null,
-    impedanciaLow: record.impedanciaLow ?? null,
-    grasaPct: record.grasaPct ?? null,
-    masaMagraKg: record.masaMagraKg ?? null,
-    masaGrasaKg: record.masaGrasaKg ?? null,
-    aguaPct: record.aguaPct ?? null,
-    bmi: record.bmi ?? null,
-    ffmi: record.ffmi ?? null,
-    altura: record.altura ?? null,
+    peso,
+    impedancia,
+    impedanciaLow,
+    grasaPct,
+    masaMagraKg,
+    masaGrasaKg,
+    aguaPct,
+    bmi,
+    ffmi,
+    altura,
     boneMass: record.boneMass ?? null,
     metabolism: record.metabolism ?? null,
     muscleRate: record.muscleRate ?? null,
     visceralFat: record.visceralFat ?? null,
-    source: record.source || "manual",
+    source,
     notes: record.notes || null,
     esValido: true,
   };
