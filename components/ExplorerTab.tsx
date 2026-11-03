@@ -819,6 +819,78 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* 1RM Estimado Card (Contenido en vertical) */}
+                      <div className="p-3.5 rounded-xl bg-gradient-to-br from-orange-500/10 via-zinc-900 to-zinc-900 border border-orange-500/25 flex flex-col justify-between shadow-xs">
+                        <div className="flex items-center justify-between pb-2 border-b border-orange-500/20">
+                          <span className="text-[10px] uppercase tracking-wider text-orange-400 font-bold flex items-center gap-1.5">
+                            <FlameIcon className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                            <span>1RM Estimado</span>
+                          </span>
+                          <span className="text-[9px] font-mono text-zinc-500 uppercase">Fórmula Brzycki</span>
+                        </div>
+
+                        {isWeightMetric ? (
+                          <div className="flex flex-col divide-y divide-zinc-800/70 pt-1">
+                            {/* Row 1: Mayor Peso */}
+                            <div className="py-2 flex flex-col">
+                              <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-orange-400/80 shrink-0" />
+                                <span>Mayor Peso</span>
+                              </span>
+                              <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-zinc-100 mt-0.5">
+                                {detailData.exercise.allTimeBest?.label || "—"}
+                              </div>
+                              <span className="text-[10px] font-mono text-zinc-400 mt-0.5">
+                                {detailData.exercise.allTimeBest?.date || "Sin registro"}
+                              </span>
+                            </div>
+
+                            {/* Row 2: Top Set 1RM */}
+                            <div className="pt-2 flex flex-col">
+                              <span className="text-[10px] uppercase tracking-wider text-orange-400 font-semibold flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0" />
+                                <span>Top Set 1RM</span>
+                              </span>
+                              <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-orange-300 mt-0.5">
+                                {detailData.exercise.allTimeMax1RM?.label ||
+                                  (detailData.exercise.allTimeEstimated1RM
+                                    ? `${detailData.exercise.allTimeEstimated1RM} kg 1RM`
+                                    : "—")}
+                              </div>
+                              <div className="text-[10px] font-mono text-zinc-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                {detailData.exercise.allTimeMax1RM?.setLabel && (
+                                  <>
+                                    <span className="text-zinc-300 font-medium">{detailData.exercise.allTimeMax1RM.setLabel}</span>
+                                    <span className="text-zinc-600">·</span>
+                                  </>
+                                )}
+                                <span>
+                                  {detailData.exercise.allTimeMax1RM?.date ||
+                                    detailData.exercise.allTimeBest?.date ||
+                                    "Sin registro"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="pt-2 flex flex-col">
+                            <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
+                              {detailData.exercise.metricType === "bodyweight_reps"
+                                ? "Récord Repeticiones"
+                                : detailData.exercise.metricType === "seconds"
+                                ? "Récord Duración"
+                                : "Récord Distancia"}
+                            </span>
+                            <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-orange-200 mt-0.5">
+                              {detailData.exercise.allTimeBest?.label || "—"}
+                            </div>
+                            <span className="text-[10px] font-mono text-zinc-400 mt-0.5">
+                              {detailData.exercise.allTimeBest?.date || "Sin registro"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
                       {/* ALL-TIME PR Card (Contenido en vertical) */}
                       <div className="p-3.5 rounded-xl bg-gradient-to-br from-yellow-500/10 via-zinc-900 to-zinc-900 border border-yellow-500/30 flex flex-col justify-between shadow-xs">
                         <div className="flex items-center justify-between pb-2 border-b border-yellow-500/20">
@@ -888,31 +960,6 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                             </span>
                           </div>
                         )}
-                      </div>
-
-                      {/* 1RM Estimado Card */}
-                      <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between shadow-xs">
-                        <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
-                          <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold flex items-center gap-1.5">
-                            <FlameIcon className="w-3.5 h-3.5 text-zinc-500" />
-                            <span>1RM Estimado</span>
-                          </span>
-                          <span className="text-[9px] font-mono text-zinc-500 uppercase">Fórmula Brzycki</span>
-                        </div>
-                        <div className="pt-2 flex flex-col justify-between">
-                          <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-zinc-200">
-                            {detailData.exercise.allTimeMax1RM?.value
-                              ? `${detailData.exercise.allTimeMax1RM.value} ${getUnit(detailData.exercise.metricType)}`
-                              : detailData.exercise.estimated1RM
-                              ? `${detailData.exercise.estimated1RM} ${getUnit(detailData.exercise.metricType)}`
-                              : "—"}
-                          </div>
-                          <span className="text-[10px] text-zinc-500 mt-1">
-                            {detailData.exercise.allTimeMax1RM?.setLabel
-                              ? `Calculado sobre ${detailData.exercise.allTimeMax1RM.setLabel}`
-                              : "Calculado a partir de la mejor serie registrada"}
-                          </span>
-                        </div>
                       </div>
                     </div>
                   )}
