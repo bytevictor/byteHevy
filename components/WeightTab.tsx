@@ -55,6 +55,236 @@ export type WeightChartMode = "combined" | "weight_only" | "fat_only" | "trend" 
 export type TimeRange = "1M" | "3M" | "6M" | "1A" | "all";
 export type CurveType = "linear" | "smooth" | "flow";
 
+export interface DateSegmentOption {
+  offset: number;
+  label: string;
+  shortLabel: string;
+  subLabel: string;
+  startTimestamp: number;
+  endTimestamp: number;
+  isLatest: boolean;
+}
+
+/**
+ * Genera los tramos navegables según el rango temporal seleccionado:
+ * - Para "1A":
+ *   - Offset 0: Último año continuo desde la última medida registrada.
+ *   - Offset 1, 2, ...: Años naturales completos anteriores (1 Ene a 31 Dic).
+ * - Para "1M":
+ *   - Offset 0: Último mes continuo desde la última medida.
+ *   - Offset 1, 2, ...: Meses naturales completos anteriores.
+ * - Para "3M" y "6M": Bloques continuos hacia el pasado.
+ */
+export function buildDateSegments(
+  records: WeightRecord[],
+  timeRange: TimeRange
+): DateSegmentOption[] {
+  if (records.length === 0) return [];
+
+  const sorted = [...records].sort((a, b) => a.timestamp - b.timestamp);
+  const minTs = sorted[0].timestamp;
+  const maxTs = sorted[sorted.length - 1].timestamp;
+  const latestDate = new Date(maxTs);
+  const earliestDate = new Date(minTs);
+  const latestYear = latestDate.getFullYear();
+  const earliestYear = earliestDate.getFullYear();
+
+  const segments: DateSegmentOption[] = [];
+
+  if (timeRange === "1A") {
+    // 1. Tramo actual (Offset 0): El último año continuo desde la última medida registrada
+    const oneYearAgoTs = new Date(
+      latestDate.getFullYear() - 1,
+      latestDate.getMonth(),
+      latestDate.getDate(),
+      0,
+      0,
+      0,
+      0
+    ).getTime();
+
+    const startLabel = new Date(oneYearAgoTs).toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+    const endLabel = latestDate.toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+
+    segments.push({
+      offset: 0,
+      label: "Último año",
+      shortLabel: "Último año",
+      subLabel: `${startLabel} – ${endLabel}`,
+      startTimestamp: oneYearAgoTs,
+      endTimestamp: maxTs + 86400000,
+      isLatest: true,
+    });
+
+    // 2. Tramos anteriores (Offset 1, 2, ...): Años naturales completos (1 Ene a 31 Dic)
+    for (let y = latestYear - 1; y >= earliestYear; y--) {
+      const startTs = new Date(y, 0, 1, 0, 0, 0, 0).getTime();
+      const endTs = new Date(y, 11, 31, 23, 59, 59, 999).getTime();
+      const k = latestYear - y;
+
+      segments.push({
+        offset: k,
+        label: `Año ${y}`,
+        shortLabel: String(y),
+        subLabel: `01/01/${y} – 31/12/${y}`,
+        startTimestamp: startTs,
+        endTimestamp: endTs,
+        isLatest: false,
+      });
+    }
+  } else if (timeRange === "1M") {
+    // 1. Tramo actual (Offset 0): El último mes continuo desde la última medida
+    const oneMonthAgoTs = new Date(
+      latestDate.getFullYear(),
+      latestDate.getMonth() - 1,
+      latestDate.getDate(),
+      0,
+      0,
+      0,
+      0
+    ).getTime();
+
+    const startLabel = new Date(oneMonthAgoTs).toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+    const endLabel = latestDate.toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+
+    segments.push({
+      offset: 0,
+      label: "Último mes",
+      shortLabel: "Último mes",
+      subLabel: `${startLabel} – ${endLabel}`,
+      startTimestamp: oneMonthAgoTs,
+      endTimestamp: maxTs + 86400000,
+      isLatest: true,
+    });
+
+    // 2. Meses naturales completos anteriores
+    let k = 1;
+    while (true) {
+      const mDate = new Date(latestDate.getFullYear(), latestDate.getMonth() - k, 1);
+      const startTs = new Date(mDate.getFullYear(), mDate.getMonth(), 1, 0, 0, 0, 0).getTime();
+      const endTs = new Date(mDate.getFullYear(), mDate.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+
+      if (endTs < minTs) break;
+
+      const mName = mDate.toLocaleDateString("es-ES", { month: "long" });
+      const capName = mName.charAt(0).toUpperCase() + mName.slice(1);
+      const lastDay = new Date(endTs).getDate();
+
+      segments.push({
+        offset: k,
+        label: `${capName} ${mDate.getFullYear()}`,
+        shortLabel: `${capName.slice(0, 3)} ${mDate.getFullYear()}`,
+        subLabel: `01/${String(mDate.getMonth() + 1).padStart(2, "0")} – ${String(lastDay).padStart(2, "0")}/${String(mDate.getMonth() + 1).padStart(2, "0")}/${mDate.getFullYear()}`,
+        startTimestamp: startTs,
+        endTimestamp: endTs,
+        isLatest: false,
+      });
+
+      k++;
+      if (k > 120) break;
+    }
+  } else if (timeRange === "3M") {
+    // 3 meses
+    const threeMonthsAgoTs = maxTs - 90 * 86400000;
+    segments.push({
+      offset: 0,
+      label: "Últimos 3 meses",
+      shortLabel: "Últimos 3M",
+      subLabel: `${new Date(threeMonthsAgoTs).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" })} – ${latestDate.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" })}`,
+      startTimestamp: threeMonthsAgoTs,
+      endTimestamp: maxTs + 86400000,
+      isLatest: true,
+    });
+
+    let k = 1;
+    while (true) {
+      const endTs = maxTs - k * 90 * 86400000;
+      const startTs = maxTs - (k + 1) * 90 * 86400000;
+      if (endTs < minTs) break;
+
+      const startLabel = new Date(startTs).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "2-digit" });
+      const endLabel = new Date(endTs).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "2-digit" });
+
+      segments.push({
+        offset: k,
+        label: `3M: ${startLabel} – ${endLabel}`,
+        shortLabel: `-3M (${startLabel})`,
+        subLabel: `${startLabel} – ${endLabel}`,
+        startTimestamp: startTs,
+        endTimestamp: endTs,
+        isLatest: false,
+      });
+
+      k++;
+      if (k > 40) break;
+    }
+  } else if (timeRange === "6M") {
+    // 6 meses
+    const sixMonthsAgoTs = maxTs - 180 * 86400000;
+    segments.push({
+      offset: 0,
+      label: "Últimos 6 meses",
+      shortLabel: "Últimos 6M",
+      subLabel: `${new Date(sixMonthsAgoTs).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" })} – ${latestDate.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" })}`,
+      startTimestamp: sixMonthsAgoTs,
+      endTimestamp: maxTs + 86400000,
+      isLatest: true,
+    });
+
+    let k = 1;
+    while (true) {
+      const endTs = maxTs - k * 180 * 86400000;
+      const startTs = maxTs - (k + 1) * 180 * 86400000;
+      if (endTs < minTs) break;
+
+      const startLabel = new Date(startTs).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "2-digit" });
+      const endLabel = new Date(endTs).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "2-digit" });
+
+      segments.push({
+        offset: k,
+        label: `6M: ${startLabel} – ${endLabel}`,
+        shortLabel: `-6M (${startLabel})`,
+        subLabel: `${startLabel} – ${endLabel}`,
+        startTimestamp: startTs,
+        endTimestamp: endTs,
+        isLatest: false,
+      });
+
+      k++;
+      if (k > 20) break;
+    }
+  } else {
+    // "all"
+    segments.push({
+      offset: 0,
+      label: "Todo el historial",
+      shortLabel: "Todo",
+      subLabel: `${earliestDate.toLocaleDateString("es-ES", { month: "short", year: "numeric" })} – ${latestDate.toLocaleDateString("es-ES", { month: "short", year: "numeric" })}`,
+      startTimestamp: minTs,
+      endTimestamp: maxTs,
+      isLatest: true,
+    });
+  }
+
+  return segments;
+}
+
 /**
  * Generador de trazados SVG:
  * - "linear": Segmentos rectos directos entre puntos.
@@ -298,6 +528,8 @@ export function WeightTab() {
   const [isTrendMode, setIsTrendMode] = useState<boolean>(false);
   const [curveType, setCurveType] = useState<CurveType>("smooth");
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
+  const [dateSegmentOffset, setDateSegmentOffset] = useState<number>(0);
+  const [segmentDropdownOpen, setSegmentDropdownOpen] = useState<boolean>(false);
   const [groupingMode, setGroupingMode] = useState<WeightGroupingMode>("auto");
   const [syncWithSeason, setSyncWithSeason] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -397,6 +629,7 @@ export function WeightTab() {
 
   const handleTimeRangeChange = (r: TimeRange) => {
     setTimeRange(r);
+    setDateSegmentOffset(0);
     try {
       localStorage.setItem("bytehevy_weight_time_range", r);
     } catch {}
@@ -672,7 +905,33 @@ export function WeightTab() {
     }
   };
 
-  // Filtrado de datos por rango temporal y season (registros brutos)
+  // Tramos temporales disponibles según el rango actual y los datos reales
+  const dateSegments = useMemo<DateSegmentOption[]>(() => {
+    return buildDateSegments(records, timeRange);
+  }, [records, timeRange]);
+
+  const currentSegment = useMemo(() => {
+    if (dateSegments.length === 0) return null;
+    const found = dateSegments.find((s) => s.offset === dateSegmentOffset);
+    return found || dateSegments[0];
+  }, [dateSegments, dateSegmentOffset]);
+
+  const canGoBackSegment = dateSegmentOffset < dateSegments.length - 1;
+  const canGoForwardSegment = dateSegmentOffset > 0;
+
+  const handlePrevSegment = () => {
+    if (canGoBackSegment) {
+      setDateSegmentOffset((prev) => prev + 1);
+    }
+  };
+
+  const handleNextSegment = () => {
+    if (canGoForwardSegment) {
+      setDateSegmentOffset((prev) => prev - 1);
+    }
+  };
+
+  // Filtrado de datos por rango temporal, tramo seleccionado y season (registros brutos)
   const filteredRecords = useMemo(() => {
     let result = [...records];
 
@@ -680,7 +939,13 @@ export function WeightTab() {
       const seasonStart = activeSeason.startTimestamp * 1000;
       const seasonEnd = activeSeason.endTimestamp ? activeSeason.endTimestamp * 1000 : Infinity;
       result = result.filter((r) => r.timestamp >= seasonStart && r.timestamp <= seasonEnd);
-    } else if (timeRange !== "all") {
+    } else if (timeRange === "all") {
+      // Todo el historial completo
+    } else if (currentSegment) {
+      result = result.filter(
+        (r) => r.timestamp >= currentSegment.startTimestamp && r.timestamp <= currentSegment.endTimestamp
+      );
+    } else {
       const now = records.length > 0 ? records[records.length - 1].timestamp : Date.now();
       let days = 90;
       if (timeRange === "1M") days = 30;
@@ -693,7 +958,7 @@ export function WeightTab() {
     }
 
     return result.sort((a, b) => a.timestamp - b.timestamp);
-  }, [records, timeRange, syncWithSeason, activeSeason, activeSeasonId]);
+  }, [records, timeRange, syncWithSeason, activeSeason, activeSeasonId, currentSegment]);
 
   // Agrupación adaptativa inteligente para la gráfica:
   // Cuando las medidas se amontonan (como en el TODO o en el peso anual "1A"),
@@ -1024,8 +1289,15 @@ export function WeightTab() {
     if (chartRecords.length === 0) return null;
 
     const timestamps = filteredRecords.map((r) => r.timestamp);
-    const minTime = timestamps.length > 0 ? Math.min(...timestamps) : 0;
-    const maxTime = timestamps.length > 0 ? Math.max(...timestamps) : 1;
+    let minTime = timestamps.length > 0 ? Math.min(...timestamps) : 0;
+    let maxTime = timestamps.length > 0 ? Math.max(...timestamps) : 1;
+
+    // Si hay un tramo específico activo (no "all"), usar el dominio exacto del tramo
+    // para preservar la proporción de año completo o mes completo en el eje X
+    if (currentSegment && timeRange !== "all") {
+      minTime = currentSegment.startTimestamp;
+      maxTime = currentSegment.endTimestamp;
+    }
     const timeSpan = maxTime - minTime || 1;
 
     // Escala Peso (kg) - En modo trend incluimos los puntos de la nube para ajuste exacto
@@ -1071,7 +1343,7 @@ export function WeightTab() {
       getYWeight,
       getYFat,
     };
-  }, [chartRecords, filteredRecords, chartInnerWidth, chartInnerHeight, padding, chartMode, trendAnalysis]);
+  }, [chartRecords, filteredRecords, chartInnerWidth, chartInnerHeight, padding, chartMode, trendAnalysis, currentSegment, timeRange]);
 
   // Generador de rutas SVG respetando curveType ("linear" | "smooth" | "flow")
   const chartPaths = useMemo(() => {
@@ -1237,7 +1509,7 @@ export function WeightTab() {
         const ts = d.getTime();
         if (ts >= minTime) {
           const x = getX(ts);
-          if (x >= padding.left + 10 && x <= svgWidth - padding.right - 10) {
+          if (x >= padding.left - 5 && x <= svgWidth - padding.right + 5) {
             const label = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
             ticks.push({ x, label, timestamp: ts });
           }
@@ -1253,7 +1525,7 @@ export function WeightTab() {
           const ts = d.getTime();
           if (ts >= minTime && ts <= maxTime) {
             const x = getX(ts);
-            if (x >= padding.left + 10 && x <= svgWidth - padding.right - 10) {
+            if (x >= padding.left - 5 && x <= svgWidth - padding.right + 5) {
               const label = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
               ticks.push({ x, label, timestamp: ts });
             }
@@ -1269,7 +1541,7 @@ export function WeightTab() {
         const ts = d.getTime();
         if (ts >= minTime && ts <= maxTime) {
           const x = getX(ts);
-          if (x >= padding.left + 10 && x <= svgWidth - padding.right - 10) {
+          if (x >= padding.left - 5 && x <= svgWidth - padding.right + 5) {
             const isJan = d.getMonth() === 0;
             const monthName = d.toLocaleDateString("es-ES", { month: "short" });
             const label = isJan ? `${monthName} '${String(d.getFullYear()).slice(2)}` : monthName;
@@ -1648,7 +1920,11 @@ export function WeightTab() {
           <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
             <span className="flex items-center gap-1.5">
               <ScaleIcon className="w-3.5 h-3.5 text-blue-500" />
-              <span className="text-zinc-300 font-semibold">Peso Actual</span>
+              <span className="text-zinc-300 font-semibold">
+                {currentSegment && !currentSegment.isLatest
+                  ? `Peso Cierre (${currentSegment.shortLabel})`
+                  : "Peso Actual"}
+              </span>
             </span>
             <span className="text-[10px] font-mono text-blue-400 font-medium">kg</span>
           </div>
@@ -1934,6 +2210,131 @@ export function WeightTab() {
                 </button>
               ))}
             </div>
+
+            {/* Iterador de Tramos por Fecha */}
+            {timeRange !== "all" && !syncWithSeason && dateSegments.length > 1 && currentSegment && (
+              <div className="inline-flex items-center p-0.5 rounded-xl bg-zinc-950/90 border border-zinc-800 shadow-inner">
+                {/* Botón Atrás (<) - Ir al tramo anterior hacia el pasado */}
+                <button
+                  type="button"
+                  onClick={handlePrevSegment}
+                  disabled={!canGoBackSegment}
+                  className="w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 disabled:opacity-25 disabled:pointer-events-none"
+                  title={
+                    canGoBackSegment
+                      ? `Ir al periodo anterior (${dateSegments[dateSegmentOffset + 1]?.label})`
+                      : "No hay periodos anteriores disponibles"
+                  }
+                  aria-label="Tramo anterior"
+                >
+                  <ChevronLeftIcon className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Selector Desplegable del Tramo Activo */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setSegmentDropdownOpen((prev) => !prev)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                      dateSegmentOffset > 0
+                        ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold"
+                        : "bg-zinc-800/90 text-zinc-200 border border-zinc-700/60 font-semibold"
+                    }`}
+                    title={
+                      currentSegment.subLabel
+                        ? `${currentSegment.label} (${currentSegment.subLabel})`
+                        : currentSegment.label
+                    }
+                  >
+                    <CalendarIcon
+                      className={`w-3 h-3 ${dateSegmentOffset > 0 ? "text-amber-400" : "text-zinc-400"}`}
+                    />
+                    <span>{currentSegment.shortLabel || currentSegment.label}</span>
+                    <ChevronDownIcon className="w-3 h-3 text-zinc-400" />
+                  </button>
+
+                  {/* Dropdown Menu Flotante */}
+                  {segmentDropdownOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setSegmentDropdownOpen(false)}
+                      />
+                      <div className="absolute left-0 mt-1.5 z-50 min-w-[230px] bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-1 animate-in fade-in zoom-in-95 duration-150">
+                        <div className="px-2.5 py-1.5 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider border-b border-zinc-800/80">
+                          {timeRange === "1A" ? "Años Disponibles" : "Tramos Disponibles"}
+                        </div>
+                        <div className="max-h-60 overflow-y-auto py-1 space-y-0.5">
+                          {dateSegments.map((s) => {
+                            const isSelected = s.offset === dateSegmentOffset;
+                            return (
+                              <button
+                                key={s.offset}
+                                type="button"
+                                onClick={() => {
+                                  setDateSegmentOffset(s.offset);
+                                  setSegmentDropdownOpen(false);
+                                }}
+                                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                                  isSelected
+                                    ? "bg-zinc-800 text-white font-bold"
+                                    : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                                }`}
+                              >
+                                <div className="flex flex-col">
+                                  <span className="flex items-center gap-1.5">
+                                    {s.isLatest && (
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                                    )}
+                                    <span>{s.label}</span>
+                                  </span>
+                                  {s.subLabel && (
+                                    <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                                      {s.subLabel}
+                                    </span>
+                                  )}
+                                </div>
+                                {isSelected && (
+                                  <CheckIcon className="w-3.5 h-3.5 text-accent shrink-0 ml-2" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Botón Adelante (>) - Ir al tramo siguiente hacia el presente */}
+                <button
+                  type="button"
+                  onClick={handleNextSegment}
+                  disabled={!canGoForwardSegment}
+                  className="w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 disabled:opacity-25 disabled:pointer-events-none"
+                  title={
+                    canGoForwardSegment
+                      ? `Ir al periodo siguiente (${dateSegments[dateSegmentOffset - 1]?.label})`
+                      : "Estás en el tramo más reciente"
+                  }
+                  aria-label="Tramo siguiente"
+                >
+                  <ChevronRightIcon className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Botón rápido "Volver a Reciente" si está viendo un tramo histórico */}
+            {dateSegmentOffset > 0 && !syncWithSeason && timeRange !== "all" && (
+              <button
+                type="button"
+                onClick={() => setDateSegmentOffset(0)}
+                className="px-2 py-1 rounded-xl text-[11px] font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors cursor-pointer flex items-center gap-1"
+                title="Volver al tramo más reciente (último año continuo)"
+              >
+                <span>Volver a Reciente</span>
+              </button>
+            )}
 
             {/* Control de Agrupación (Fórmula anti-amontonamiento) */}
             <div className="inline-flex items-center p-0.5 rounded-xl bg-zinc-950/90 border border-zinc-800 shadow-inner">
