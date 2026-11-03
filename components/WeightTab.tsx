@@ -1941,13 +1941,13 @@ export function WeightTab() {
                     strokeOpacity={chartMode === "weight_only" ? "0.6" : "0.95"}
                   />
 
-                  {/* Línea de Media Móvil 7D de Peso (destacada) */}
+                  {/* Línea de Media Móvil 7D de Peso (destacada y punteada) */}
                   <path
                     d={chartPaths.maWeightLine}
                     fill="none"
                     stroke="#3b82f6"
                     strokeWidth="2.5"
-                    strokeDasharray={chartMode === "weight_only" ? undefined : "3 3"}
+                    strokeDasharray="3 3"
                   />
 
                   {/* Puntos individuales de pesaje (media diaria cuando hay varias tomas) */}
@@ -2000,13 +2000,13 @@ export function WeightTab() {
                     strokeOpacity={chartMode === "fat_only" ? "0.6" : "0.95"}
                   />
 
-                  {/* Línea de Media Móvil 7D de Grasa */}
+                  {/* Línea de Media Móvil 7D de Grasa (punteada) */}
                   <path
                     d={chartPaths.maFatLine}
                     fill="none"
                     stroke="#facc15"
                     strokeWidth="2.5"
-                    strokeDasharray={chartMode === "fat_only" ? undefined : "3 3"}
+                    strokeDasharray="3 3"
                   />
 
                   {chartRecords
