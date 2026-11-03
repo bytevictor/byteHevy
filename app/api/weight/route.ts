@@ -9,12 +9,13 @@ import {
 } from "@/lib/actions";
 import { parseWeightCsv } from "@/lib/mock-weight-data";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
     const records = await getWeightRecords();
     return NextResponse.json(
       { success: true, data: records, count: records.length },
-      { headers: { "Cache-Control": "no-store, max-age=0" } }
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
     );
   } catch (error: any) {
     if (error?.digest === "NEXT_PRERENDER_INTERRUPTED") throw error;

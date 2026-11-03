@@ -14,34 +14,19 @@ function isIoOrLockError(err: any): boolean {
     code === "SQLITE_IOERR" ||
     code === "SQLITE_BUSY" ||
     code === "SQLITE_LOCKED" ||
+    code === "SQLITE_CORRUPT" ||
     extendedCode === "SQLITE_IOERR_SHORT_READ" ||
     msg.includes("SQLITE_IOERR") ||
     msg.includes("disk I/O error") ||
-    msg.includes("database is locked")
+    msg.includes("database is locked") ||
+    msg.includes("SQLITE_CORRUPT") ||
+    msg.includes("malformed")
   );
 }
 
 function cleanStaleAuxFiles(dbPath: string) {
-  const walPath = `${dbPath}-wal`;
-  if (fs.existsSync(walPath)) {
-    try {
-      const stat = fs.statSync(walPath);
-      if (stat.size === 0) {
-        fs.unlinkSync(walPath);
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  const shmPath = `${dbPath}-shm`;
-  if (fs.existsSync(shmPath) && !fs.existsSync(walPath)) {
-    try {
-      fs.unlinkSync(shmPath);
-    } catch {
-      // ignore
-    }
-  }
+  // SQLite gestiona nativamente los archivos -wal y -shm en modo WAL.
+  // No eliminar -shm o -wal manualmente para evitar desincronizar los descriptores abiertos.
 }
 
 export function resetDb() {

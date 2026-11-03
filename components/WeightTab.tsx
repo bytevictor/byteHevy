@@ -159,7 +159,7 @@ export function WeightTab() {
   const loadRecords = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/weight");
+      const res = await fetch(`/api/weight?t=${Date.now()}`, { cache: "no-store" });
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
         setRecords(json.data);
