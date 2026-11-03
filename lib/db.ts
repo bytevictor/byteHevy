@@ -222,6 +222,42 @@ export async function ensureSchema(db: Client) {
     );`,
     `CREATE INDEX IF NOT EXISTS idx_weight_records_date ON weight_records(date);`,
     `CREATE INDEX IF NOT EXISTS idx_weight_records_timestamp ON weight_records(timestamp);`,
+    `CREATE TABLE IF NOT EXISTS xiaomi_auth (
+      id TEXT PRIMARY KEY DEFAULT 'primary',
+      user_id TEXT,
+      pass_token TEXT,
+      region TEXT DEFAULT 'de',
+      scale_model TEXT DEFAULT 'yunmai.scales.ms104',
+      is_authenticated INTEGER DEFAULT 0,
+      last_sync_timestamp_ms INTEGER DEFAULT 0,
+      qr_lp_url TEXT,
+      qr_login_url TEXT,
+      qr_image_url TEXT,
+      qr_created_at INTEGER,
+      updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+    );`,
+    `CREATE TABLE IF NOT EXISTS scale_measurements (
+      timestamp_ms INTEGER PRIMARY KEY,
+      measured_at TEXT,
+      weight_kg REAL,
+      bmi REAL,
+      body_fat_pct REAL,
+      body_water_pct REAL,
+      bone_mass_kg REAL,
+      muscle_mass_kg REAL,
+      protein_mass_kg REAL,
+      skeletal_muscle_mass_kg REAL,
+      visceral_fat INTEGER,
+      metabolic_age INTEGER,
+      bmr_kcal INTEGER,
+      body_score INTEGER,
+      heart_rate_bpm INTEGER,
+      user_name TEXT,
+      height_cm REAL,
+      scale_model TEXT DEFAULT 'yunmai.scales.ms104',
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_scale_measurements_timestamp ON scale_measurements(timestamp_ms);`,
   ]);
 
   // Migration for seasons: ensure color column exists
