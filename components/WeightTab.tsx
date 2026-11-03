@@ -1345,15 +1345,6 @@ export function WeightTab() {
           </button>
 
           <button
-            onClick={() => setCsvModalOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-zinc-800/90 text-zinc-200 border border-zinc-700/80 hover:bg-zinc-750 hover:text-white transition-all shadow-sm cursor-pointer"
-            title="Importar archivo CSV"
-          >
-            <UploadCloudIcon className="w-4 h-4 text-accent-light" />
-            <span>Importar CSV</span>
-          </button>
-
-          <button
             onClick={() => setManualEntryModalOpen(true)}
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm cursor-pointer text-zinc-950 font-bold"
             style={{
@@ -1367,29 +1358,7 @@ export function WeightTab() {
         </div>
       </div>
 
-      {/* 2. Banner informativo sobre el Schema y la interacción */}
-      <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 backdrop-blur-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-zinc-300">
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center shrink-0 text-blue-400">
-            <InfoIcon className="w-4 h-4" />
-          </div>
-          <div>
-            <span className="font-semibold text-zinc-200">Base de datos de pesajes sincronizada:</span>{" "}
-            Soporta datos directos de báscula (peso e impedancia) o importaciones de Zepp Life.
-            Haz clic en cualquier punto o fila para <span className="text-amber-400 font-medium">editar o eliminar</span>.
-          </div>
-        </div>
-
-        <button
-          onClick={handleReloadFromDb}
-          className="flex items-center gap-1.5 text-[11px] text-zinc-400 hover:text-zinc-200 cursor-pointer whitespace-nowrap ml-auto"
-        >
-          <RefreshCwIcon className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
-          <span>Sincronizar BD</span>
-        </button>
-      </div>
-
-      {/* 3. Panel de Métricas / KPI Cards (3 Cards) */}
+      {/* 2. Panel de Métricas / KPI Cards (3 Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
         {/* KPI 1: Peso Actual (Azul Cobalto) */}
         <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
