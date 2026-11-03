@@ -829,12 +829,9 @@ export function WeightTab() {
   const chartScales = useMemo(() => {
     if (chartRecords.length === 0) return null;
 
-    const allRecordsForTime = chartMode === "trend" && trendAnalysis
-      ? trendAnalysis.rawPoints
-      : chartRecords;
-    const timestamps = allRecordsForTime.map((r) => r.timestamp);
-    const minTime = Math.min(...timestamps);
-    const maxTime = Math.max(...timestamps);
+    const timestamps = filteredRecords.map((r) => r.timestamp);
+    const minTime = timestamps.length > 0 ? Math.min(...timestamps) : 0;
+    const maxTime = timestamps.length > 0 ? Math.max(...timestamps) : 1;
     const timeSpan = maxTime - minTime || 1;
 
     // Escala Peso (kg) - En modo trend incluimos los puntos de la nube para ajuste exacto
@@ -880,7 +877,7 @@ export function WeightTab() {
       getYWeight,
       getYFat,
     };
-  }, [chartRecords, chartInnerWidth, chartInnerHeight, padding, chartMode, trendAnalysis]);
+  }, [chartRecords, filteredRecords, chartInnerWidth, chartInnerHeight, padding, chartMode, trendAnalysis]);
 
   // Generador de rutas SVG respetando curveType ("linear" | "smooth" | "flow")
   const chartPaths = useMemo(() => {
@@ -995,6 +992,133 @@ export function WeightTab() {
       trendBandArea,
     };
   }, [chartScales, chartRecords, curveType, padding, chartInnerHeight, trendAnalysis]);
+
+  // Generación inteligente del eje de fechas y separadores de año
+  const xAxisData = useMemo(() => {
+    if (!chartScales || filteredRecords.length === 0) {
+      return { yearSeparators: [], ticks: [], startYear: 0, endYear: 0 };
+    }
+
+    const { minTime, maxTime, getX } = chartScales;
+    const spanMs = maxTime - minTime;
+    const spanDays = spanMs / (1000 * 3600 * 24);
+
+    const startD = new Date(minTime);
+    const endD = new Date(maxTime);
+    const startYear = startD.getFullYear();
+    const endYear = endD.getFullYear();
+    const totalYears = endYear - startYear;
+
+    // 1. Líneas verticales separadoras de año (Jan 1st de cada año intermedio)
+    const yearSeparators: { year: number; x: number; timestamp: number }[] = [];
+    if (totalYears >= 1 || timeRange === "all") {
+      for (let y = startYear + 1; y <= endYear; y++) {
+        const ts = new Date(y, 0, 1, 0, 0, 0, 0).getTime();
+        if (ts >= minTime && ts <= maxTime) {
+          const x = getX(ts);
+          if (x >= padding.left + 5 && x <= svgWidth - padding.right - 5) {
+            yearSeparators.push({ year: y, x, timestamp: ts });
+          }
+        }
+      }
+    }
+
+    // 2. Generación de marcas (ticks) y etiquetas del eje X según el rango temporal
+    const ticks: {
+      x: number;
+      label: string;
+      isYear?: boolean;
+      timestamp: number;
+    }[] = [];
+
+    if (spanDays <= 35) {
+      // Rango 1M: Ticks limpios cada 5 días basados en el calendario
+      const d = new Date(startD);
+      d.setHours(0, 0, 0, 0);
+      const curDay = d.getDate();
+      const nextStepDay = Math.ceil(curDay / 5) * 5 || 1;
+      d.setDate(nextStepDay);
+
+      while (d.getTime() <= maxTime) {
+        const ts = d.getTime();
+        if (ts >= minTime) {
+          const x = getX(ts);
+          if (x >= padding.left + 10 && x <= svgWidth - padding.right - 10) {
+            const label = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+            ticks.push({ x, label, timestamp: ts });
+          }
+        }
+        d.setDate(d.getDate() + 5);
+      }
+    } else if (spanDays <= 110) {
+      // Rango 3M: Ticks en los días 1 y 15 de cada mes
+      const d = new Date(startYear, startD.getMonth(), 1);
+      while (d.getTime() <= maxTime + 15 * 86400000) {
+        for (const day of [1, 15]) {
+          d.setDate(day);
+          const ts = d.getTime();
+          if (ts >= minTime && ts <= maxTime) {
+            const x = getX(ts);
+            if (x >= padding.left + 10 && x <= svgWidth - padding.right - 10) {
+              const label = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+              ticks.push({ x, label, timestamp: ts });
+            }
+          }
+        }
+        d.setMonth(d.getMonth() + 1);
+        d.setDate(1);
+      }
+    } else if (spanDays <= 380) {
+      // Rango 6M a 1A: Ticks en el día 1 de cada mes
+      const d = new Date(startYear, startD.getMonth(), 1);
+      while (d.getTime() <= maxTime + 32 * 86400000) {
+        const ts = d.getTime();
+        if (ts >= minTime && ts <= maxTime) {
+          const x = getX(ts);
+          if (x >= padding.left + 10 && x <= svgWidth - padding.right - 10) {
+            const isJan = d.getMonth() === 0;
+            const monthName = d.toLocaleDateString("es-ES", { month: "short" });
+            const label = isJan ? `${monthName} '${String(d.getFullYear()).slice(2)}` : monthName;
+            ticks.push({ x, label, isYear: isJan, timestamp: ts });
+          }
+        }
+        d.setMonth(d.getMonth() + 1);
+      }
+    } else {
+      // Rango "Todo" o multi-año (> 380 días):
+      // Si son muchos años (> 4), marcas semi-anuales (Ene y Jul); si son <= 4 años, trimestrales (Ene, Abr, Jul, Oct)
+      const months = totalYears > 4 ? [0, 6] : [0, 3, 6, 9];
+
+      for (let y = startYear; y <= endYear; y++) {
+        for (const m of months) {
+          const d = new Date(y, m, 1);
+          const ts = d.getTime();
+          if (ts >= minTime && ts <= maxTime) {
+            const x = getX(ts);
+            if (x >= padding.left + 12 && x <= svgWidth - padding.right - 12) {
+              const isJan = m === 0;
+              const monthName = d.toLocaleDateString("es-ES", { month: "short" });
+              ticks.push({
+                x,
+                label: isJan ? `${y}` : monthName,
+                isYear: isJan,
+                timestamp: ts,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      yearSeparators,
+      ticks,
+      startYear,
+      endYear,
+      totalYears,
+      spanDays,
+    };
+  }, [chartScales, filteredRecords, timeRange, padding, svgWidth]);
 
   // Manejador del cursor sobre el SVG con precisión subpíxel y detección exacta del punto más cercano
   const handleSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement | HTMLDivElement>) => {
@@ -1729,6 +1853,79 @@ export function WeightTab() {
                 );
               })}
 
+              {/* 0. Líneas verticales punteadas y semi-transparentes que separan los años en el gráfico de todo */}
+              {xAxisData.yearSeparators.map((sep) => (
+                <g key={`year-sep-${sep.year}`} pointerEvents="none">
+                  {/* Línea vertical punteada semi-transparente */}
+                  <line
+                    x1={sep.x}
+                    y1={padding.top}
+                    x2={sep.x}
+                    y2={padding.top + chartInnerHeight}
+                    stroke="rgba(148, 163, 184, 0.22)"
+                    strokeDasharray="4 4"
+                    strokeWidth="1.25"
+                  />
+
+                  {/* Badge del año en la cabecera superior del separador */}
+                  <g transform={`translate(${sep.x}, ${padding.top - 12})`}>
+                    <rect
+                      x={-19}
+                      y={-9}
+                      width={38}
+                      height={16}
+                      rx={4}
+                      fill="#18181b"
+                      stroke="rgba(148, 163, 184, 0.35)"
+                      strokeWidth={1}
+                    />
+                    <text
+                      x={0}
+                      y={3}
+                      textAnchor="middle"
+                      fontSize="10"
+                      fontWeight="700"
+                      fill="#93c5fd"
+                      fontFamily="monospace"
+                    >
+                      {sep.year}
+                    </text>
+                  </g>
+                </g>
+              ))}
+
+              {/* Badge del año inicial si hay separadores de año y espacio a la izquierda */}
+              {xAxisData.yearSeparators.length > 0 &&
+                xAxisData.yearSeparators[0].x > padding.left + 50 && (
+                  <g
+                    key="year-sep-start"
+                    pointerEvents="none"
+                    transform={`translate(${padding.left + 22}, ${padding.top - 12})`}
+                  >
+                    <rect
+                      x={-19}
+                      y={-9}
+                      width={38}
+                      height={16}
+                      rx={4}
+                      fill="#18181b"
+                      stroke="rgba(148, 163, 184, 0.25)"
+                      strokeWidth={1}
+                    />
+                    <text
+                      x={0}
+                      y={3}
+                      textAnchor="middle"
+                      fontSize="10"
+                      fontWeight="700"
+                      fill="#64748b"
+                      fontFamily="monospace"
+                    >
+                      {xAxisData.startYear}
+                    </text>
+                  </g>
+                )}
+
               {/* 1. CURVAS DE PESO (Azul Cobalto) */}
               {(chartMode === "combined" || chartMode === "weight_only") && (
                 <>
@@ -1977,42 +2174,43 @@ export function WeightTab() {
                 </g>
               )}
 
-              {/* Eje X: Fechas destacadas */}
-              {(() => {
-                const step = Math.max(1, Math.floor(chartRecords.length / 6));
-                const samples: WeightRecord[] = [];
-                for (let i = 0; i < chartRecords.length; i += step) {
-                  samples.push(chartRecords[i]);
-                }
-                const last = chartRecords[chartRecords.length - 1];
-                if (!samples.includes(last)) samples.push(last);
+              {/* Eje X: Línea base horizontal y marcas (ticks) de fechas inteligentes */}
+              <line
+                x1={padding.left}
+                y1={padding.top + chartInnerHeight}
+                x2={svgWidth - padding.right}
+                y2={padding.top + chartInnerHeight}
+                stroke="rgba(63, 63, 70, 0.55)"
+                strokeWidth="1"
+              />
 
-                return samples.map((r, i) => {
-                  const x = chartScales.getX(r.timestamp);
-                  let label = r.fecha.slice(5);
-                  if (r.periodType === "monthly") {
-                    const d = new Date(r.timestamp);
-                    label = d.toLocaleDateString("es-ES", { month: "short", year: "2-digit" });
-                  } else if (r.periodType === "weekly") {
-                    const d = new Date(r.timestamp);
-                    label = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
-                  }
+              {/* Marcas de tiempo y etiquetas del Eje X */}
+              {xAxisData.ticks.map((tick, idx) => (
+                <g key={`x-tick-${idx}-${tick.timestamp}`} pointerEvents="none">
+                  {/* Pequeña muesca (tick mark) en el eje */}
+                  <line
+                    x1={tick.x}
+                    y1={padding.top + chartInnerHeight}
+                    x2={tick.x}
+                    y2={padding.top + chartInnerHeight + (tick.isYear ? 6 : 4)}
+                    stroke={tick.isYear ? "#60a5fa" : "rgba(113, 113, 122, 0.45)"}
+                    strokeWidth={tick.isYear ? 1.5 : 1}
+                  />
 
-                  return (
-                    <text
-                      key={i}
-                      x={x}
-                      y={svgHeight - 12}
-                      textAnchor="middle"
-                      fontSize="10"
-                      fill="#71717a"
-                      fontFamily="monospace"
-                    >
-                      {label}
-                    </text>
-                  );
-                });
-              })()}
+                  {/* Texto de la etiqueta de fecha / año */}
+                  <text
+                    x={tick.x}
+                    y={padding.top + chartInnerHeight + 17}
+                    textAnchor="middle"
+                    fontSize={tick.isYear ? "11" : "10"}
+                    fontWeight={tick.isYear ? "700" : "500"}
+                    fill={tick.isYear ? "#60a5fa" : "#71717a"}
+                    fontFamily="monospace"
+                  >
+                    {tick.label}
+                  </text>
+                </g>
+              ))}
             </svg>
           ) : (
             <div className="py-20 text-center text-zinc-500 text-sm">
