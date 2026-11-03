@@ -539,12 +539,12 @@ export function WeightTab() {
   const chartMode: WeightChartMode = isTrendMode
     ? "trend"
     : showWeight && showFat
-    ? "combined"
-    : showWeight
-    ? "weight_only"
-    : showFat
-    ? "fat_only"
-    : "combined";
+      ? "combined"
+      : showWeight
+        ? "weight_only"
+        : showFat
+          ? "fat_only"
+          : "combined";
 
   // Cargar persistencia de opciones del gráfico desde localStorage
   useEffect(() => {
@@ -575,7 +575,7 @@ export function WeightTab() {
 
       const savedSyncSeason = localStorage.getItem("bytehevy_weight_sync_season");
       if (savedSyncSeason !== null) setSyncWithSeason(savedSyncSeason === "true");
-    } catch {}
+    } catch { }
   }, []);
 
   const handleToggleWeight = () => {
@@ -583,13 +583,13 @@ export function WeightTab() {
       setIsTrendMode(false);
       try {
         localStorage.setItem("bytehevy_weight_is_trend", "false");
-      } catch {}
+      } catch { }
     }
     setShowWeight((prev) => {
       const next = !prev;
       try {
         localStorage.setItem("bytehevy_weight_show_weight", String(next));
-      } catch {}
+      } catch { }
       return next;
     });
   };
@@ -599,13 +599,13 @@ export function WeightTab() {
       setIsTrendMode(false);
       try {
         localStorage.setItem("bytehevy_weight_is_trend", "false");
-      } catch {}
+      } catch { }
     }
     setShowFat((prev) => {
       const next = !prev;
       try {
         localStorage.setItem("bytehevy_weight_show_fat", String(next));
-      } catch {}
+      } catch { }
       return next;
     });
   };
@@ -615,7 +615,7 @@ export function WeightTab() {
       const next = !prev;
       try {
         localStorage.setItem("bytehevy_weight_is_trend", String(next));
-      } catch {}
+      } catch { }
       return next;
     });
   };
@@ -624,7 +624,7 @@ export function WeightTab() {
     setCurveType(c);
     try {
       localStorage.setItem("bytehevy_weight_curve_type", c);
-    } catch {}
+    } catch { }
   };
 
   const handleTimeRangeChange = (r: TimeRange) => {
@@ -632,21 +632,21 @@ export function WeightTab() {
     setDateSegmentOffset(0);
     try {
       localStorage.setItem("bytehevy_weight_time_range", r);
-    } catch {}
+    } catch { }
   };
 
   const handleGroupingModeChange = (m: WeightGroupingMode) => {
     setGroupingMode(m);
     try {
       localStorage.setItem("bytehevy_weight_grouping_mode", m);
-    } catch {}
+    } catch { }
   };
 
   const handleSyncSeasonChange = (val: boolean) => {
     setSyncWithSeason(val);
     try {
       localStorage.setItem("bytehevy_weight_sync_season", String(val));
-    } catch {}
+    } catch { }
   };
 
   // Modales
@@ -1797,11 +1797,10 @@ export function WeightTab() {
                     setXiaomiAutoStartQr(!xiaomiConnected);
                     setXiaomiModalOpen(true);
                   }}
-                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border flex items-center gap-1.5 transition-all cursor-pointer ${
-                    xiaomiConnected
+                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border flex items-center gap-1.5 transition-all cursor-pointer ${xiaomiConnected
                       ? "bg-orange-500/10 text-orange-400 border-orange-500/30 hover:bg-orange-500/20"
                       : "bg-zinc-800/80 text-zinc-400 border-zinc-700/80 hover:bg-zinc-700/60 hover:text-zinc-200"
-                  }`}
+                    }`}
                   title={
                     xiaomiConnected
                       ? `Conectado a Xiaomi Cloud${xiaomiUserId ? ` (${xiaomiUserId})` : ""}. Última sinc: ${xiaomiLastSync || "reciente"}`
@@ -1835,11 +1834,10 @@ export function WeightTab() {
             type="button"
             onClick={handleXiaomiQuickSync}
             disabled={xiaomiSyncing}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-sm ${
-              xiaomiConnected
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-sm ${xiaomiConnected
                 ? "bg-orange-500/10 border-orange-500/30 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300"
                 : "bg-zinc-900 border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-            } disabled:opacity-50`}
+              } disabled:opacity-50`}
             title={
               xiaomiConnected
                 ? "Sincronizar pesajes con Xiaomi Cloud de forma incremental"
@@ -1857,8 +1855,8 @@ export function WeightTab() {
               {xiaomiSyncing
                 ? "Sincronizando..."
                 : xiaomiConnected
-                ? "Sincronizar Xiaomi"
-                : "Conectar Xiaomi"}
+                  ? "Sincronizar Xiaomi"
+                  : "Conectar Xiaomi"}
             </span>
           </button>
 
@@ -1889,11 +1887,10 @@ export function WeightTab() {
       {/* Banner de notificación de Xiaomi Cloud */}
       {xiaomiToast && (
         <div
-          className={`p-3 rounded-xl border flex items-center justify-between text-xs animate-in fade-in duration-200 ${
-            xiaomiToast.type === "success"
+          className={`p-3 rounded-xl border flex items-center justify-between text-xs animate-in fade-in duration-200 ${xiaomiToast.type === "success"
               ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
               : "bg-rose-500/10 border-rose-500/30 text-rose-300"
-          }`}
+            }`}
         >
           <div className="flex items-center gap-2">
             {xiaomiToast.type === "success" ? (
@@ -2063,11 +2060,10 @@ export function WeightTab() {
             <button
               type="button"
               onClick={handleToggleWeight}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                !isTrendMode && showWeight
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${!isTrendMode && showWeight
                   ? "bg-blue-500/15 text-blue-200 border border-blue-500/40 shadow-xs"
                   : "text-zinc-500 hover:text-zinc-300 border border-transparent"
-              }`}
+                }`}
               title={
                 !isTrendMode && showWeight
                   ? "Desactivar visualización de Peso y Media Móvil"
@@ -2075,11 +2071,10 @@ export function WeightTab() {
               }
             >
               <span
-                className={`w-2 h-2 rounded-full transition-all ${
-                  !isTrendMode && showWeight
+                className={`w-2 h-2 rounded-full transition-all ${!isTrendMode && showWeight
                     ? "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]"
                     : "bg-zinc-600"
-                }`}
+                  }`}
               />
               <span>Peso</span>
             </button>
@@ -2087,11 +2082,10 @@ export function WeightTab() {
             <button
               type="button"
               onClick={handleToggleFat}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                !isTrendMode && showFat
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${!isTrendMode && showFat
                   ? "bg-yellow-500/15 text-yellow-200 border border-yellow-500/40 shadow-xs"
                   : "text-zinc-500 hover:text-zinc-300 border border-transparent"
-              }`}
+                }`}
               title={
                 !isTrendMode && showFat
                   ? "Desactivar visualización de % Grasa"
@@ -2099,11 +2093,10 @@ export function WeightTab() {
               }
             >
               <span
-                className={`w-2 h-2 rounded-full transition-all ${
-                  !isTrendMode && showFat
+                className={`w-2 h-2 rounded-full transition-all ${!isTrendMode && showFat
                     ? "bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]"
                     : "bg-zinc-600"
-                }`}
+                  }`}
               />
               <span>% Grasa</span>
             </button>
@@ -2113,11 +2106,10 @@ export function WeightTab() {
             <button
               type="button"
               onClick={handleToggleTrend}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                isTrendMode
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${isTrendMode
                   ? "bg-sky-500/20 text-sky-200 border border-sky-500/40 shadow-xs"
                   : "text-zinc-400 hover:text-zinc-200 border border-transparent"
-              }`}
+                }`}
               title="Modo Tendencia: convierte la nube de tomas en una trayectoria suavizada con canal de dispersión"
             >
               <TrendingDownIcon className={`w-3.5 h-3.5 ${isTrendMode ? "text-sky-300" : "text-zinc-400"}`} />
@@ -2132,11 +2124,10 @@ export function WeightTab() {
               <button
                 type="button"
                 onClick={() => handleCurveChange("linear")}
-                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
-                  curveType === "linear"
+                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${curveType === "linear"
                     ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
                     : "text-zinc-500 hover:text-zinc-200"
-                }`}
+                  }`}
                 title="Líneas rectas directas entre puntos"
                 aria-label="Rectas"
               >
@@ -2146,11 +2137,10 @@ export function WeightTab() {
               <button
                 type="button"
                 onClick={() => handleCurveChange("smooth")}
-                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
-                  curveType === "smooth"
+                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${curveType === "smooth"
                     ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
                     : "text-zinc-500 hover:text-zinc-200"
-                }`}
+                  }`}
                 title="Curvas naturales (spline cúbico)"
                 aria-label="Curvas"
               >
@@ -2160,11 +2150,10 @@ export function WeightTab() {
               <button
                 type="button"
                 onClick={() => handleCurveChange("flow")}
-                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
-                  curveType === "flow"
+                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${curveType === "flow"
                     ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
                     : "text-zinc-500 hover:text-zinc-200"
-                }`}
+                  }`}
                 title="Completamente suavizadas (línea continua fluida)"
                 aria-label="Fluida"
               >
@@ -2176,11 +2165,10 @@ export function WeightTab() {
             {activeSeason && activeSeasonId !== "all" && (
               <button
                 onClick={() => handleSyncSeasonChange(!syncWithSeason)}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-colors cursor-pointer ${
-                  syncWithSeason
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-colors cursor-pointer ${syncWithSeason
                     ? "bg-zinc-800 text-zinc-100 border-zinc-700"
                     : "bg-zinc-900/40 text-zinc-500 border-zinc-800 hover:text-zinc-300"
-                }`}
+                  }`}
                 title="Filtrar por la temporada activa"
               >
                 <div
@@ -2200,11 +2188,10 @@ export function WeightTab() {
                     handleTimeRangeChange(r);
                     if (syncWithSeason) handleSyncSeasonChange(false);
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${
-                    timeRange === r && !syncWithSeason
+                  className={`px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${timeRange === r && !syncWithSeason
                       ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
                       : "text-zinc-400 hover:text-zinc-200"
-                  }`}
+                    }`}
                 >
                   {r === "all" ? "Todo" : r}
                 </button>
@@ -2235,11 +2222,10 @@ export function WeightTab() {
                   <button
                     type="button"
                     onClick={() => setSegmentDropdownOpen((prev) => !prev)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
-                      dateSegmentOffset > 0
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${dateSegmentOffset > 0
                         ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold"
                         : "bg-zinc-800/90 text-zinc-200 border border-zinc-700/60 font-semibold"
-                    }`}
+                      }`}
                     title={
                       currentSegment.subLabel
                         ? `${currentSegment.label} (${currentSegment.subLabel})`
@@ -2275,11 +2261,10 @@ export function WeightTab() {
                                   setDateSegmentOffset(s.offset);
                                   setSegmentDropdownOpen(false);
                                 }}
-                                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                                  isSelected
+                                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${isSelected
                                     ? "bg-zinc-800 text-white font-bold"
                                     : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
-                                }`}
+                                  }`}
                               >
                                 <div className="flex flex-col">
                                   <span className="flex items-center gap-1.5">
@@ -2353,11 +2338,10 @@ export function WeightTab() {
                   key={m.id}
                   type="button"
                   onClick={() => handleGroupingModeChange(m.id)}
-                  className={`px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                    groupingMode === m.id
+                  className={`px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${groupingMode === m.id
                       ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
                       : "text-zinc-400 hover:text-zinc-200"
-                  }`}
+                    }`}
                   title={m.title}
                 >
                   {m.label}
@@ -2375,13 +2359,12 @@ export function WeightTab() {
                 <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
                 <span className="font-semibold text-blue-200">Ritmo de Tendencia:</span>
                 <span
-                  className={`font-mono font-bold ${
-                    trendAnalysis.kgPerWeek < 0
+                  className={`font-mono font-bold ${trendAnalysis.kgPerWeek < 0
                       ? "text-emerald-400"
                       : trendAnalysis.kgPerWeek > 0
-                      ? "text-amber-400"
-                      : "text-zinc-300"
-                  }`}
+                        ? "text-amber-400"
+                        : "text-zinc-300"
+                    }`}
                 >
                   {trendAnalysis.kgPerWeek > 0 ? `+${trendAnalysis.kgPerWeek}` : trendAnalysis.kgPerWeek} kg/semana
                 </span>
@@ -2903,8 +2886,8 @@ export function WeightTab() {
                     {hoveredPoint.periodType === "weekly"
                       ? `Media semanal (${hoveredPoint.measurements.length} tomas)`
                       : hoveredPoint.periodType === "monthly"
-                      ? `Media mensual (${hoveredPoint.measurements.length} tomas)`
-                      : `Media diaria (${hoveredPoint.measurements.length} tomas)`}
+                        ? `Media mensual (${hoveredPoint.measurements.length} tomas)`
+                        : `Media diaria (${hoveredPoint.measurements.length} tomas)`}
                   </span>
                 ) : (
                   <span className="flex items-center gap-1">
@@ -2920,23 +2903,22 @@ export function WeightTab() {
                     {hoveredPoint.periodType === "weekly"
                       ? "Peso Semanal"
                       : hoveredPoint.periodType === "monthly"
-                      ? "Peso Mensual"
-                      : hoveredPoint.measurements && hoveredPoint.measurements.length > 1
-                      ? "Peso Medio"
-                      : "Peso"}
+                        ? "Peso Mensual"
+                        : hoveredPoint.measurements && hoveredPoint.measurements.length > 1
+                          ? "Peso Medio"
+                          : "Peso"}
                   </span>
                   <span className="font-extrabold text-sm text-blue-400 font-mono">
                     {hoveredPoint.peso.toFixed(1)} kg
                   </span>
                   {hoveredPoint.deltaPeso !== undefined && (
                     <span
-                      className={`text-[10px] ml-1 font-mono ${
-                        hoveredPoint.deltaPeso < 0
+                      className={`text-[10px] ml-1 font-mono ${hoveredPoint.deltaPeso < 0
                           ? "text-emerald-400"
                           : hoveredPoint.deltaPeso > 0
-                          ? "text-rose-400"
-                          : "text-zinc-500"
-                      }`}
+                            ? "text-rose-400"
+                            : "text-zinc-500"
+                        }`}
                     >
                       ({hoveredPoint.deltaPeso > 0 ? `+${hoveredPoint.deltaPeso}` : hoveredPoint.deltaPeso})
                     </span>
@@ -2948,10 +2930,10 @@ export function WeightTab() {
                     {hoveredPoint.periodType === "weekly"
                       ? "% Grasa Semanal"
                       : hoveredPoint.periodType === "monthly"
-                      ? "% Grasa Mensual"
-                      : hoveredPoint.measurements && hoveredPoint.measurements.length > 1
-                      ? "% Grasa Media"
-                      : "% Graso"}
+                        ? "% Grasa Mensual"
+                        : hoveredPoint.measurements && hoveredPoint.measurements.length > 1
+                          ? "% Grasa Media"
+                          : "% Graso"}
                   </span>
                   <span className="font-extrabold text-sm text-yellow-400 font-mono">
                     {typeof hoveredPoint.grasaPct === "number" ? `${hoveredPoint.grasaPct.toFixed(1)}%` : "—"}
@@ -3124,11 +3106,10 @@ export function WeightTab() {
                 setTableGroupByDay(!tableGroupByDay);
                 setTablePage(1);
               }}
-              className={`px-2.5 py-1.5 rounded-xl border text-xs font-medium cursor-pointer transition-colors flex items-center gap-1.5 ${
-                tableGroupByDay
+              className={`px-2.5 py-1.5 rounded-xl border text-xs font-medium cursor-pointer transition-colors flex items-center gap-1.5 ${tableGroupByDay
                   ? "bg-cyan-500/15 border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25"
                   : "bg-zinc-800/80 border-zinc-700/80 text-zinc-300 hover:text-white"
-              }`}
+                }`}
               title={
                 tableGroupByDay
                   ? "Modo: Agrupado por día (medias). Haz clic para ver todas las tomas individuales"
@@ -3196,9 +3177,8 @@ export function WeightTab() {
                             handleOpenEdit(r.measurements?.[0] || r);
                           }
                         }}
-                        className={`hover:bg-zinc-850/70 transition-colors cursor-pointer group ${
-                          isExpanded ? "bg-zinc-850/40" : ""
-                        }`}
+                        className={`hover:bg-zinc-850/70 transition-colors cursor-pointer group ${isExpanded ? "bg-zinc-850/40" : ""
+                          }`}
                       >
                         <td className="py-3 px-3 text-zinc-300 font-sans">
                           <div className="flex flex-wrap items-center gap-2 font-medium">
@@ -3222,9 +3202,8 @@ export function WeightTab() {
                               >
                                 <span>{r.measurements?.length} medidas</span>
                                 <ChevronDownIcon
-                                  className={`w-3 h-3 transition-transform duration-200 ${
-                                    isExpanded ? "rotate-180" : ""
-                                  }`}
+                                  className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""
+                                    }`}
                                 />
                               </button>
                             )}
@@ -3244,9 +3223,8 @@ export function WeightTab() {
                         <td className="py-3 px-3">
                           {r.deltaPeso !== undefined && r.deltaPeso !== 0 ? (
                             <span
-                              className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${
-                                r.deltaPeso < 0 ? "text-emerald-400" : "text-rose-400"
-                              }`}
+                              className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${r.deltaPeso < 0 ? "text-emerald-400" : "text-rose-400"
+                                }`}
                             >
                               {r.deltaPeso < 0 ? "▼" : "▲"}{" "}
                               {r.deltaPeso > 0 ? `+${r.deltaPeso.toFixed(2)}` : r.deltaPeso.toFixed(2)}
@@ -3992,8 +3970,8 @@ export function WeightTab() {
                       {selectedDayModal.periodType === "weekly"
                         ? `Semana: ${selectedDayModal.periodLabel || selectedDayModal.fecha}`
                         : selectedDayModal.periodType === "monthly"
-                        ? `Mes: ${selectedDayModal.periodLabel || selectedDayModal.fecha}`
-                        : `Medidas del ${selectedDayModal.fecha}`}
+                          ? `Mes: ${selectedDayModal.periodLabel || selectedDayModal.fecha}`
+                          : `Medidas del ${selectedDayModal.fecha}`}
                     </span>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30">
                       {selectedDayModal.measurements?.length || 1} tomas
@@ -4003,8 +3981,8 @@ export function WeightTab() {
                     {selectedDayModal.periodType === "weekly"
                       ? "En la gráfica se muestra la media semanal calculada para este período."
                       : selectedDayModal.periodType === "monthly"
-                      ? "En la gráfica se muestra la media mensual calculada para este período."
-                      : "En la gráfica general se muestra la media diaria de este conjunto de medidas."}
+                        ? "En la gráfica se muestra la media mensual calculada para este período."
+                        : "En la gráfica general se muestra la media diaria de este conjunto de medidas."}
                   </p>
                 </div>
               </div>
@@ -4023,8 +4001,8 @@ export function WeightTab() {
                   {selectedDayModal.periodType === "weekly"
                     ? "Media Semanal"
                     : selectedDayModal.periodType === "monthly"
-                    ? "Media Mensual"
-                    : "Peso Medio"}
+                      ? "Media Mensual"
+                      : "Peso Medio"}
                 </span>
                 <span className="text-base font-extrabold text-blue-400">{selectedDayModal.peso.toFixed(1)} kg</span>
               </div>
@@ -4082,22 +4060,21 @@ export function WeightTab() {
                             <ClockIcon className="w-3 h-3" />
                             {m.hora}
                           </span>
-                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-sans ${
-                            m.source === "home_assistant"
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-sans ${m.source === "home_assistant"
                               ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/30"
                               : m.source === "xiaomi_mi_home"
-                              ? "bg-orange-500/15 text-orange-300 border border-orange-500/30"
-                              : "bg-zinc-800 text-zinc-400"
-                          }`}>
+                                ? "bg-orange-500/15 text-orange-300 border border-orange-500/30"
+                                : "bg-zinc-800 text-zinc-400"
+                            }`}>
                             {m.source === "home_assistant"
                               ? "Home Assistant"
                               : m.source === "xiaomi_mi_home"
-                              ? "Xiaomi Mi Home"
-                              : m.source === "scale_bia"
-                              ? "Báscula BIA"
-                              : m.source === "manual"
-                              ? "Manual"
-                              : "Zepp Life"}
+                                ? "Xiaomi Mi Home"
+                                : m.source === "scale_bia"
+                                  ? "Báscula BIA"
+                                  : m.source === "manual"
+                                    ? "Manual"
+                                    : "Zepp Life"}
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px] text-zinc-400 font-mono">

@@ -1,0 +1,47 @@
+name: Deploy Next.js to LXC (Secure)
+
+# 1. Ejecutar ÚNICAMENTE ante pushes a master (nunca en pull_request)
+on:
+  push:
+    branches:
+      - master
+
+# 2. Bloquear permisos del token automático de GitHub (solo lectura de código)
+permissions:
+  contents: read
+
+# 3. Evitar colisiones si haces varios commits seguidos (cancela el build anterior si no ha terminado)
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Actualizar repositorio local
+        run: |
+          cd /var/www/byteHevy
+          git pull origin master
+
+      - name: Instalar dependencias con Bun
+        run: |
+          export BUN_INSTALL="$HOME/.bun"
+          export PATH="$BUN_INSTALL/bin:$PATH:/usr/local/bin:/usr/bin"
+          cd /var/www/byteHevy
+          # --frozen-lockfile garantiza que no se instalen versiones distintas a bun.lock
+          bun install --frozen-lockfile
+
+      - name: Compilar aplicación Next.js
+        run: |
+          export BUN_INSTALL="$HOME/.bun"
+          export PATH="$BUN_INSTALL/bin:$PATH:/usr/local/bin:/usr/bin"
+          cd /var/www/byteHevy
+          bun run build
+
+      - name: Recargar servicio PM2
+        run: |
+          export PATH=$PATH:/usr/local/bin:/usr/bin
+          # Recarga gracefully; si no existe, lo arranca
+          pm2 reload bytehevy || pm2 start bun --name "bytehevy" --cwd /var/www/byteHevy -- run start
