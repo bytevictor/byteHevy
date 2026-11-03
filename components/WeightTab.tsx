@@ -255,6 +255,7 @@ export function WeightTab() {
   // Hover interactivo en el gráfico
   const [hoveredPoint, setHoveredPoint] = useState<WeightRecord | null>(null);
   const [hoverX, setHoverX] = useState<number | null>(null);
+  const hoveredPointRef = useRef<WeightRecord | null>(null);
 
   // Días con múltiples medidas: días expandidos en la tabla y modal de detalle del día
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
@@ -827,7 +828,10 @@ export function WeightTab() {
   const chartScales = useMemo(() => {
     if (chartRecords.length === 0) return null;
 
-    const timestamps = chartRecords.map((r) => r.timestamp);
+    const allRecordsForTime = chartMode === "trend" && trendAnalysis
+      ? trendAnalysis.rawPoints
+      : chartRecords;
+    const timestamps = allRecordsForTime.map((r) => r.timestamp);
     const minTime = Math.min(...timestamps);
     const maxTime = Math.max(...timestamps);
     const timeSpan = maxTime - minTime || 1;
@@ -991,39 +995,81 @@ export function WeightTab() {
     };
   }, [chartScales, chartRecords, curveType, padding, chartInnerHeight, trendAnalysis]);
 
-  // Manejador del cursor sobre el SVG
-  const handleSvgMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+  // Manejador del cursor sobre el SVG con inercia (Hysteresis), distancia 2D y protección anti-parpadeo
+  const handleSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement | HTMLDivElement>) => {
     if (!chartScales || chartRecords.length === 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const clientX = e.clientX - rect.left;
+    const clientY = e.clientY - rect.top;
     const svgX = (clientX / rect.width) * svgWidth;
+    const svgY = (clientY / rect.height) * svgHeight;
 
-    let closest: WeightRecord | null = null;
-    let closestDist = Infinity;
+    // Si el cursor se sale holgadamente de la zona del gráfico, limpiar hover
+    if (
+      svgX < padding.left - 20 ||
+      svgX > svgWidth - padding.right + 20 ||
+      svgY < padding.top - 20 ||
+      svgY > padding.top + chartInnerHeight + 30
+    ) {
+      if (hoveredPointRef.current) {
+        hoveredPointRef.current = null;
+        setHoveredPoint(null);
+        setHoverX(null);
+      }
+      return;
+    }
 
     const candidateRecords = chartMode === "trend" && trendAnalysis
       ? trendAnalysis.rawPoints
       : chartRecords;
 
+    if (candidateRecords.length === 0) return;
+
+    let closest: WeightRecord | null = null;
+    let minScore = Infinity;
+    const currentId = hoveredPointRef.current?.id;
+
+    // Umbral de inercia/adherencia (Hysteresis): el punto actualmente seleccionado
+    // tiene una ventaja de 20px para evitar que el cursor oscile o vibre entre puntos muy próximos.
+    const HYSTERESIS_BONUS = 20;
+
     for (const r of candidateRecords) {
       const px = chartScales.getX(r.timestamp);
-      const dist = Math.abs(px - svgX);
-      if (dist < closestDist) {
-        closestDist = dist;
+      let py: number;
+      if (chartMode === "fat_only") {
+        py = typeof r.grasaPct === "number" ? chartScales.getYFat(r.grasaPct) : padding.top + chartInnerHeight / 2;
+      } else {
+        py = chartScales.getYWeight(r.peso);
+      }
+
+      const dx = px - svgX;
+      const dy = (py - svgY) * 0.45; // Distancia 2D con ponderación vertical equilibrada
+      let score = Math.hypot(dx, dy);
+
+      // Si es el registro actualmente en hover, conceder ventaja de inercia
+      if (currentId && r.id === currentId) {
+        score = Math.max(0, score - HYSTERESIS_BONUS);
+      }
+
+      if (score < minScore) {
+        minScore = score;
         closest = r;
       }
     }
 
-    if (closest) {
+    // Solo actualizar el estado de React si el punto seleccionado REALMENTE ha cambiado
+    if (closest && closest.id !== hoveredPointRef.current?.id) {
+      hoveredPointRef.current = closest;
       setHoveredPoint(closest);
       setHoverX(chartScales.getX(closest.timestamp));
     }
-  };
+  }, [chartScales, chartRecords, chartMode, trendAnalysis, padding, chartInnerHeight, svgWidth, svgHeight]);
 
-  const handleSvgMouseLeave = () => {
+  const handleSvgMouseLeave = useCallback(() => {
+    hoveredPointRef.current = null;
     setHoveredPoint(null);
     setHoverX(null);
-  };
+  }, []);
 
   // Cálculo en vivo para el modal de edición
   const liveEditPreview = useMemo(() => {
@@ -1555,23 +1601,25 @@ export function WeightTab() {
           </div>
         )}
 
-        {/* Canvas SVG Interactivo */}
-        <div className="relative w-full overflow-hidden select-none">
+        {/* Canvas SVG Interactivo con mouse tracking suave a nivel contenedor */}
+        <div
+          className="relative w-full overflow-hidden select-none cursor-pointer"
+          onMouseMove={handleSvgMouseMove}
+          onMouseLeave={handleSvgMouseLeave}
+          onClick={() => {
+            if (hoveredPoint) {
+              if (hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1) {
+                setSelectedDayModal(hoveredPoint);
+              } else {
+                handleOpenEdit(hoveredPoint.measurements?.[0] || hoveredPoint);
+              }
+            }
+          }}
+        >
           {chartScales && chartPaths && chartRecords.length > 0 ? (
             <svg
               viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-              className="w-full h-auto overflow-visible cursor-crosshair"
-              onMouseMove={handleSvgMouseMove}
-              onMouseLeave={handleSvgMouseLeave}
-              onClick={() => {
-                if (hoveredPoint) {
-                  if (hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1) {
-                    setSelectedDayModal(hoveredPoint);
-                  } else {
-                    handleOpenEdit(hoveredPoint.measurements?.[0] || hoveredPoint);
-                  }
-                }
-              }}
+              className="w-full h-auto overflow-visible"
             >
               <defs>
                 {/* Degradado Peso (Azul Cobalto) */}
@@ -1668,40 +1716,30 @@ export function WeightTab() {
                   {chartRecords.map((r) => {
                     const cx = chartScales.getX(r.timestamp);
                     const cy = chartScales.getYWeight(r.peso);
-                    const isHovered = hoveredPoint?.id === r.id;
                     const isFlow = curveType === "flow";
                     const isMulti = Boolean(r.isDailyAverage && r.measurements && r.measurements.length > 1);
 
                     return (
-                      <g key={r.id}>
+                      <g key={r.id} className="pointer-events-none">
                         {isMulti && (
                           <circle
                             cx={cx}
                             cy={cy}
-                            r={isHovered ? 9 : 6}
+                            r={6}
                             fill="none"
                             stroke="#3b82f6"
                             strokeWidth={1.5}
                             strokeDasharray="2 2"
-                            className="pointer-events-none opacity-85"
+                            className="opacity-75"
                           />
                         )}
                         <circle
                           cx={cx}
                           cy={cy}
-                          r={isHovered ? 6 : isFlow ? (isMulti ? 3 : 1.5) : (isMulti ? 4 : 3)}
-                          fill={isHovered ? "#ffffff" : "#2563eb"}
+                          r={isFlow ? (isMulti ? 3 : 1.5) : (isMulti ? 4 : 3)}
+                          fill="#2563eb"
                           stroke="#18181b"
-                          strokeWidth={isHovered ? 2.5 : 1}
-                          className="transition-all cursor-pointer hover:r-[6px]"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isMulti) {
-                              setSelectedDayModal(r);
-                            } else {
-                              handleOpenEdit(r.measurements?.[0] || r);
-                            }
-                          }}
+                          strokeWidth={1}
                         />
                       </g>
                     );
@@ -1738,40 +1776,30 @@ export function WeightTab() {
                     .map((r) => {
                       const cx = chartScales.getX(r.timestamp);
                       const cy = chartScales.getYFat(r.grasaPct);
-                      const isHovered = hoveredPoint?.id === r.id;
                       const isFlow = curveType === "flow";
                       const isMulti = Boolean(r.isDailyAverage && r.measurements && r.measurements.length > 1);
 
                       return (
-                        <g key={`f-${r.id}`}>
+                        <g key={`f-${r.id}`} className="pointer-events-none">
                           {isMulti && (
                             <circle
                               cx={cx}
                               cy={cy}
-                              r={isHovered ? 9 : 6}
+                              r={6}
                               fill="none"
                               stroke="#eab308"
                               strokeWidth={1.5}
                               strokeDasharray="2 2"
-                              className="pointer-events-none opacity-85"
+                              className="opacity-75"
                             />
                           )}
                           <circle
                             cx={cx}
                             cy={cy}
-                            r={isHovered ? 6 : isFlow ? (isMulti ? 3 : 1.5) : (isMulti ? 4 : 3)}
-                            fill={isHovered ? "#ffffff" : "#eab308"}
+                            r={isFlow ? (isMulti ? 3 : 1.5) : (isMulti ? 4 : 3)}
+                            fill="#eab308"
                             stroke="#18181b"
-                            strokeWidth={isHovered ? 2.5 : 1}
-                            className="transition-all cursor-pointer hover:r-[6px]"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (isMulti) {
-                                setSelectedDayModal(r);
-                              } else {
-                                handleOpenEdit(r.measurements?.[0] || r);
-                              }
-                            }}
+                            strokeWidth={1}
                           />
                         </g>
                       );
@@ -1820,22 +1848,17 @@ export function WeightTab() {
                   {trendAnalysis.rawPoints.map((r, i) => {
                     const cx = chartScales.getX(r.timestamp);
                     const cy = chartScales.getYWeight(r.peso);
-                    const isHovered = hoveredPoint?.id === r.id;
                     return (
                       <circle
                         key={`scatter-${r.id}-${i}`}
                         cx={cx}
                         cy={cy}
-                        r={isHovered ? 6 : 3.5}
-                        fill={isHovered ? "#38bdf8" : "#60a5fa"}
-                        fillOpacity={isHovered ? 1 : 0.45}
-                        stroke={isHovered ? "#ffffff" : "#1e40af"}
-                        strokeWidth={isHovered ? 2 : 1}
-                        className="cursor-pointer transition-all hover:scale-125"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenEdit(r);
-                        }}
+                        r={3.5}
+                        fill="#60a5fa"
+                        fillOpacity={0.45}
+                        stroke="#1e40af"
+                        strokeWidth={1}
+                        className="pointer-events-none"
                       />
                     );
                   })}
@@ -1844,7 +1867,7 @@ export function WeightTab() {
 
               {/* Guía vertical de cursor (Crosshair) */}
               {hoverX !== null && hoveredPoint && (
-                <g>
+                <g pointerEvents="none">
                   <line
                     x1={hoverX}
                     y1={padding.top}
@@ -1854,6 +1877,62 @@ export function WeightTab() {
                     strokeWidth="1.25"
                     strokeDasharray="3 3"
                   />
+                </g>
+              )}
+
+              {/* Indicador de punto activo destacado (SMOOTH & ROCK-STEADY) */}
+              {hoveredPoint && (
+                <g pointerEvents="none">
+                  {/* Modo Tendencia, Peso o Combinado: Anillo y punto central de Peso */}
+                  {(chartMode === "combined" ||
+                    chartMode === "weight_only" ||
+                    chartMode === "trend" ||
+                    chartMode === "composition") && (
+                    <>
+                      <circle
+                        cx={chartScales.getX(hoveredPoint.timestamp)}
+                        cy={chartScales.getYWeight(hoveredPoint.peso)}
+                        r={9}
+                        fill="none"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        strokeDasharray="2 2"
+                        className="opacity-80"
+                      />
+                      <circle
+                        cx={chartScales.getX(hoveredPoint.timestamp)}
+                        cy={chartScales.getYWeight(hoveredPoint.peso)}
+                        r={5.5}
+                        fill="#ffffff"
+                        stroke="#2563eb"
+                        strokeWidth={2.5}
+                      />
+                    </>
+                  )}
+
+                  {/* Modo Grasa o Combinado: Anillo y punto central de Grasa */}
+                  {(chartMode === "combined" || chartMode === "fat_only") &&
+                    typeof hoveredPoint.grasaPct === "number" && (
+                      <>
+                        <circle
+                          cx={chartScales.getX(hoveredPoint.timestamp)}
+                          cy={chartScales.getYFat(hoveredPoint.grasaPct)}
+                          r={8}
+                          fill="none"
+                          stroke="#fde047"
+                          strokeWidth={1.5}
+                          className="opacity-80"
+                        />
+                        <circle
+                          cx={chartScales.getX(hoveredPoint.timestamp)}
+                          cy={chartScales.getYFat(hoveredPoint.grasaPct)}
+                          r={4.5}
+                          fill="#ffffff"
+                          stroke="#eab308"
+                          strokeWidth={2.5}
+                        />
+                      </>
+                    )}
                 </g>
               )}
 
@@ -1900,26 +1979,14 @@ export function WeightTab() {
             </div>
           )}
 
-          {/* Tooltip flotante interactivo con botón de edición rápida */}
+          {/* Tooltip flotante informativo sincronizado (pointer-events-none para interacción SMOOTH) */}
           {hoveredPoint && hoverX !== null && (
             <div
-              className="absolute top-2 pointer-events-auto z-20 bg-zinc-900/95 border border-zinc-700/80 rounded-xl p-3 shadow-2xl backdrop-blur-md text-xs space-y-1.5 min-w-[230px] transition-all cursor-pointer hover:border-accent-light"
+              className="absolute top-2 pointer-events-none z-20 bg-zinc-900/95 border border-zinc-700/80 rounded-xl p-3 shadow-2xl backdrop-blur-md text-xs space-y-1.5 min-w-[230px] transition-opacity duration-150"
               style={{
                 left: Math.min(Math.max(20, (hoverX / svgWidth) * 100), 75) + "%",
                 transform: "translateX(-50%)",
               }}
-              onClick={() => {
-                if (hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1) {
-                  setSelectedDayModal(hoveredPoint);
-                } else {
-                  handleOpenEdit(hoveredPoint.measurements?.[0] || hoveredPoint);
-                }
-              }}
-              title={
-                hoveredPoint.isDailyAverage && hoveredPoint.measurements && hoveredPoint.measurements.length > 1
-                  ? "Haz clic para ver las distintas medidas de este día"
-                  : "Haz clic para modificar o eliminar este pesaje"
-              }
             >
               <div className="flex items-center justify-between border-b border-zinc-800 pb-1 text-zinc-400 font-mono text-[11px]">
                 <span className="flex items-center gap-1 font-semibold text-zinc-200">
@@ -1986,20 +2053,11 @@ export function WeightTab() {
                   </span>
                 </div>
 
-                <div
-                  className="cursor-pointer group/bmi hover:bg-zinc-800/60 p-1 -m-1 rounded-lg transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setBmiModalWeight(hoveredPoint.peso);
-                    setBmiModalOpen(true);
-                  }}
-                  title="Haz clic para ver el mapa de IMC para este pesaje"
-                >
-                  <span className="text-[10px] text-zinc-400 block flex items-center justify-between">
-                    <span>BMI / IMC</span>
-                    <span className="text-[9px] text-indigo-400 font-sans group-hover/bmi:underline">↗ mapa</span>
+                <div className="p-1 -m-1 rounded-lg">
+                  <span className="text-[10px] text-zinc-400 block">
+                    BMI / IMC
                   </span>
-                  <span className="font-extrabold text-sm text-indigo-300 font-mono group-hover/bmi:text-indigo-200">
+                  <span className="font-extrabold text-sm text-indigo-300 font-mono">
                     {(hoveredPoint.bmi || calculateBmi(hoveredPoint.peso)).toFixed(1)}
                   </span>
                 </div>
@@ -2060,20 +2118,14 @@ export function WeightTab() {
                   <span className="text-[10px] text-zinc-400 font-mono">
                     Rango: {hoveredPoint.minPeso?.toFixed(1)} - {hoveredPoint.maxPeso?.toFixed(1)} kg
                   </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedDayModal(hoveredPoint);
-                    }}
-                    className="px-2.5 py-1 rounded-lg bg-blue-500 hover:bg-blue-400 text-zinc-950 font-bold text-[10px] cursor-pointer transition-colors shadow-sm"
-                  >
-                    Ver {hoveredPoint.measurements.length} medidas
-                  </button>
+                  <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-bold text-[10px] border border-blue-500/30">
+                    {hoveredPoint.measurements.length} tomas (clic para ver)
+                  </span>
                 </div>
               ) : (
-                <div className="pt-1.5 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-accent-light font-medium">
-                  <span>Clic para editar o borrar</span>
-                  <EditIcon className="w-3.5 h-3.5" />
+                <div className="pt-1.5 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-blue-400 font-medium">
+                  <span>Haz clic para editar o borrar</span>
+                  <EditIcon className="w-3.5 h-3.5 opacity-80" />
                 </div>
               )}
             </div>
