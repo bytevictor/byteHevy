@@ -256,6 +256,7 @@ export function WeightTab() {
   const [hoveredPoint, setHoveredPoint] = useState<WeightRecord | null>(null);
   const [hoverX, setHoverX] = useState<number | null>(null);
   const hoveredPointRef = useRef<WeightRecord | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
 
   // Días con múltiples medidas: días expandidos en la tabla y modal de detalle del día
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
@@ -995,21 +996,38 @@ export function WeightTab() {
     };
   }, [chartScales, chartRecords, curveType, padding, chartInnerHeight, trendAnalysis]);
 
-  // Manejador del cursor sobre el SVG con inercia (Hysteresis), distancia 2D y protección anti-parpadeo
+  // Manejador del cursor sobre el SVG con precisión subpíxel y detección exacta del punto más cercano
   const handleSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement | HTMLDivElement>) => {
     if (!chartScales || chartRecords.length === 0) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clientX = e.clientX - rect.left;
-    const clientY = e.clientY - rect.top;
-    const svgX = (clientX / rect.width) * svgWidth;
-    const svgY = (clientY / rect.height) * svgHeight;
 
-    // Si el cursor se sale holgadamente de la zona del gráfico, limpiar hover
+    const svg = svgRef.current;
+    let svgX: number;
+    let svgY: number;
+
+    if (svg) {
+      const ctm = svg.getScreenCTM();
+      if (ctm) {
+        svgX = (e.clientX - ctm.e) / ctm.a;
+        svgY = (e.clientY - ctm.f) / ctm.d;
+      } else {
+        const rect = svg.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        svgX = ((e.clientX - rect.left) / rect.width) * svgWidth;
+        svgY = ((e.clientY - rect.top) / rect.height) * svgHeight;
+      }
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      svgX = ((e.clientX - rect.left) / rect.width) * svgWidth;
+      svgY = ((e.clientY - rect.top) / rect.height) * svgHeight;
+    }
+
+    // Si el cursor se sale de la zona del gráfico, limpiar hover
     if (
-      svgX < padding.left - 20 ||
-      svgX > svgWidth - padding.right + 20 ||
-      svgY < padding.top - 20 ||
-      svgY > padding.top + chartInnerHeight + 30
+      svgX < padding.left - 25 ||
+      svgX > svgWidth - padding.right + 25 ||
+      svgY < padding.top - 25 ||
+      svgY > padding.top + chartInnerHeight + 35
     ) {
       if (hoveredPointRef.current) {
         hoveredPointRef.current = null;
@@ -1025,36 +1043,58 @@ export function WeightTab() {
 
     if (candidateRecords.length === 0) return;
 
-    let closest: WeightRecord | null = null;
-    let minScore = Infinity;
-    const currentId = hoveredPointRef.current?.id;
+    // 1. Calcular para cada registro la distancia euclidiana 2D real a los puntos en pantalla
+    let closest2D: WeightRecord | null = null;
+    let minDistance2D = Infinity;
 
-    // Umbral de inercia/adherencia (Hysteresis): el punto actualmente seleccionado
-    // tiene una ventaja de 20px para evitar que el cursor oscile o vibre entre puntos muy próximos.
-    const HYSTERESIS_BONUS = 20;
+    // Y también la distancia horizontal pura en X
+    let closestX: WeightRecord | null = null;
+    let minDistanceX = Infinity;
 
     for (const r of candidateRecords) {
       const px = chartScales.getX(r.timestamp);
-      let py: number;
+      const distX = Math.abs(px - svgX);
+
+      if (distX < minDistanceX) {
+        minDistanceX = distX;
+        closestX = r;
+      }
+
+      // Distancia 2D real a los puntos visibles en pantalla
+      let dist2D = Infinity;
+
       if (chartMode === "fat_only") {
-        py = typeof r.grasaPct === "number" ? chartScales.getYFat(r.grasaPct) : padding.top + chartInnerHeight / 2;
+        if (typeof r.grasaPct === "number" && !isNaN(r.grasaPct)) {
+          const py = chartScales.getYFat(r.grasaPct);
+          dist2D = Math.hypot(px - svgX, py - svgY);
+        }
+      } else if (chartMode === "combined") {
+        const pyWeight = chartScales.getYWeight(r.peso);
+        const dWeight = Math.hypot(px - svgX, pyWeight - svgY);
+        const dFat = typeof r.grasaPct === "number" && !isNaN(r.grasaPct)
+          ? Math.hypot(px - svgX, chartScales.getYFat(r.grasaPct) - svgY)
+          : Infinity;
+        dist2D = Math.min(dWeight, dFat);
       } else {
-        py = chartScales.getYWeight(r.peso);
+        // "weight_only" o "trend" o "composition"
+        const py = chartScales.getYWeight(r.peso);
+        dist2D = Math.hypot(px - svgX, py - svgY);
       }
 
-      const dx = px - svgX;
-      const dy = (py - svgY) * 0.45; // Distancia 2D con ponderación vertical equilibrada
-      let score = Math.hypot(dx, dy);
-
-      // Si es el registro actualmente en hover, conceder ventaja de inercia
-      if (currentId && r.id === currentId) {
-        score = Math.max(0, score - HYSTERESIS_BONUS);
+      if (dist2D < minDistance2D) {
+        minDistance2D = dist2D;
+        closest2D = r;
       }
+    }
 
-      if (score < minScore) {
-        minScore = score;
-        closest = r;
-      }
+    // Si el cursor está en un radio cercano de interacción (<= 65px de un punto real en 2D),
+    // o en modo "trend" (nube de puntos), priorizar SIEMPRE el punto 2D físicamente más cercano al cursor.
+    // Si el cursor está en zona neutra lejana (e.g. en el eje de fechas inferior), seleccionar por proximidad temporal X.
+    let closest: WeightRecord | null = null;
+    if (chartMode === "trend" || minDistance2D <= 65) {
+      closest = closest2D || closestX;
+    } else {
+      closest = closestX || closest2D;
     }
 
     // Solo actualizar el estado de React si el punto seleccionado REALMENTE ha cambiado
@@ -1618,8 +1658,9 @@ export function WeightTab() {
         >
           {chartScales && chartPaths && chartRecords.length > 0 ? (
             <svg
+              ref={svgRef}
               viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-              className="w-full h-auto overflow-visible"
+              className="w-full h-auto block overflow-visible"
             >
               <defs>
                 {/* Degradado Peso (Azul Cobalto) */}
