@@ -47,7 +47,7 @@ import {
   DEFAULT_USER_PROFILE,
 } from "@/lib/mock-weight-data";
 
-export type WeightChartMode = "combined" | "weight_only" | "fat_only" | "composition";
+export type WeightChartMode = "combined" | "weight_only" | "fat_only" | "trend" | "composition";
 export type TimeRange = "1M" | "3M" | "6M" | "1A" | "all";
 export type CurveType = "linear" | "smooth" | "flow";
 
@@ -746,6 +746,83 @@ export function WeightTab() {
   const chartInnerWidth = svgWidth - padding.left - padding.right;
   const chartInnerHeight = svgHeight - padding.top - padding.bottom;
 
+  // Análisis de tendencia para el modo "trend" (nube de puntos + línea de tendencia)
+  const trendAnalysis = useMemo(() => {
+    const rawPoints = filteredRecords.filter((r) => typeof r.peso === "number" && r.peso > 0);
+    if (rawPoints.length < 2) return null;
+
+    const n = rawPoints.length;
+    const timestamps = rawPoints.map((r) => r.timestamp);
+    const weights = rawPoints.map((r) => r.peso);
+
+    const minTs = Math.min(...timestamps);
+    const maxTs = Math.max(...timestamps);
+
+    // Regresión lineal por mínimos cuadrados: y = m*x + b
+    let sumX = 0;
+    let sumY = 0;
+    let sumXY = 0;
+    let sumXX = 0;
+
+    for (let i = 0; i < n; i++) {
+      const x = timestamps[i];
+      const y = weights[i];
+      sumX += x;
+      sumY += y;
+      sumXY += x * y;
+      sumXX += x * x;
+    }
+
+    const denom = n * sumXX - sumX * sumX;
+    const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+    const intercept = (sumY - slope * sumX) / n;
+
+    // Ritmo de cambio semanal en kg/semana (7 días)
+    const msInWeek = 7 * 24 * 3600 * 1000;
+    const kgPerWeek = Math.round(slope * msInWeek * 100) / 100;
+
+    // Valores estimados en los extremos por la recta de regresión
+    const startWeight = slope * minTs + intercept;
+    const endWeight = slope * maxTs + intercept;
+    const totalTrendDelta = Math.round((endWeight - startWeight) * 10) / 10;
+
+    // Desviación típica de los residuos (amplitud de la nube de dispersión)
+    let sumResSq = 0;
+    for (let i = 0; i < n; i++) {
+      const yHat = slope * timestamps[i] + intercept;
+      const res = weights[i] - yHat;
+      sumResSq += res * res;
+    }
+    const stdDev = Math.round(Math.sqrt(sumResSq / Math.max(1, n - 2)) * 100) / 100;
+
+    // Tendencia dinámica exponencialmente suavizada (EMA con alpha = 0.12)
+    const alpha = 0.12;
+    let currentEma = weights[0];
+    const emaSeries = rawPoints.map((r) => {
+      currentEma = alpha * r.peso + (1 - alpha) * currentEma;
+      return {
+        id: r.id,
+        timestamp: r.timestamp,
+        rawWeight: r.peso,
+        trendWeight: Math.round(currentEma * 100) / 100,
+      };
+    });
+
+    return {
+      n,
+      slope,
+      kgPerWeek,
+      startWeight: Math.round(startWeight * 10) / 10,
+      endWeight: Math.round(endWeight * 10) / 10,
+      totalTrendDelta,
+      stdDev,
+      minTs,
+      maxTs,
+      rawPoints,
+      emaSeries,
+    };
+  }, [filteredRecords]);
+
   // Escalas matemáticas para el gráfico
   const chartScales = useMemo(() => {
     if (chartRecords.length === 0) return null;
@@ -755,8 +832,10 @@ export function WeightTab() {
     const maxTime = Math.max(...timestamps);
     const timeSpan = maxTime - minTime || 1;
 
-    // Escala Peso (kg)
-    const weights = chartRecords.map((r) => r.peso);
+    // Escala Peso (kg) - En modo trend incluimos los puntos de la nube para ajuste exacto
+    const weights = chartMode === "trend" && trendAnalysis
+      ? trendAnalysis.rawPoints.map((r) => r.peso)
+      : chartRecords.map((r) => r.peso);
     const maWeights = chartRecords.map((r) => r.ma7Peso || r.peso);
     const allWeightVals = [...weights, ...maWeights];
     const rawMinW = Math.min(...allWeightVals);
@@ -796,7 +875,7 @@ export function WeightTab() {
       getYWeight,
       getYFat,
     };
-  }, [chartRecords, chartInnerWidth, chartInnerHeight, padding]);
+  }, [chartRecords, chartInnerWidth, chartInnerHeight, padding, chartMode, trendAnalysis]);
 
   // Generador de rutas SVG respetando curveType ("linear" | "smooth" | "flow")
   const chartPaths = useMemo(() => {
@@ -863,6 +942,40 @@ export function WeightTab() {
     }));
     const fatKgLine = buildPath(fatKgPoints, curveType, padding.top, bottomY);
 
+    // 6. Modo Tendencia (Línea de tendencia suavizada, canal de dispersión y recta de regresión)
+    let trendEmaLine = "";
+    let trendRegressionLine = "";
+    let trendBandArea = "";
+
+    if (trendAnalysis && trendAnalysis.emaSeries.length > 0) {
+      const emaPoints = trendAnalysis.emaSeries.map((p) => ({
+        x: getX(p.timestamp),
+        y: getYWeight(p.trendWeight),
+      }));
+      trendEmaLine = buildPath(emaPoints, curveType, padding.top, bottomY);
+
+      // Recta de regresión global (inicio a fin)
+      const regStartX = getX(trendAnalysis.minTs);
+      const regStartY = getYWeight(trendAnalysis.startWeight);
+      const regEndX = getX(trendAnalysis.maxTs);
+      const regEndY = getYWeight(trendAnalysis.endWeight);
+      trendRegressionLine = `M ${regStartX.toFixed(1)} ${regStartY.toFixed(1)} L ${regEndX.toFixed(1)} ${regEndY.toFixed(1)}`;
+
+      // Banda de dispersión de la nube (± 1 desviación típica)
+      const upperPoints = trendAnalysis.emaSeries.map((p) => ({
+        x: getX(p.timestamp),
+        y: getYWeight(p.trendWeight + trendAnalysis.stdDev),
+      }));
+      const lowerPoints = trendAnalysis.emaSeries.map((p) => ({
+        x: getX(p.timestamp),
+        y: getYWeight(p.trendWeight - trendAnalysis.stdDev),
+      }));
+      const upperPath = buildPath(upperPoints, curveType, padding.top, bottomY);
+      const revLower = [...lowerPoints].reverse();
+      const revLowerPath = revLower.map((pt) => `L ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(" ");
+      trendBandArea = `${upperPath} ${revLowerPath} Z`;
+    }
+
     return {
       weightLine,
       maWeightLine,
@@ -872,8 +985,11 @@ export function WeightTab() {
       fatArea,
       leanLine,
       fatKgLine,
+      trendEmaLine,
+      trendRegressionLine,
+      trendBandArea,
     };
-  }, [chartScales, chartRecords, curveType, padding, chartInnerHeight]);
+  }, [chartScales, chartRecords, curveType, padding, chartInnerHeight, trendAnalysis]);
 
   // Manejador del cursor sobre el SVG
   const handleSvgMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -885,7 +1001,11 @@ export function WeightTab() {
     let closest: WeightRecord | null = null;
     let closestDist = Infinity;
 
-    for (const r of chartRecords) {
+    const candidateRecords = chartMode === "trend" && trendAnalysis
+      ? trendAnalysis.rawPoints
+      : chartRecords;
+
+    for (const r of candidateRecords) {
       const px = chartScales.getX(r.timestamp);
       const dist = Math.abs(px - svgX);
       if (dist < closestDist) {
@@ -1059,8 +1179,8 @@ export function WeightTab() {
         </button>
       </div>
 
-      {/* 3. Panel de Métricas / KPI Cards (5 Cards) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3.5">
+      {/* 3. Panel de Métricas / KPI Cards (3 Cards) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
         {/* KPI 1: Peso Actual (Azul Cobalto) */}
         <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
@@ -1194,56 +1314,6 @@ export function WeightTab() {
             </div>
           );
         })()}
-
-        {/* KPI 4: Masa Magra (Rojo) */}
-        <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
-            <span className="flex items-center gap-1.5">
-              <ActivityIcon className="w-3.5 h-3.5 text-red-500" />
-              <span className="text-zinc-300 font-semibold">Masa Magra</span>
-            </span>
-            <span className="text-[10px] font-mono text-red-400 font-semibold">FFM</span>
-          </div>
-
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold text-red-400 tracking-tight font-mono">
-              {stats.latestLean.toFixed(1)}
-            </span>
-            <span className="text-xs text-red-400/80 font-normal">kg</span>
-          </div>
-
-          <div className="mt-2.5 flex items-center justify-between text-[11px]">
-            <span className="text-red-400/90 font-medium">Musculatura</span>
-            <span className="text-[10px] text-zinc-500 font-mono">
-              {((stats.latestLean / (stats.latestWeight || 1)) * 100).toFixed(0)}%
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 5: Masa Grasa (Amarillo) */}
-        <div className="col-span-1 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 shadow-md relative overflow-hidden">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
-            <span className="flex items-center gap-1.5">
-              <TrendingDownIcon className="w-3.5 h-3.5 text-yellow-400" />
-              <span className="text-zinc-300 font-semibold">Masa Grasa</span>
-            </span>
-            <span className="text-[10px] font-mono text-yellow-400 font-semibold">FAT</span>
-          </div>
-
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold text-yellow-300 tracking-tight font-mono">
-              {stats.latestFatKg.toFixed(1)}
-            </span>
-            <span className="text-xs text-yellow-400/80 font-normal">kg</span>
-          </div>
-
-          <div className="mt-2.5 flex items-center justify-between text-[11px]">
-            <span className="text-yellow-400/90 font-medium">Tejido adiposo</span>
-            <span className="text-[10px] text-zinc-500 font-mono">
-              {((stats.latestFatKg / (stats.latestWeight || 1)) * 100).toFixed(0)}%
-            </span>
-          </div>
-        </div>
       </div>
 
       {/* 4. Gráfico Principal Interactivo de Evolución */}
@@ -1299,19 +1369,16 @@ export function WeightTab() {
 
             <button
               type="button"
-              onClick={() => setChartMode("composition")}
+              onClick={() => setChartMode("trend")}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                chartMode === "composition"
+                chartMode === "trend"
                   ? "bg-zinc-800 text-zinc-100 shadow-xs border border-zinc-700/60"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
-              title="Composición Corporal: Masa Magra (rojo) vs Masa Grasa (amarillo)"
+              title="Línea de tendencia: convierte la nube de tomas en una trayectoria suavizada"
             >
-              <span className="flex items-center gap-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
-              </span>
-              <span>Composición</span>
+              <TrendingDownIcon className="w-3.5 h-3.5 text-blue-400" />
+              <span>Tendencia</span>
             </button>
           </div>
 
@@ -1432,8 +1499,44 @@ export function WeightTab() {
           </div>
         </div>
 
+        {/* Banner de estadísticas de tendencia cuando el modo Tendencia está activo */}
+        {chartMode === "trend" && trendAnalysis && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                <span className="font-semibold text-blue-200">Ritmo de Tendencia:</span>
+                <span
+                  className={`font-mono font-bold ${
+                    trendAnalysis.kgPerWeek < 0
+                      ? "text-emerald-400"
+                      : trendAnalysis.kgPerWeek > 0
+                      ? "text-amber-400"
+                      : "text-zinc-300"
+                  }`}
+                >
+                  {trendAnalysis.kgPerWeek > 0 ? `+${trendAnalysis.kgPerWeek}` : trendAnalysis.kgPerWeek} kg/semana
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-zinc-300">
+                <span className="text-zinc-400">Variación proyectada:</span>
+                <span className="font-mono font-semibold text-blue-300">
+                  {trendAnalysis.totalTrendDelta > 0 ? `+${trendAnalysis.totalTrendDelta}` : trendAnalysis.totalTrendDelta} kg
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-zinc-300">
+                <span className="text-zinc-400">Dispersión de la nube:</span>
+                <span className="font-mono text-zinc-400">±{trendAnalysis.stdDev} kg</span>
+              </div>
+            </div>
+            <span className="text-[11px] font-mono text-blue-300/80">
+              {trendAnalysis.n} tomas en la nube
+            </span>
+          </div>
+        )}
+
         {/* Banner informativo de fórmula de descongestión activa */}
-        {adaptiveResult.effectiveInterval !== "daily" && (
+        {chartMode !== "trend" && adaptiveResult.effectiveInterval !== "daily" && (
           <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
@@ -1506,6 +1609,7 @@ export function WeightTab() {
                     {/* Etiquetas eje izquierdo (Peso) */}
                     {(chartMode === "combined" ||
                       chartMode === "weight_only" ||
+                      chartMode === "trend" ||
                       chartMode === "composition") && (
                       <text
                         x={padding.left - 12}
@@ -1675,69 +1779,66 @@ export function WeightTab() {
                 </>
               )}
 
-              {/* 3. MODO COMPOSICIÓN CORPORAL (Masa Magra en Rojo vs Masa Grasa en Amarillo) */}
-              {chartMode === "composition" && (
+              {/* 3. MODO TENDENCIA: NUBE DE PUNTOS DE PESO CONVERTIDA EN LÍNEA DE TENDENCIA */}
+              {chartMode === "trend" && trendAnalysis && (
                 <>
-                  <path d={chartPaths.leanLine} fill="none" stroke="#ef4444" strokeWidth="2.5" />
-                  <path d={chartPaths.fatKgLine} fill="none" stroke="#eab308" strokeWidth="2.5" />
+                  {/* A. Canal / Banda de dispersión de la nube (±1 desviación estándar) */}
+                  {chartPaths.trendBandArea && (
+                    <path
+                      d={chartPaths.trendBandArea}
+                      fill="rgba(56, 189, 248, 0.08)"
+                      stroke="none"
+                    />
+                  )}
 
-                  {chartRecords
-                    .filter((r): r is typeof r & { masaMagraKg: number } => typeof r.masaMagraKg === "number")
-                    .map((r) => {
-                      const cx = chartScales.getX(r.timestamp);
-                      const cyLean = chartScales.getYWeight(r.masaMagraKg);
-                      const isHovered = hoveredPoint?.id === r.id;
-                      const isMulti = Boolean(r.isDailyAverage && r.measurements && r.measurements.length > 1);
-                      return (
-                        <circle
-                          key={`lean-${r.id}`}
-                          cx={cx}
-                          cy={cyLean}
-                          r={isHovered ? 6 : (isMulti ? 4 : 3)}
-                          fill="#ef4444"
-                          stroke="#18181b"
-                          strokeWidth={1.5}
-                          className="cursor-pointer"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isMulti) {
-                              setSelectedDayModal(r);
-                            } else {
-                              handleOpenEdit(r.measurements?.[0] || r);
-                            }
-                          }}
-                        />
-                      );
-                    })}
+                  {/* B. Directriz de Regresión Lineal Global */}
+                  {chartPaths.trendRegressionLine && (
+                    <path
+                      d={chartPaths.trendRegressionLine}
+                      fill="none"
+                      stroke="#38bdf8"
+                      strokeWidth="1.5"
+                      strokeDasharray="4 4"
+                      strokeOpacity="0.65"
+                    />
+                  )}
 
-                  {chartRecords
-                    .filter((r): r is typeof r & { masaGrasaKg: number } => typeof r.masaGrasaKg === "number")
-                    .map((r) => {
-                      const cx = chartScales.getX(r.timestamp);
-                      const cyFatKg = chartScales.getYWeight(r.masaGrasaKg);
-                      const isHovered = hoveredPoint?.id === r.id;
-                      const isMulti = Boolean(r.isDailyAverage && r.measurements && r.measurements.length > 1);
-                      return (
-                        <circle
-                          key={`fatkg-${r.id}`}
-                          cx={cx}
-                          cy={cyFatKg}
-                          r={isHovered ? 6 : (isMulti ? 4 : 3)}
-                          fill="#eab308"
-                          stroke="#18181b"
-                          strokeWidth={1.5}
-                          className="cursor-pointer"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isMulti) {
-                              setSelectedDayModal(r);
-                            } else {
-                              handleOpenEdit(r.measurements?.[0] || r);
-                            }
-                          }}
-                        />
-                      );
-                    })}
+                  {/* C. Línea de Tendencia Dinámica Suavizada (Eje Central de la Nube) */}
+                  {chartPaths.trendEmaLine && (
+                    <path
+                      d={chartPaths.trendEmaLine}
+                      fill="none"
+                      stroke="#2563eb"
+                      strokeWidth="3.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="drop-shadow-sm"
+                    />
+                  )}
+
+                  {/* D. Nube de Puntos de Peso Individuales (Scatter Cloud) */}
+                  {trendAnalysis.rawPoints.map((r, i) => {
+                    const cx = chartScales.getX(r.timestamp);
+                    const cy = chartScales.getYWeight(r.peso);
+                    const isHovered = hoveredPoint?.id === r.id;
+                    return (
+                      <circle
+                        key={`scatter-${r.id}-${i}`}
+                        cx={cx}
+                        cy={cy}
+                        r={isHovered ? 6 : 3.5}
+                        fill={isHovered ? "#38bdf8" : "#60a5fa"}
+                        fillOpacity={isHovered ? 1 : 0.45}
+                        stroke={isHovered ? "#ffffff" : "#1e40af"}
+                        strokeWidth={isHovered ? 2 : 1}
+                        className="cursor-pointer transition-all hover:scale-125"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEdit(r);
+                        }}
+                      />
+                    );
+                  })}
                 </>
               )}
 
@@ -1999,15 +2100,19 @@ export function WeightTab() {
               <span className="font-medium text-yellow-400">% Graso</span>
             </div>
           )}
-          {chartMode === "composition" && (
+          {chartMode === "trend" && (
             <>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-0.5 bg-red-500 rounded-full" />
-                <span className="font-medium text-red-400">Masa Magra (kg)</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-400/50 border border-blue-600" />
+                <span className="font-medium text-blue-300">Nube de tomas</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-0.5 bg-yellow-400 rounded-full" />
-                <span className="font-medium text-yellow-400">Masa Grasa (kg)</span>
+                <span className="w-4 h-0.5 bg-blue-600 rounded-full" />
+                <span className="font-medium text-blue-400">Línea de Tendencia</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-0.5 border-t border-dashed border-sky-400" />
+                <span className="text-zinc-400">Regresión Global</span>
               </div>
             </>
           )}
