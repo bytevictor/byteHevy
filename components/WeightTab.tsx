@@ -29,11 +29,15 @@ import {
   UserIcon,
   RefreshCwIcon,
   DatabaseIcon,
+  CheckCircleIcon,
+  AlertTriangleIcon,
+  QrCodeIcon,
 } from "./Icons";
 import { useSeason } from "@/lib/season-context";
 import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
 import { useUserProfile, getBmiCategory } from "@/lib/user-profile-context";
 import { BmiMapModal } from "./BmiMapModal";
+import { XiaomiSyncModal } from "./XiaomiSyncModal";
 import {
   WeightRecord,
   generateMockWeightRecords,
@@ -175,6 +179,81 @@ export function WeightTab() {
     loadRecords();
   }, [loadRecords]);
 
+  // Estado de integración con Xiaomi Cloud
+  const [xiaomiModalOpen, setXiaomiModalOpen] = useState(false);
+  const [xiaomiAutoStartQr, setXiaomiAutoStartQr] = useState(false);
+  const [xiaomiConnected, setXiaomiConnected] = useState(false);
+  const [xiaomiUserId, setXiaomiUserId] = useState<string | null>(null);
+  const [xiaomiLastSync, setXiaomiLastSync] = useState<string | null>(null);
+  const [xiaomiSyncing, setXiaomiSyncing] = useState(false);
+  const [xiaomiToast, setXiaomiToast] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
+
+  const fetchXiaomiStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/xiaomi/status");
+      if (res.ok) {
+        const data = await res.json();
+        setXiaomiConnected(!!data.is_connected);
+        setXiaomiUserId(data.user_id || null);
+        setXiaomiLastSync(data.last_sync || null);
+      }
+    } catch (e) {
+      console.error("Error al obtener estado de Xiaomi Cloud:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchXiaomiStatus();
+  }, [fetchXiaomiStatus]);
+
+  // Sincronización rápida desde el toolbar
+  const handleXiaomiQuickSync = async () => {
+    if (!xiaomiConnected) {
+      setXiaomiAutoStartQr(true);
+      setXiaomiModalOpen(true);
+      return;
+    }
+
+    setXiaomiSyncing(true);
+    setXiaomiToast(null);
+
+    try {
+      const res = await fetch("/api/xiaomi/sync", { method: "POST" });
+      const data = await res.json();
+
+      if (res.status === 401 || data.error === "SESSION_EXPIRED") {
+        setXiaomiConnected(false);
+        setXiaomiToast({
+          type: "error",
+          text: "Sesión caducada en Xiaomi Cloud. Pulsa para renovar mediante código QR.",
+        });
+        setXiaomiAutoStartQr(true);
+        setXiaomiModalOpen(true);
+      } else if (data.success) {
+        const count = data.new_records_count || 0;
+        setXiaomiToast({
+          type: "success",
+          text: count > 0 ? `¡Sincronizado! Se descargaron ${count} nuevos pesajes.` : "Tu historial ya está al día con Xiaomi Cloud.",
+        });
+        await loadRecords();
+        await fetchXiaomiStatus();
+        setTimeout(() => setXiaomiToast(null), 5000);
+      } else {
+        setXiaomiToast({
+          type: "error",
+          text: data.error || "Error al sincronizar con Xiaomi.",
+        });
+      }
+    } catch (err: any) {
+      setXiaomiToast({
+        type: "error",
+        text: `Error de conexión: ${err.message || err}`,
+      });
+    } finally {
+      setXiaomiSyncing(false);
+    }
+  };
+
   // Recalcular BMI y composición cuando cambie el perfil de altura/edad en Configuración
   useEffect(() => {
     setRecords((prev) =>
@@ -214,13 +293,128 @@ export function WeightTab() {
   }, [profile.alturaCm, profile.edad, profile.sexo, calculateBmi, calculateFfmi]);
 
   // Filtros y vistas
-  const [chartMode, setChartMode] = useState<WeightChartMode>("combined");
+  const [showWeight, setShowWeight] = useState<boolean>(true);
+  const [showFat, setShowFat] = useState<boolean>(true);
+  const [isTrendMode, setIsTrendMode] = useState<boolean>(false);
   const [curveType, setCurveType] = useState<CurveType>("smooth");
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
   const [groupingMode, setGroupingMode] = useState<WeightGroupingMode>("auto");
   const [syncWithSeason, setSyncWithSeason] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortAsc, setSortAsc] = useState(false);
+
+  // Modo derivado para retrocompatibilidad
+  const chartMode: WeightChartMode = isTrendMode
+    ? "trend"
+    : showWeight && showFat
+    ? "combined"
+    : showWeight
+    ? "weight_only"
+    : showFat
+    ? "fat_only"
+    : "combined";
+
+  // Cargar persistencia de opciones del gráfico desde localStorage
+  useEffect(() => {
+    try {
+      const savedWeight = localStorage.getItem("bytehevy_weight_show_weight");
+      if (savedWeight !== null) setShowWeight(savedWeight === "true");
+
+      const savedFat = localStorage.getItem("bytehevy_weight_show_fat");
+      if (savedFat !== null) setShowFat(savedFat === "true");
+
+      const savedTrend = localStorage.getItem("bytehevy_weight_is_trend");
+      if (savedTrend !== null) setIsTrendMode(savedTrend === "true");
+
+      const savedCurve = localStorage.getItem("bytehevy_weight_curve_type");
+      if (savedCurve === "linear" || savedCurve === "smooth" || savedCurve === "flow") {
+        setCurveType(savedCurve);
+      }
+
+      const savedRange = localStorage.getItem("bytehevy_weight_time_range");
+      if (savedRange === "1M" || savedRange === "3M" || savedRange === "6M" || savedRange === "1A" || savedRange === "all") {
+        setTimeRange(savedRange);
+      }
+
+      const savedGrouping = localStorage.getItem("bytehevy_weight_grouping_mode");
+      if (savedGrouping === "auto" || savedGrouping === "daily" || savedGrouping === "weekly" || savedGrouping === "monthly") {
+        setGroupingMode(savedGrouping);
+      }
+
+      const savedSyncSeason = localStorage.getItem("bytehevy_weight_sync_season");
+      if (savedSyncSeason !== null) setSyncWithSeason(savedSyncSeason === "true");
+    } catch {}
+  }, []);
+
+  const handleToggleWeight = () => {
+    if (isTrendMode) {
+      setIsTrendMode(false);
+      try {
+        localStorage.setItem("bytehevy_weight_is_trend", "false");
+      } catch {}
+    }
+    setShowWeight((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("bytehevy_weight_show_weight", String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const handleToggleFat = () => {
+    if (isTrendMode) {
+      setIsTrendMode(false);
+      try {
+        localStorage.setItem("bytehevy_weight_is_trend", "false");
+      } catch {}
+    }
+    setShowFat((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("bytehevy_weight_show_fat", String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const handleToggleTrend = () => {
+    setIsTrendMode((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("bytehevy_weight_is_trend", String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const handleCurveChange = (c: CurveType) => {
+    setCurveType(c);
+    try {
+      localStorage.setItem("bytehevy_weight_curve_type", c);
+    } catch {}
+  };
+
+  const handleTimeRangeChange = (r: TimeRange) => {
+    setTimeRange(r);
+    try {
+      localStorage.setItem("bytehevy_weight_time_range", r);
+    } catch {}
+  };
+
+  const handleGroupingModeChange = (m: WeightGroupingMode) => {
+    setGroupingMode(m);
+    try {
+      localStorage.setItem("bytehevy_weight_grouping_mode", m);
+    } catch {}
+  };
+
+  const handleSyncSeasonChange = (val: boolean) => {
+    setSyncWithSeason(val);
+    try {
+      localStorage.setItem("bytehevy_weight_sync_season", String(val));
+    } catch {}
+  };
 
   // Modales
   const [csvModalOpen, setCsvModalOpen] = useState(false);
@@ -1316,7 +1510,7 @@ export function WeightTab() {
               <ScaleIcon className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-100">
                   Seguimiento de Peso
                 </h1>
@@ -1324,6 +1518,36 @@ export function WeightTab() {
                   <DatabaseIcon className="w-3 h-3 text-emerald-400" />
                   <span>SQLite Conectado ({records.length} pesajes)</span>
                 </span>
+                {/* Badge Xiaomi Cloud */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setXiaomiAutoStartQr(!xiaomiConnected);
+                    setXiaomiModalOpen(true);
+                  }}
+                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border flex items-center gap-1.5 transition-all cursor-pointer ${
+                    xiaomiConnected
+                      ? "bg-orange-500/10 text-orange-400 border-orange-500/30 hover:bg-orange-500/20"
+                      : "bg-zinc-800/80 text-zinc-400 border-zinc-700/80 hover:bg-zinc-700/60 hover:text-zinc-200"
+                  }`}
+                  title={
+                    xiaomiConnected
+                      ? `Conectado a Xiaomi Cloud${xiaomiUserId ? ` (${xiaomiUserId})` : ""}. Última sinc: ${xiaomiLastSync || "reciente"}`
+                      : "Haz clic para conectar tu báscula Xiaomi mediante QR"
+                  }
+                >
+                  {xiaomiConnected ? (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />
+                      <span>Xiaomi Cloud Conectado</span>
+                    </>
+                  ) : (
+                    <>
+                      <QrCodeIcon className="w-3 h-3 text-zinc-400" />
+                      <span>Conectar Xiaomi</span>
+                    </>
+                  )}
+                </button>
               </div>
               <p className="text-xs text-zinc-400 mt-0.5">
                 Haz clic en cualquier punto de la gráfica o fila para{" "}
@@ -1333,7 +1557,39 @@ export function WeightTab() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {/* Botón Sincronizar Xiaomi */}
+          <button
+            type="button"
+            onClick={handleXiaomiQuickSync}
+            disabled={xiaomiSyncing}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-sm ${
+              xiaomiConnected
+                ? "bg-orange-500/10 border-orange-500/30 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300"
+                : "bg-zinc-900 border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+            } disabled:opacity-50`}
+            title={
+              xiaomiConnected
+                ? "Sincronizar pesajes con Xiaomi Cloud de forma incremental"
+                : "Conectar con Xiaomi Cloud mediante código QR"
+            }
+          >
+            {xiaomiSyncing ? (
+              <RefreshCwIcon className="w-3.5 h-3.5 animate-spin text-orange-400" />
+            ) : xiaomiConnected ? (
+              <UploadCloudIcon className="w-3.5 h-3.5 text-orange-400" />
+            ) : (
+              <QrCodeIcon className="w-3.5 h-3.5 text-zinc-400" />
+            )}
+            <span>
+              {xiaomiSyncing
+                ? "Sincronizando..."
+                : xiaomiConnected
+                ? "Sincronizar Xiaomi"
+                : "Conectar Xiaomi"}
+            </span>
+          </button>
+
           <button
             onClick={handleReloadFromDb}
             disabled={loading}
@@ -1357,6 +1613,33 @@ export function WeightTab() {
           </button>
         </div>
       </div>
+
+      {/* Banner de notificación de Xiaomi Cloud */}
+      {xiaomiToast && (
+        <div
+          className={`p-3 rounded-xl border flex items-center justify-between text-xs animate-in fade-in duration-200 ${
+            xiaomiToast.type === "success"
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+              : "bg-rose-500/10 border-rose-500/30 text-rose-300"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {xiaomiToast.type === "success" ? (
+              <CheckCircleIcon className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertTriangleIcon className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span className="font-medium">{xiaomiToast.text}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setXiaomiToast(null)}
+            className="text-zinc-400 hover:text-zinc-200 p-1"
+          >
+            <XIcon className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* 2. Panel de Métricas / KPI Cards (3 Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
@@ -1499,64 +1782,69 @@ export function WeightTab() {
       <div className="p-4 sm:p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 backdrop-blur-sm shadow-xl space-y-4">
         {/* Barra de Controles del Gráfico: Organizada en horizontal, compacta y cuadrada */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 pb-3 border-b border-zinc-800/60">
-          {/* Selector de Parámetros / Métricas (Horizontal, cuadrado y con indicadores de color) */}
+          {/* Selector de Parámetros / Métricas (Toggles independientes para Peso y Grasa, y modo Tendencia aparte) */}
           <div className="inline-flex items-center p-0.5 rounded-xl bg-zinc-950/90 border border-zinc-800 shadow-inner overflow-x-auto">
             <button
               type="button"
-              onClick={() => setChartMode("combined")}
+              onClick={handleToggleWeight}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                chartMode === "combined"
-                  ? "bg-zinc-800 text-zinc-100 shadow-xs border border-zinc-700/60"
-                  : "text-zinc-400 hover:text-zinc-200"
+                !isTrendMode && showWeight
+                  ? "bg-blue-500/15 text-blue-200 border border-blue-500/40 shadow-xs"
+                  : "text-zinc-500 hover:text-zinc-300 border border-transparent"
               }`}
-              title="Vista combinada: Peso (azul cobalto) y % Grasa (amarillo)"
+              title={
+                !isTrendMode && showWeight
+                  ? "Desactivar visualización de Peso y Media Móvil"
+                  : "Activar visualización de Peso y Media Móvil (azul cobalto)"
+              }
             >
-              <span className="flex items-center gap-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
-              </span>
-              <span>Combinado</span>
+              <span
+                className={`w-2 h-2 rounded-full transition-all ${
+                  !isTrendMode && showWeight
+                    ? "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]"
+                    : "bg-zinc-600"
+                }`}
+              />
+              <span>Peso</span>
             </button>
 
             <button
               type="button"
-              onClick={() => setChartMode("weight_only")}
+              onClick={handleToggleFat}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                chartMode === "weight_only"
-                  ? "bg-zinc-800 text-zinc-100 shadow-xs border border-zinc-700/60"
-                  : "text-zinc-400 hover:text-zinc-200"
+                !isTrendMode && showFat
+                  ? "bg-yellow-500/15 text-yellow-200 border border-yellow-500/40 shadow-xs"
+                  : "text-zinc-500 hover:text-zinc-300 border border-transparent"
               }`}
-              title="Solo Peso Corporal y Media Móvil de 7 días (azul cobalto)"
+              title={
+                !isTrendMode && showFat
+                  ? "Desactivar visualización de % Grasa"
+                  : "Activar visualización de Porcentaje de Grasa (amarillo)"
+              }
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-              <span>Peso & MA-7</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setChartMode("fat_only")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                chartMode === "fat_only"
-                  ? "bg-zinc-800 text-zinc-100 shadow-xs border border-zinc-700/60"
-                  : "text-zinc-400 hover:text-zinc-200"
-              }`}
-              title="Solo Porcentaje de Grasa Corporal (amarillo)"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+              <span
+                className={`w-2 h-2 rounded-full transition-all ${
+                  !isTrendMode && showFat
+                    ? "bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]"
+                    : "bg-zinc-600"
+                }`}
+              />
               <span>% Grasa</span>
             </button>
 
+            <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
+
             <button
               type="button"
-              onClick={() => setChartMode("trend")}
+              onClick={handleToggleTrend}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                chartMode === "trend"
-                  ? "bg-zinc-800 text-zinc-100 shadow-xs border border-zinc-700/60"
-                  : "text-zinc-400 hover:text-zinc-200"
+                isTrendMode
+                  ? "bg-sky-500/20 text-sky-200 border border-sky-500/40 shadow-xs"
+                  : "text-zinc-400 hover:text-zinc-200 border border-transparent"
               }`}
-              title="Línea de tendencia: convierte la nube de tomas en una trayectoria suavizada"
+              title="Modo Tendencia: convierte la nube de tomas en una trayectoria suavizada con canal de dispersión"
             >
-              <TrendingDownIcon className="w-3.5 h-3.5 text-blue-400" />
+              <TrendingDownIcon className={`w-3.5 h-3.5 ${isTrendMode ? "text-sky-300" : "text-zinc-400"}`} />
               <span>Tendencia</span>
             </button>
           </div>
@@ -1567,7 +1855,7 @@ export function WeightTab() {
             <div className="inline-flex items-center p-0.5 rounded-xl bg-zinc-950/90 border border-zinc-800 shadow-inner">
               <button
                 type="button"
-                onClick={() => setCurveType("linear")}
+                onClick={() => handleCurveChange("linear")}
                 className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
                   curveType === "linear"
                     ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
@@ -1581,7 +1869,7 @@ export function WeightTab() {
 
               <button
                 type="button"
-                onClick={() => setCurveType("smooth")}
+                onClick={() => handleCurveChange("smooth")}
                 className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
                   curveType === "smooth"
                     ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
@@ -1595,7 +1883,7 @@ export function WeightTab() {
 
               <button
                 type="button"
-                onClick={() => setCurveType("flow")}
+                onClick={() => handleCurveChange("flow")}
                 className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
                   curveType === "flow"
                     ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
@@ -1611,7 +1899,7 @@ export function WeightTab() {
             {/* Sincronización con Season */}
             {activeSeason && activeSeasonId !== "all" && (
               <button
-                onClick={() => setSyncWithSeason(!syncWithSeason)}
+                onClick={() => handleSyncSeasonChange(!syncWithSeason)}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-colors cursor-pointer ${
                   syncWithSeason
                     ? "bg-zinc-800 text-zinc-100 border-zinc-700"
@@ -1633,8 +1921,8 @@ export function WeightTab() {
                 <button
                   key={r}
                   onClick={() => {
-                    setTimeRange(r);
-                    if (syncWithSeason) setSyncWithSeason(false);
+                    handleTimeRangeChange(r);
+                    if (syncWithSeason) handleSyncSeasonChange(false);
                   }}
                   className={`px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${
                     timeRange === r && !syncWithSeason
@@ -1663,7 +1951,7 @@ export function WeightTab() {
                 <button
                   key={m.id}
                   type="button"
-                  onClick={() => setGroupingMode(m.id)}
+                  onClick={() => handleGroupingModeChange(m.id)}
                   className={`px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                     groupingMode === m.id
                       ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
@@ -1789,10 +2077,7 @@ export function WeightTab() {
                     />
 
                     {/* Etiquetas eje izquierdo (Peso) */}
-                    {(chartMode === "combined" ||
-                      chartMode === "weight_only" ||
-                      chartMode === "trend" ||
-                      chartMode === "composition") && (
+                    {(isTrendMode || showWeight) && (
                       <text
                         x={padding.left - 12}
                         y={y + 3.5}
@@ -1806,7 +2091,7 @@ export function WeightTab() {
                     )}
 
                     {/* Etiquetas eje derecho (% Grasa) */}
-                    {(chartMode === "combined" || chartMode === "fat_only") && (
+                    {!isTrendMode && showFat && (
                       <text
                         x={svgWidth - padding.right + 12}
                         y={y + 3.5}
@@ -1896,7 +2181,7 @@ export function WeightTab() {
                 )}
 
               {/* 1. CURVAS DE PESO (Azul Cobalto) */}
-              {(chartMode === "combined" || chartMode === "weight_only") && (
+              {!isTrendMode && showWeight && (
                 <>
                   {/* Área degradada de peso con el trazado exacto de curveType */}
                   <path d={chartPaths.weightArea} fill="url(#weightGrad)" />
@@ -1906,8 +2191,8 @@ export function WeightTab() {
                     d={chartPaths.weightLine}
                     fill="none"
                     stroke="#2563eb"
-                    strokeWidth={chartMode === "weight_only" ? "1.75" : "2"}
-                    strokeOpacity={chartMode === "weight_only" ? "0.6" : "0.95"}
+                    strokeWidth={!showFat ? "2.2" : "2"}
+                    strokeOpacity={!showFat ? "0.9" : "0.95"}
                   />
 
                   {/* Línea de Media Móvil 7D de Peso (destacada y punteada) */}
@@ -1955,7 +2240,7 @@ export function WeightTab() {
               )}
 
               {/* 2. CURVAS DE % GRASO (Amarillo) */}
-              {(chartMode === "combined" || chartMode === "fat_only") && (
+              {!isTrendMode && showFat && (
                 <>
                   {/* Área degradada de grasa */}
                   <path d={chartPaths.fatArea} fill="url(#fatGrad)" />
@@ -1965,8 +2250,8 @@ export function WeightTab() {
                     d={chartPaths.fatLine}
                     fill="none"
                     stroke="#eab308"
-                    strokeWidth={chartMode === "fat_only" ? "1.75" : "2"}
-                    strokeOpacity={chartMode === "fat_only" ? "0.6" : "0.95"}
+                    strokeWidth={!showWeight ? "2.2" : "2"}
+                    strokeOpacity={!showWeight ? "0.9" : "0.95"}
                   />
 
                   {/* Línea de Media Móvil 7D de Grasa (punteada) */}
@@ -2014,8 +2299,22 @@ export function WeightTab() {
                 </>
               )}
 
+              {/* Estado cuando ninguna serie está activa */}
+              {!isTrendMode && !showWeight && !showFat && (
+                <text
+                  x={svgWidth / 2}
+                  y={padding.top + chartInnerHeight / 2}
+                  textAnchor="middle"
+                  fill="#71717a"
+                  fontSize="12"
+                  fontFamily="sans-serif"
+                >
+                  Activa Peso o % Grasa arriba para visualizar las líneas
+                </text>
+              )}
+
               {/* 3. MODO TENDENCIA: NUBE DE PUNTOS DE PESO CONVERTIDA EN LÍNEA DE TENDENCIA */}
-              {chartMode === "trend" && trendAnalysis && (
+              {isTrendMode && trendAnalysis && (
                 <>
                   {/* A. Canal / Banda de dispersión de la nube (±1 desviación estándar) */}
                   {chartPaths.trendBandArea && (
@@ -2090,11 +2389,8 @@ export function WeightTab() {
               {/* Indicador de punto activo destacado (SMOOTH & ROCK-STEADY) */}
               {hoveredPoint && (
                 <g pointerEvents="none">
-                  {/* Modo Tendencia, Peso o Combinado: Anillo y punto central de Peso */}
-                  {(chartMode === "combined" ||
-                    chartMode === "weight_only" ||
-                    chartMode === "trend" ||
-                    chartMode === "composition") && (
+                  {/* Modo Tendencia o Peso: Anillo y punto central de Peso */}
+                  {(isTrendMode || showWeight) && (
                     <>
                       <circle
                         cx={chartScales.getX(hoveredPoint.timestamp)}
@@ -2117,8 +2413,8 @@ export function WeightTab() {
                     </>
                   )}
 
-                  {/* Modo Grasa o Combinado: Anillo y punto central de Grasa */}
-                  {(chartMode === "combined" || chartMode === "fat_only") &&
+                  {/* Modo Grasa: Anillo y punto central de Grasa */}
+                  {!isTrendMode && showFat &&
                     typeof hoveredPoint.grasaPct === "number" && (
                       <>
                         <circle
@@ -2342,25 +2638,31 @@ export function WeightTab() {
 
         {/* Leyenda del gráfico */}
         <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 pt-2 text-xs text-zinc-400 border-t border-zinc-800/60">
-          {(chartMode === "combined" || chartMode === "weight_only") && (
+          {!isTrendMode && showWeight && (
             <div className="flex items-center gap-2">
               <span className="w-3 h-0.5 rounded-full bg-blue-500" />
               <span className="font-medium text-blue-400">Peso Diario (kg)</span>
             </div>
           )}
-          {(chartMode === "combined" || chartMode === "weight_only") && (
+          {!isTrendMode && showWeight && (
             <div className="flex items-center gap-2">
               <span className="w-4 h-0.5 border-t border-dashed border-blue-400" />
               <span className="text-zinc-400">Media Móvil 7d (Tendencia)</span>
             </div>
           )}
-          {(chartMode === "combined" || chartMode === "fat_only") && (
+          {!isTrendMode && showFat && (
             <div className="flex items-center gap-2">
               <span className="w-3 h-0.5 bg-yellow-400 rounded-full" />
               <span className="font-medium text-yellow-400">% Graso</span>
             </div>
           )}
-          {chartMode === "trend" && (
+          {!isTrendMode && showFat && (
+            <div className="flex items-center gap-2">
+              <span className="w-4 h-0.5 border-t border-dashed border-yellow-400" />
+              <span className="text-zinc-400">Media Móvil Grasa 7d</span>
+            </div>
+          )}
+          {isTrendMode && (
             <>
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-blue-400/50 border border-blue-600" />
@@ -2375,6 +2677,11 @@ export function WeightTab() {
                 <span className="text-zinc-400">Regresión Global</span>
               </div>
             </>
+          )}
+          {!isTrendMode && !showWeight && !showFat && (
+            <div className="text-zinc-500 italic text-[11px]">
+              Ninguna serie seleccionada. Pulsa en Peso o % Grasa arriba para activarlas.
+            </div>
           )}
 
           <div className="flex items-center gap-1.5 text-zinc-400">
@@ -3467,6 +3774,20 @@ export function WeightTab() {
         isOpen={bmiModalOpen}
         onClose={() => setBmiModalOpen(false)}
         weight={bmiModalWeight ?? (stats.latestWeight > 0 ? stats.latestWeight : undefined)}
+      />
+
+      {/* 10. MODAL: Sincronización Xiaomi Cloud (Mi Home / Yunmai) */}
+      <XiaomiSyncModal
+        isOpen={xiaomiModalOpen}
+        onClose={() => {
+          setXiaomiModalOpen(false);
+          setXiaomiAutoStartQr(false);
+        }}
+        autoStartQr={xiaomiAutoStartQr}
+        onSyncSuccess={() => {
+          loadRecords();
+          fetchXiaomiStatus();
+        }}
       />
     </div>
   );
