@@ -24,6 +24,7 @@ import {
   ByteHevyLogo,
   ScaleIcon,
   QrCodeIcon,
+  SparklesIcon,
 } from "./Icons";
 import { useSync } from "@/lib/sync-context";
 import { ThemeCustomizer } from "./ThemeCustomizer";
@@ -65,7 +66,7 @@ interface MediaCacheStatus {
   diskFilesCount: number;
 }
 
-type SettingsSubTab = "datos" | "temporadas" | "multimedia" | "perfil";
+type SettingsSubTab = "datos" | "perfil" | "temporadas" | "multimedia" | "apariencia";
 
 interface SettingsTabProps {
   onSyncComplete?: () => void;
@@ -77,9 +78,10 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
   // Tab state with query param sync
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>(() => {
     const tab = searchParams?.get("tab");
+    if (tab === "perfil" || tab === "profile" || tab === "biometrics") return "perfil";
     if (tab === "temporadas" || tab === "seasons") return "temporadas";
     if (tab === "multimedia" || tab === "media") return "multimedia";
-    if (tab === "perfil" || tab === "appearance" || tab === "theme") return "perfil";
+    if (tab === "apariencia" || tab === "appearance" || tab === "theme") return "apariencia";
     return "datos";
   });
 
@@ -526,94 +528,75 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
 
   return (
     <div className="py-6 max-w-4xl mx-auto flex flex-col gap-6">
-      {/* 1. Header con Título Principal y Sub-pestañas Modernas */}
-      <div className="flex flex-col gap-4">
-        <div className="p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2.5">
-              <SettingsIcon className="w-5 h-5 text-accent-light" />
-              <span>Configuración y Preferencias</span>
-            </h2>
-            <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-              Administra tus fuentes de datos, organiza tus etapas de entrenamiento, supervisa la multimedia 3D y personaliza tu experiencia.
-            </p>
-          </div>
+      {/* Selector de Sub-pestañas Protagonista */}
+      <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 backdrop-blur-md overflow-x-auto shadow-md">
+        <button
+          onClick={() => handleSubTabChange("datos")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+            activeSubTab === "datos"
+              ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
+              : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
+          }`}
+        >
+          <UploadCloudIcon className="w-4 h-4 text-accent-light" />
+          <span>Datos & Conexiones</span>
+        </button>
 
-          {/* Estado de sincronización rápido en la cabecera */}
-          <div className="flex items-center gap-2 flex-wrap self-start sm:self-center shrink-0">
-            {hevyConnected && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium shrink-0">
-                <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                <span>Hevy @{hevyUsername || "conectado"}</span>
-              </div>
-            )}
-            {xiaomiConnected && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-medium shrink-0">
-                <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
-                <span>Xiaomi Báscula</span>
-              </div>
-            )}
-          </div>
-        </div>
+        <button
+          onClick={() => handleSubTabChange("perfil")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+            activeSubTab === "perfil"
+              ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
+              : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
+          }`}
+        >
+          <UserIcon className="w-4 h-4 text-emerald-400" />
+          <span>Perfil Biométrico</span>
+        </button>
 
-        {/* Barra de Sub-pestañas */}
-        <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-zinc-900/70 border border-zinc-800/80 backdrop-blur-md overflow-x-auto">
-          <button
-            onClick={() => handleSubTabChange("datos")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-              activeSubTab === "datos"
-                ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
-            }`}
-          >
-            <UploadCloudIcon className="w-4 h-4 text-accent-light" />
-            <span>Datos & Conexiones</span>
-          </button>
+        <button
+          onClick={() => handleSubTabChange("temporadas")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+            activeSubTab === "temporadas"
+              ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
+              : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
+          }`}
+        >
+          <CalendarIcon className="w-4 h-4 text-amber-400" />
+          <span>Temporadas</span>
+          {seasons.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-zinc-800/90 text-zinc-300 border border-zinc-700/60">
+              {seasons.length}
+            </span>
+          )}
+        </button>
 
-          <button
-            onClick={() => handleSubTabChange("temporadas")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-              activeSubTab === "temporadas"
-                ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
-            }`}
-          >
-            <CalendarIcon className="w-4 h-4 text-amber-400" />
-            <span>Temporadas (Seasons)</span>
-            {seasons.length > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-zinc-800/90 text-zinc-300 border border-zinc-700/60">
-                {seasons.length}
-              </span>
-            )}
-          </button>
+        <button
+          onClick={() => handleSubTabChange("multimedia")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+            activeSubTab === "multimedia"
+              ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
+              : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
+          }`}
+        >
+          <FilmIcon className="w-4 h-4 text-blue-400" />
+          <span>Multimedia 3D</span>
+          {mediaStatus && mediaStatus.missingCount > 0 && (
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" title={`${mediaStatus.missingCount} pendientes`} />
+          )}
+        </button>
 
-          <button
-            onClick={() => handleSubTabChange("multimedia")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-              activeSubTab === "multimedia"
-                ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
-            }`}
-          >
-            <FilmIcon className="w-4 h-4 text-blue-400" />
-            <span>Multimedia 3D</span>
-            {mediaStatus && mediaStatus.missingCount > 0 && (
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" title={`${mediaStatus.missingCount} pendientes`} />
-            )}
-          </button>
-
-          <button
-            onClick={() => handleSubTabChange("perfil")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-              activeSubTab === "perfil"
-                ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
-            }`}
-          >
-            <UserIcon className="w-4 h-4 text-emerald-400" />
-            <span>Perfil & Apariencia</span>
-          </button>
-        </div>
+        <button
+          onClick={() => handleSubTabChange("apariencia")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+            activeSubTab === "apariencia"
+              ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
+              : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
+          }`}
+        >
+          <SparklesIcon className="w-4 h-4 text-purple-400" />
+          <span>Apariencia</span>
+        </button>
       </div>
 
       {/* =========================================================================
@@ -1382,14 +1365,19 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
       )}
 
       {/* =========================================================================
-          SUB-TAB 4: PERFIL BIOMÉTRICO Y APARIENCIA
+          SUB-TAB: PERFIL BIOMÉTRICO
          ========================================================================= */}
       {activeSubTab === "perfil" && (
         <section className="flex flex-col gap-6 animate-in fade-in duration-150">
-          {/* Biometric Profile (Altura, Edad & BMI) */}
           <BiometricProfileSettings />
+        </section>
+      )}
 
-          {/* Theme & Appearance Customizer */}
+      {/* =========================================================================
+          SUB-TAB: APARIENCIA & TEMAS
+         ========================================================================= */}
+      {activeSubTab === "apariencia" && (
+        <section className="flex flex-col gap-6 animate-in fade-in duration-150">
           <ThemeCustomizer />
         </section>
       )}
