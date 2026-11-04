@@ -2013,7 +2013,7 @@ export function WeightTab() {
                   : "Peso Actual"}
               </span>
             </span>
-            <span className="text-[10px] font-mono text-blue-400 font-medium">kg</span>
+            <span className="text-xs font-mono text-blue-400 font-semibold">kg</span>
           </div>
 
           <div className="flex items-baseline gap-2">
@@ -2023,23 +2023,23 @@ export function WeightTab() {
             <span className="text-xs text-blue-400/80 font-normal">kg</span>
           </div>
 
-          <div className="mt-2.5 flex items-center justify-between text-[11px]">
+          <div className="mt-2.5 flex items-center justify-between text-xs">
             <div className="flex items-center gap-1 font-semibold">
               {stats.deltaWeightWeek < 0 ? (
                 <span className="text-emerald-400 flex items-center gap-0.5">
-                  <TrendingDownIcon className="w-3 h-3" />
+                  <TrendingDownIcon className="w-3.5 h-3.5" />
                   {stats.deltaWeightWeek} kg
                 </span>
               ) : stats.deltaWeightWeek > 0 ? (
                 <span className="text-amber-400 flex items-center gap-0.5">
-                  <TrendingUpIcon className="w-3 h-3" />+{stats.deltaWeightWeek} kg
+                  <TrendingUpIcon className="w-3.5 h-3.5" />+{stats.deltaWeightWeek} kg
                 </span>
               ) : (
                 <span className="text-zinc-400">0.0 kg</span>
               )}
-              <span className="text-zinc-500 font-normal">7d</span>
+              <span className="text-zinc-400 font-normal">7d</span>
             </div>
-            <span className="text-[10px] text-zinc-500 font-mono">
+            <span className="text-xs text-zinc-400 font-mono">
               MA-7: <span className="text-blue-400 font-semibold">{stats.ma7Weight.toFixed(1)}</span>
             </span>
           </div>
@@ -2052,7 +2052,7 @@ export function WeightTab() {
               <PercentIcon className="w-3.5 h-3.5 text-yellow-400" />
               <span className="text-zinc-300 font-semibold">% Grasa Corporal</span>
             </span>
-            <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+            <span className="px-2 py-0.5 rounded text-xs font-semibold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
               FAT %
             </span>
           </div>
@@ -2064,19 +2064,19 @@ export function WeightTab() {
             <span className="text-xs text-yellow-400/80 font-normal">%</span>
           </div>
 
-          <div className="mt-2.5 flex items-center justify-between text-[11px]">
+          <div className="mt-2.5 flex items-center justify-between text-xs">
             <div className="flex items-center gap-1 font-semibold">
               {stats.deltaFatWeek < 0 ? (
                 <span className="text-emerald-400 flex items-center gap-0.5">
-                  <TrendingDownIcon className="w-3 h-3" />
+                  <TrendingDownIcon className="w-3.5 h-3.5" />
                   {stats.deltaFatWeek}%
                 </span>
               ) : (
                 <span className="text-zinc-400">{stats.deltaFatWeek}%</span>
               )}
-              <span className="text-zinc-500 font-normal">7d</span>
+              <span className="text-zinc-400 font-normal">7d</span>
             </div>
-            <span className="text-[10px] text-zinc-500">
+            <span className="text-xs text-zinc-400 font-medium">
               Total: {stats.deltaFatTotal > 0 ? `+${stats.deltaFatTotal}` : stats.deltaFatTotal}%
             </span>
           </div>
@@ -2104,7 +2104,7 @@ export function WeightTab() {
                   <span className="text-zinc-300 font-semibold group-hover:text-white transition-colors">BMI / IMC</span>
                 </span>
                 <span
-                  className={`px-1.5 py-0.2 rounded text-[9px] font-semibold border ${bmiCat.bgColor} ${bmiCat.color} ${bmiCat.borderColor}`}
+                  className={`px-2 py-0.5 rounded text-xs font-semibold border ${bmiCat.bgColor} ${bmiCat.color} ${bmiCat.borderColor}`}
                 >
                   {bmiCat.label.split(" ")[0]}
                 </span>
@@ -2117,20 +2117,20 @@ export function WeightTab() {
                   </span>
                   <span className="text-xs text-indigo-400/80 font-normal">kg/m²</span>
                 </div>
-                <span className="text-[10px] text-indigo-400 opacity-80 group-hover:opacity-100 group-hover:underline flex items-center font-sans font-medium">
+                <span className="text-xs text-indigo-400 opacity-90 group-hover:opacity-100 group-hover:underline flex items-center font-sans font-medium">
                   Ver mapa ↗
                 </span>
               </div>
 
-              <div className="mt-2.5 flex items-center justify-between text-[11px]">
+              <div className="mt-2.5 flex items-center justify-between text-xs">
                 <span
-                  className="text-zinc-400 truncate"
+                  className="text-zinc-300 truncate"
                   title={`Altura configurada: ${profile.alturaCm} cm · Edad: ${profile.edad} años`}
                 >
                   {profile.alturaCm} cm · {profile.edad}a
                 </span>
                 <span
-                  className="text-[10px] text-zinc-500 font-mono"
+                  className="text-xs text-zinc-400 font-mono"
                   title={`Rango saludable: ${idealRange.min} - ${idealRange.max} kg | FFMI: ${currentFfmi.ffmi}`}
                 >
                   Normo: {idealRange.min}-{idealRange.max}kg
@@ -2608,11 +2608,11 @@ export function WeightTab() {
                     <h3 className="text-xs font-bold text-zinc-100">
                       Proyección a {projectionData.days} días ({projectionData.horizon === "2W" ? "2 semanas" : projectionData.horizon === "1M" ? "1 mes" : projectionData.horizon === "2M" ? "2 meses" : projectionData.horizon === "3M" ? "3 meses" : "6 meses"})
                     </h3>
-                    <span className="text-[10px] font-mono text-purple-300 font-bold px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/30">
+                    <span className="text-xs font-mono text-purple-300 font-bold px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/30">
                       🎯 {projectionData.targetDateLabel}
                     </span>
                   </div>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                  <p className="text-xs text-zinc-400 mt-0.5">
                     Estimación calculada según la tendencia del momento en los últimos {projectionData.windowDays} días ({projectionData.sampleCount} pesajes)
                   </p>
                 </div>
@@ -2622,7 +2622,7 @@ export function WeightTab() {
                 <button
                   type="button"
                   onClick={() => handleProjectionChange("none")}
-                  className="text-[11px] font-semibold text-zinc-400 hover:text-zinc-200 px-2.5 py-1 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer border border-zinc-700/60"
+                  className="text-xs font-semibold text-zinc-400 hover:text-zinc-200 px-2.5 py-1 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer border border-zinc-700/60"
                 >
                   Desactivar Proyección
                 </button>
@@ -2632,7 +2632,7 @@ export function WeightTab() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               {/* 1. Peso Proyectado */}
               <div className="p-3 rounded-xl bg-zinc-950/60 border border-blue-500/25 space-y-1">
-                <span className="text-[11px] text-zinc-400 flex items-center gap-1 font-medium">
+                <span className="text-xs text-zinc-300 flex items-center gap-1 font-medium">
                   <ScaleIcon className="w-3.5 h-3.5 text-blue-400" />
                   <span>Peso Estimado</span>
                 </span>
@@ -2640,9 +2640,9 @@ export function WeightTab() {
                   <span className="text-xl font-mono font-extrabold text-blue-400">
                     {projectionData.projectedWeight.toFixed(1)}
                   </span>
-                  <span className="text-[10px] text-blue-400/80 font-normal">kg</span>
+                  <span className="text-xs text-blue-400/80 font-normal">kg</span>
                   <span
-                    className={`text-[11px] font-mono font-bold ml-1.5 ${
+                    className={`text-xs font-mono font-bold ml-1.5 ${
                       projectionData.deltaWeight > 0
                         ? "text-amber-400"
                         : projectionData.deltaWeight < 0
@@ -2653,14 +2653,14 @@ export function WeightTab() {
                     {projectionData.deltaWeight > 0 ? `+${projectionData.deltaWeight}` : projectionData.deltaWeight} kg
                   </span>
                 </div>
-                <span className="text-[10px] text-zinc-500 block font-mono">
+                <span className="text-xs text-zinc-400 block font-mono">
                   Ritmo: {projectionData.kgPerWeek > 0 ? `+${projectionData.kgPerWeek}` : projectionData.kgPerWeek} kg/sem
                 </span>
               </div>
 
               {/* 2. Grasa Proyectada */}
               <div className="p-3 rounded-xl bg-zinc-950/60 border border-yellow-500/25 space-y-1">
-                <span className="text-[11px] text-zinc-400 flex items-center gap-1 font-medium">
+                <span className="text-xs text-zinc-300 flex items-center gap-1 font-medium">
                   <PercentIcon className="w-3.5 h-3.5 text-yellow-400" />
                   <span>% Grasa Estimado</span>
                 </span>
@@ -2670,9 +2670,9 @@ export function WeightTab() {
                       <span className="text-xl font-mono font-extrabold text-yellow-400">
                         {projectionData.projectedFatPct.toFixed(1)}
                       </span>
-                      <span className="text-[10px] text-yellow-400/80 font-normal">%</span>
+                      <span className="text-xs text-yellow-400/80 font-normal">%</span>
                       <span
-                        className={`text-[11px] font-mono font-bold ml-1.5 ${
+                        className={`text-xs font-mono font-bold ml-1.5 ${
                           projectionData.deltaFatPct > 0
                             ? "text-amber-400"
                             : projectionData.deltaFatPct < 0
@@ -2683,7 +2683,7 @@ export function WeightTab() {
                         {projectionData.deltaFatPct > 0 ? `+${projectionData.deltaFatPct}` : projectionData.deltaFatPct}%
                       </span>
                     </div>
-                    <span className="text-[10px] text-zinc-500 block font-mono">
+                    <span className="text-xs text-zinc-400 block font-mono">
                       Ritmo: {projectionData.fatPerWeek > 0 ? `+${projectionData.fatPerWeek}` : projectionData.fatPerWeek}%/sem
                     </span>
                   </>
@@ -2694,7 +2694,7 @@ export function WeightTab() {
 
               {/* 3. Masa Magra Proyectada */}
               <div className="p-3 rounded-xl bg-zinc-950/60 border border-emerald-500/25 space-y-1">
-                <span className="text-[11px] text-zinc-400 flex items-center gap-1 font-medium">
+                <span className="text-xs text-zinc-300 flex items-center gap-1 font-medium">
                   <ZapIcon className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Masa Magra Estimada</span>
                 </span>
@@ -2704,9 +2704,9 @@ export function WeightTab() {
                       <span className="text-xl font-mono font-extrabold text-emerald-400">
                         {projectionData.projectedLeanKg.toFixed(1)}
                       </span>
-                      <span className="text-[10px] text-emerald-400/80 font-normal">kg</span>
+                      <span className="text-xs text-emerald-400/80 font-normal">kg</span>
                     </div>
-                    <span className="text-[10px] text-zinc-500 block font-mono">
+                    <span className="text-xs text-zinc-400 block font-mono">
                       Actual: {projectionData.currentLeanKg.toFixed(1)} kg
                     </span>
                   </>
@@ -2717,7 +2717,7 @@ export function WeightTab() {
 
               {/* 4. Masa Grasa Proyectada */}
               <div className="p-3 rounded-xl bg-zinc-950/60 border border-purple-500/25 space-y-1">
-                <span className="text-[11px] text-zinc-400 flex items-center gap-1 font-medium">
+                <span className="text-xs text-zinc-300 flex items-center gap-1 font-medium">
                   <ActivityIcon className="w-3.5 h-3.5 text-purple-400" />
                   <span>Masa Grasa Estimada</span>
                 </span>
@@ -2727,9 +2727,9 @@ export function WeightTab() {
                       <span className="text-xl font-mono font-extrabold text-purple-300">
                         {projectionData.projectedFatKg.toFixed(1)}
                       </span>
-                      <span className="text-[10px] text-purple-300/80 font-normal">kg</span>
+                      <span className="text-xs text-purple-300/80 font-normal">kg</span>
                     </div>
-                    <span className="text-[10px] text-zinc-500 block font-mono">
+                    <span className="text-xs text-zinc-400 block font-mono">
                       Actual: {projectionData.currentFatKg.toFixed(1)} kg
                     </span>
                   </>
