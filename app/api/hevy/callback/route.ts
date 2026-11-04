@@ -140,3 +140,4 @@ function renderHtmlPage(success: boolean, message: string, token = ""): string {
 </body>
 </html>`;
 }
+
