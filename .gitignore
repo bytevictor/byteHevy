@@ -45,6 +45,9 @@ next-env.d.ts
 
 # local sqlite database files (backed up via LXC container)
 data/*.db*
+data/hevy_session.json
+data/hevy-interception-log.json
+data/workouts.csv
 
 # Media, GIFs, images and videos (kept locally on disk, never committed to git)
 /public/media/

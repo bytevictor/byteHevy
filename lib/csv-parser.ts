@@ -18,16 +18,34 @@ const SPANISH_MONTHS: Record<string, number> = {
 
 export function parseSpanishDate(str: string): number {
   if (!str) return 0;
-  const match = str.trim().match(/^(\d{1,2})\s+([a-zA-Záéíóú]+)\.?\s+(\d{4}),\s+(\d{1,2}):(\d{2})$/);
-  if (!match) return 0;
-  const day = parseInt(match[1], 10);
-  const monthStr = match[2].toLowerCase();
-  const year = parseInt(match[3], 10);
-  const hour = parseInt(match[4], 10);
-  const minute = parseInt(match[5], 10);
-  const month = SPANISH_MONTHS[monthStr] ?? 0;
-  return new Date(year, month, day, hour, minute).getTime();
+  const trimmed = str.trim();
+
+  // 1. Try standard JS Date parsing (covers "Nov 3, 2026, 8:39 PM", ISO, etc.)
+  const nativeTs = Date.parse(trimmed);
+  if (!Number.isNaN(nativeTs) && nativeTs > 0) {
+    return nativeTs;
+  }
+
+  // 2. Try Spanish date formats ("3 nov 2026, 20:39", "3 nov. 2026, 20:39", "03 noviembre 2026, 20:39")
+  const match = trimmed.match(
+    /^(\d{1,2})\s+([a-zA-Záéíóú]+)\.?\s+(\d{4}),?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/i
+  );
+  if (match) {
+    const day = parseInt(match[1], 10);
+    const monthStr = match[2].toLowerCase();
+    const year = parseInt(match[3], 10);
+    const hour = parseInt(match[4], 10);
+    const minute = parseInt(match[5], 10);
+    const month = SPANISH_MONTHS[monthStr] ?? -1;
+    if (month >= 0) {
+      return new Date(year, month, day, hour, minute).getTime();
+    }
+  }
+
+  return 0;
 }
+
+export const parseWorkoutDate = parseSpanishDate;
 
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
