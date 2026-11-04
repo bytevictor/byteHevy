@@ -169,10 +169,31 @@ export async function verifyAndSaveHevyToken(params: {
   username?: string;
   error?: string;
 }> {
-  const token = params.accessToken.trim();
+  let token = params.accessToken.trim();
   if (!token) {
     return { success: false, error: "El token no puede estar vacío." };
   }
+
+  // Sanitizar si el usuario pegó el encabezado completo o con comillas
+  if (token.toLowerCase().startsWith("bearer ")) {
+    token = token.slice(7).trim();
+  }
+  if (token.toLowerCase().startsWith("auth-token:")) {
+    token = token.slice(11).trim();
+  }
+  if (token.toLowerCase().startsWith("authorization:")) {
+    token = token.slice(14).trim();
+    if (token.toLowerCase().startsWith("bearer ")) {
+      token = token.slice(7).trim();
+    }
+  }
+  if (token.startsWith("{") && token.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(token);
+      token = parsed.access_token || parsed.auth_token || parsed.token || token;
+    } catch {}
+  }
+  token = token.replace(/^["']|["']$/g, "").trim();
 
   try {
     // 1. Probar el token contra el endpoint de workouts_batch para verificar validez

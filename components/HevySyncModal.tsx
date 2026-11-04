@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   XIcon,
   RefreshCwIcon,
@@ -9,6 +9,7 @@ import {
   ExternalLinkIcon,
   TrashIcon,
   InfoIcon,
+  CheckIcon,
   ByteHevyLogo,
 } from "./Icons";
 
@@ -35,26 +36,16 @@ export function HevySyncModal({
 }: HevySyncModalProps) {
   const [status, setStatus] = useState<HevyStatus | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [origin, setOrigin] = useState("");
-  const [manualToken, setManualToken] = useState("");
-  const [showManualInput, setShowManualInput] = useState(false);
-  const [copiedBookmarklet, setCopiedBookmarklet] = useState(false);
+  const [tokenInput, setTokenInput] = useState("");
+  const [tutorialMethod, setTutorialMethod] = useState<"network" | "console">("network");
+  const [copiedCmd, setCopiedCmd] = useState(false);
+  const [isUpdatingToken, setIsUpdatingToken] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error" | "info";
     text: string;
   } | null>(null);
-
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const bookmarkletLinkRef = useRef<HTMLAnchorElement>(null);
-
-  // Obtener origen actual en el cliente (ej. http://192.168.1.50:3000)
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setOrigin(window.location.origin);
-    }
-  }, []);
 
   // Consultar estado de sesión en SQLite
   const fetchStatus = useCallback(async () => {
@@ -78,176 +69,23 @@ export function HevySyncModal({
     if (isOpen) {
       fetchStatus();
       setFeedback(null);
-    } else {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      }
-      setIsConnecting(false);
+      setIsUpdatingToken(false);
     }
   }, [isOpen, fetchStatus]);
 
-  // Limpiar polling al desmontar
-  useEffect(() => {
-    return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
-    };
-  }, []);
-
-  // Escuchar mensajes del Bookmarklet o de la ventana popup de retorno
-  useEffect(() => {
-    const handleMessage = async (event: MessageEvent) => {
-      // 1. Mensaje directo desde el Bookmarklet ejecutado en hevy.com
-      if (event.data?.type === "BYTEHEVY_AUTH" && event.data?.accessToken) {
-        const { accessToken, refreshToken, userId, username } = event.data;
-        setIsConnecting(true);
-        setFeedback({
-          type: "info",
-          text: "¡Token recibido! Verificando y guardando sesión en SQLite...",
-        });
-
-        try {
-          const res = await fetch("/api/hevy/auth/save-token", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              accessToken,
-              refreshToken,
-              userId,
-              username,
-            }),
-          });
-          const data = await res.json();
-
-          if (data.success) {
-            setFeedback({
-              type: "success",
-              text: `¡Cuenta vinculada correctamente${data.username ? ` (@${data.username})` : ""}! Ya puedes sincronizar tus entrenamientos.`,
-            });
-            await fetchStatus();
-            setIsConnecting(false);
-            if (pollIntervalRef.current) {
-              clearInterval(pollIntervalRef.current);
-              pollIntervalRef.current = null;
-            }
-          } else {
-            setFeedback({
-              type: "error",
-              text: data.error || "No se pudo validar el token con Hevy.",
-            });
-            setIsConnecting(false);
-          }
-        } catch (err: any) {
-          setFeedback({
-            type: "error",
-            text: `Error al guardar token: ${err.message || err}`,
-          });
-          setIsConnecting(false);
-        }
-      }
-
-      // 2. Mensaje enviado tras completar el redirect a /api/hevy/callback
-      if (event.data?.type === "BYTEHEVY_AUTH_SUCCESS") {
-        setFeedback({
-          type: "success",
-          text: "¡Cuenta vinculada con éxito! Ya puedes sincronizar tus entrenamientos.",
-        });
-        await fetchStatus();
-        setIsConnecting(false);
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-          pollIntervalRef.current = null;
-        }
-      }
-    };
-
-    // Escuchar eventos de localStorage (si el popup navegó a /api/hevy/callback en el mismo origen)
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === "bytehevy_sync_update") {
-        fetchStatus().then((newStatus) => {
-          if (newStatus?.is_connected) {
-            setFeedback({
-              type: "success",
-              text: "¡Cuenta vinculada con éxito! Ya puedes sincronizar tus entrenamientos.",
-            });
-            setIsConnecting(false);
-            if (pollIntervalRef.current) {
-              clearInterval(pollIntervalRef.current);
-              pollIntervalRef.current = null;
-            }
-          }
-        });
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-    window.addEventListener("storage", handleStorage);
-
-    return () => {
-      window.removeEventListener("message", handleMessage);
-      window.removeEventListener("storage", handleStorage);
-    };
-  }, [fetchStatus]);
-
-  // Generar código del Bookmarklet
-  const bookmarkletCode = origin
-    ? `javascript:(function(){try{var t="${origin}";var tok=null,uId=null,uName=null,rTok=null;function s(st){if(!st)return;for(var i=0;i<st.length;i++){var k=st.key(i);var v=st.getItem(k);if(!v)continue;try{var o=JSON.parse(v);if(o&&typeof o==="object"){if(!tok&&(o.access_token||o.auth_token||o.token))tok=o.access_token||o.auth_token||o.token;if(!rTok&&o.refresh_token)rTok=o.refresh_token;if(!uId&&(o.user_id||o.userId||o.id))uId=o.user_id||o.userId||o.id;if(!uName&&(o.username||o.name))uName=o.username||o.name;}}catch(e){if(!tok&&/token|auth/i.test(k)&&v.length>20)tok=v.replace(/^["\x27]|["\x27]$/g,"");}}}s(window.localStorage);if(!tok)s(window.sessionStorage);if(!tok&&document.cookie){var p=document.cookie.split(";");for(var j=0;j<p.length;j++){var pr=p[j].trim().split("=");if(/token|auth|session/i.test(pr[0])&&pr[1]&&pr[1].length>20){tok=decodeURIComponent(pr[1]);break;}}}if(tok){var d=document.createElement("div");d.style.cssText="position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:9999999;background:#18181b;color:#10b981;border:2px solid #10b981;border-radius:16px;padding:16px 28px;font-family:sans-serif;font-size:15px;font-weight:bold;box-shadow:0 10px 30px rgba(0,0,0,0.8);text-align:center;";d.innerHTML="✅ ¡Token de Hevy detectado!<br><span style=\\"font-size:12px;color:#a1a1aa;font-weight:normal;\\">Vinculando con ByteHevy...</span>";document.body.appendChild(d);var sent=false;if(window.opener){try{window.opener.postMessage({type:"BYTEHEVY_AUTH",accessToken:tok,refreshToken:rTok,userId:uId,username:uName},"*");sent=true;}catch(e){}}var u=t+"/api/hevy/callback?token="+encodeURIComponent(tok)+(uId?"&user_id="+encodeURIComponent(uId):"")+(uName?"&username="+encodeURIComponent(uName):"");setTimeout(function(){if(window.opener&&sent){window.close();}else{window.location.href=u;}},1000);}else{var m=prompt("No se detectó sesión iniciada en Hevy.\\n\\nSi ya has iniciado sesión, puedes pegar aquí tu token:");if(m&&m.trim()){window.location.href=t+"/api/hevy/callback?token="+encodeURIComponent(m.trim());}}}catch(err){alert("Error: "+err.message);}})();`
-    : "";
-
-  // Asignar el href directamente en el DOM para evitar la restricción de seguridad de React con URLs javascript:
-  useEffect(() => {
-    if (bookmarkletLinkRef.current && bookmarkletCode) {
-      bookmarkletLinkRef.current.setAttribute("href", bookmarkletCode);
+  // Guardar y verificar token
+  const handleSaveToken = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const token = tokenInput.trim();
+    if (!token) {
+      setFeedback({
+        type: "error",
+        text: "Por favor, pega el token de sesión de Hevy en el recuadro.",
+      });
+      return;
     }
-  }, [bookmarkletCode]);
 
-  // Abrir ventana emergente hacia Hevy
-  const handleOpenPopup = () => {
-    setIsConnecting(true);
-    setFeedback({
-      type: "info",
-      text: "Ventana de Hevy abierta. Inicia sesión y pulsa tu marcador '⭐ Conectar con ByteHevy' en la barra de marcadores.",
-    });
-
-    const popup = window.open(
-      "https://hevy.com/login",
-      "hevy_login_popup",
-      "width=560,height=750,left=200,top=100"
-    );
-    if (popup) popup.focus();
-
-    // Iniciar sondeo periódico de SQLite por si el callback se completó silenciosamente
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    let attempts = 0;
-    pollIntervalRef.current = setInterval(async () => {
-      attempts++;
-      if (attempts > 120) {
-        // 4 minutos de tiempo límite
-        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-        setIsConnecting(false);
-        return;
-      }
-
-      const curStatus = await fetchStatus();
-      if (curStatus?.is_connected) {
-        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-        setIsConnecting(false);
-        setFeedback({
-          type: "success",
-          text: `¡Cuenta vinculada con éxito${curStatus.username ? ` (@${curStatus.username})` : ""}! Ya puedes sincronizar tus entrenamientos.`,
-        });
-      }
-    }, 2000);
-  };
-
-  // Guardar token introducido manualmente
-  const handleSaveManualToken = async () => {
-    if (!manualToken.trim()) return;
-    setIsConnecting(true);
+    setIsSaving(true);
     setFeedback({
       type: "info",
       text: "Verificando token con la API de Hevy...",
@@ -257,22 +95,22 @@ export function HevySyncModal({
       const res = await fetch("/api/hevy/auth/save-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessToken: manualToken.trim() }),
+        body: JSON.stringify({ accessToken: token }),
       });
       const data = await res.json();
 
       if (data.success) {
         setFeedback({
           type: "success",
-          text: `¡Cuenta vinculada exitosamente${data.username ? ` (@${data.username})` : ""}!`,
+          text: `¡Cuenta vinculada con éxito${data.username ? ` (@${data.username})` : ""}! Ya puedes sincronizar tus entrenamientos.`,
         });
-        setManualToken("");
-        setShowManualInput(false);
+        setTokenInput("");
+        setIsUpdatingToken(false);
         await fetchStatus();
       } else {
         setFeedback({
           type: "error",
-          text: data.error || "El token introducido no es válido en Hevy.",
+          text: data.error || "El token introducido no es válido o ha expirado.",
         });
       }
     } catch (err: any) {
@@ -281,7 +119,7 @@ export function HevySyncModal({
         text: `Error de conexión: ${err.message || err}`,
       });
     } finally {
-      setIsConnecting(false);
+      setIsSaving(false);
     }
   };
 
@@ -351,11 +189,13 @@ export function HevySyncModal({
     }
   };
 
+  const consoleCommand = `copy(localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token') || '')`;
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl relative flex flex-col gap-6 max-h-[90vh] overflow-y-auto">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl relative flex flex-col gap-5 max-h-[92vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -382,7 +222,7 @@ export function HevySyncModal({
           </button>
         </div>
 
-        {/* Status Card */}
+        {/* Estado de la Conexión */}
         <div className="p-4 rounded-2xl bg-zinc-950/60 border border-zinc-800/80 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
@@ -425,7 +265,7 @@ export function HevySyncModal({
             </div>
           ) : (
             <p className="text-xs text-zinc-400 leading-relaxed">
-              No hay sesión guardada. Conéctate abriendo Hevy en una ventana emergente y usando el marcador para capturar tu token con 1 clic.
+              No hay sesión guardada. Sigue el breve tutorial a continuación para extraer tu token de sesión desde tu navegador y pegarlo en el recuadro.
             </p>
           )}
         </div>
@@ -452,136 +292,9 @@ export function HevySyncModal({
           </div>
         )}
 
-        {/* Instructions & Actions */}
-        {!status?.is_connected ? (
+        {/* Vista cuando está conectado */}
+        {status?.is_connected && !isUpdatingToken ? (
           <div className="flex flex-col gap-4">
-            {/* Paso 1: Marcador */}
-            <div className="p-3.5 rounded-2xl bg-zinc-950/40 border border-zinc-800/60 flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-blue-400 flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-300 text-[11px] flex items-center justify-center font-bold">
-                    1
-                  </span>
-                  Arrastra este marcador a tus favoritos
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(bookmarkletCode);
-                    setCopiedBookmarklet(true);
-                    setTimeout(() => setCopiedBookmarklet(false), 2000);
-                  }}
-                  className="text-[11px] text-zinc-500 hover:text-zinc-300 underline cursor-pointer"
-                >
-                  {copiedBookmarklet ? "¡Copiado!" : "Copiar código"}
-                </button>
-              </div>
-
-              <div className="flex items-center justify-center py-2">
-                <a
-                  ref={bookmarkletLinkRef}
-                  href="#"
-                  draggable="true"
-                  onDragStart={(e) => {
-                    if (bookmarkletCode) {
-                      e.dataTransfer.setData("text/uri-list", bookmarkletCode);
-                      e.dataTransfer.setData("text/plain", bookmarkletCode);
-                    }
-                  }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    alert(
-                      "Arrastra este botón a la barra de marcadores de tu navegador (Ctrl+Shift+B si no la ves)."
-                    );
-                  }}
-                  className="px-4 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border-2 border-dashed border-blue-500/50 text-blue-300 text-xs font-bold flex items-center gap-2 cursor-grab active:cursor-grabbing transition-all hover:scale-[1.02] shadow-sm"
-                  title="Arrastra este enlace a tu barra de marcadores"
-                >
-                  <span>⭐ Conectar con ByteHevy</span>
-                </a>
-              </div>
-              <p className="text-[11px] text-zinc-500 text-center">
-                Arrastra el recuadro a la barra de marcadores (solo la primera vez)
-              </p>
-            </div>
-
-            {/* Paso 2: Abrir Hevy */}
-            <div className="p-3.5 rounded-2xl bg-zinc-950/40 border border-zinc-800/60 flex flex-col gap-2">
-              <span className="text-xs font-semibold text-blue-400 flex items-center gap-1.5">
-                <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-300 text-[11px] flex items-center justify-center font-bold">
-                  2
-                </span>
-                Abre Hevy e inicia sesión
-              </span>
-              <button
-                onClick={handleOpenPopup}
-                disabled={isConnecting}
-                className="w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.98] disabled:opacity-50"
-              >
-                {isConnecting ? (
-                  <>
-                    <RefreshCwIcon className="w-4 h-4 animate-spin" />
-                    <span>Esperando clic en el marcador...</span>
-                  </>
-                ) : (
-                  <>
-                    <ExternalLinkIcon className="w-4 h-4" />
-                    <span>Abrir Hevy en ventana emergente ↗</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Paso 3: Explicación del clic */}
-            <div className="px-2 text-xs text-zinc-400 flex items-start gap-2">
-              <span className="w-5 h-5 rounded-full bg-zinc-800 text-zinc-400 text-[11px] flex items-center justify-center font-bold shrink-0 mt-0.5">
-                3
-              </span>
-              <p className="leading-relaxed">
-                Una vez iniciada la sesión en la ventana emergente de Hevy, pulsa el marcador <strong className="text-blue-300 font-semibold">⭐ Conectar con ByteHevy</strong> en tu barra de marcadores para vincular tu cuenta automáticamente.
-              </p>
-            </div>
-
-            {/* Alternativa: Introducir token manualmente */}
-            <div className="pt-2 border-t border-zinc-800/80">
-              <button
-                type="button"
-                onClick={() => setShowManualInput(!showManualInput)}
-                className="text-xs text-zinc-500 hover:text-zinc-300 flex items-center gap-1.5 cursor-pointer transition-colors"
-              >
-                <span>{showManualInput ? "▼" : "▶"}</span>
-                <span>¿Prefieres introducir el token manualmente?</span>
-              </button>
-
-              {showManualInput && (
-                <div className="mt-3 p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 flex flex-col gap-2.5 animate-in fade-in duration-150">
-                  <label className="text-[11px] text-zinc-400">
-                    Pega tu token de Hevy (access_token o auth_token):
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={manualToken}
-                      onChange={(e) => setManualToken(e.target.value)}
-                      placeholder="eyJhbGciOi... o tu_token_de_hevy..."
-                      className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500 font-mono"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleSaveManualToken}
-                      disabled={!manualToken.trim() || isConnecting}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-lg text-xs font-semibold cursor-pointer"
-                    >
-                      Vincular
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          /* Vista Conectado: Botón de Sincronizar */
-          <div className="flex flex-col gap-3">
             <div className="flex items-center gap-3">
               <button
                 onClick={handleSync}
@@ -608,10 +321,206 @@ export function HevySyncModal({
               </button>
             </div>
 
-            <div className="flex items-center justify-between text-[11px] text-zinc-500 px-1">
-              <span>Descarga directa a SQLite sin intermediarios</span>
-              <span>Seguridad & Privacidad ✅</span>
+            <div className="flex items-center justify-between text-xs text-zinc-500 pt-2 border-t border-zinc-800/80">
+              <button
+                type="button"
+                onClick={() => setIsUpdatingToken(true)}
+                className="text-zinc-400 hover:text-zinc-200 underline cursor-pointer"
+              >
+                Actualizar o cambiar token
+              </button>
+              <span>Descarga directa a SQLite ✅</span>
             </div>
+          </div>
+        ) : (
+          /* Tutorial y Recuadro de Token */
+          <div className="flex flex-col gap-4">
+            {/* Tutorial */}
+            <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800/90 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-zinc-200 uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                  Cómo obtener tu token de sesión en 1 minuto
+                </span>
+                <a
+                  href="https://hevy.com/login"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-semibold transition-colors"
+                >
+                  <span>Abrir hevy.com</span>
+                  <ExternalLinkIcon className="w-3.5 h-3.5" />
+                </a>
+              </div>
+
+              {/* Selector de método */}
+              <div className="flex gap-2 p-1 bg-zinc-900 rounded-xl border border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setTutorialMethod("network")}
+                  className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    tutorialMethod === "network"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  Opción 1: Pestaña Red (F12)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTutorialMethod("console")}
+                  className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    tutorialMethod === "console"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  Opción 2: Consola (1 comando)
+                </button>
+              </div>
+
+              {/* Pasos según el método */}
+              {tutorialMethod === "network" ? (
+                <div className="flex flex-col gap-2.5 text-xs text-zinc-300 pt-1">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-zinc-800 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-zinc-700">
+                      1
+                    </span>
+                    <p className="leading-relaxed">
+                      Inicia sesión en <a href="https://hevy.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-semibold">hevy.com</a> en tu navegador.
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-zinc-800 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-zinc-700">
+                      2
+                    </span>
+                    <p className="leading-relaxed">
+                      Pulsa <kbd className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-200 font-mono text-[11px]">F12</kbd> (o clic derecho &gt; <em>Inspeccionar</em>) y ve a la pestaña <strong className="text-zinc-100">Red</strong> (o <em>Network</em>).
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-zinc-800 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-zinc-700">
+                      3
+                    </span>
+                    <p className="leading-relaxed">
+                      Recarga la página (<kbd className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-200 font-mono text-[11px]">F5</kbd>) y en el filtro de búsqueda escribe <code className="text-blue-300 font-mono">workouts</code> o <code className="text-blue-300 font-mono">batch</code>.
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-zinc-800 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-zinc-700">
+                      4
+                    </span>
+                    <p className="leading-relaxed">
+                      Haz clic en la petición, abre la sub-pestaña <strong className="text-zinc-100">Encabezados</strong> (<em>Headers</em>), busca en los encabezados de solicitud <strong className="text-blue-300 font-mono">auth-token</strong> o <strong className="text-blue-300 font-mono">authorization</strong> y copia su valor.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2.5 text-xs text-zinc-300 pt-1">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-zinc-800 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-zinc-700">
+                      1
+                    </span>
+                    <p className="leading-relaxed">
+                      Con tu sesión abierta en <a href="https://hevy.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-semibold">hevy.com</a>, pulsa <kbd className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-200 font-mono text-[11px]">F12</kbd> y entra en la pestaña <strong className="text-zinc-100">Consola</strong> (<em>Console</em>).
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-zinc-800 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-zinc-700">
+                      2
+                    </span>
+                    <div className="flex-1 flex flex-col gap-1.5">
+                      <p className="leading-relaxed">
+                        Copia y pega este comando en la consola de hevy.com y presiona <kbd className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-200 font-mono text-[11px]">Enter</kbd>:
+                      </p>
+                      <div className="flex items-center gap-2 p-2 rounded-xl bg-zinc-900 border border-zinc-800 font-mono text-[11px] text-blue-300">
+                        <span className="flex-1 select-all overflow-x-auto whitespace-nowrap">
+                          {consoleCommand}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(consoleCommand);
+                            setCopiedCmd(true);
+                            setTimeout(() => setCopiedCmd(false), 2000);
+                          }}
+                          className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition-colors shrink-0"
+                        >
+                          {copiedCmd ? (
+                            <>
+                              <CheckIcon className="w-3 h-3 text-emerald-400" />
+                              <span>Copiado</span>
+                            </>
+                          ) : (
+                            <span>Copiar</span>
+                          )}
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-zinc-400">
+                        ¡El comando copiará automáticamente tu token al portapapeles!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Recuadro para pegar y guardar el token */}
+            <form onSubmit={handleSaveToken} className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-zinc-300">
+                  Pega aquí tu token de sesión de Hevy:
+                </label>
+                <div className="relative">
+                  <textarea
+                    rows={2}
+                    value={tokenInput}
+                    onChange={(e) => setTokenInput(e.target.value)}
+                    placeholder="Pega el token aquí (ej. 6NTNQDHaO4... o Bearer ...)"
+                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none font-mono resize-none transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={!tokenInput.trim() || isSaving}
+                  className="flex-1 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSaving ? (
+                    <>
+                      <RefreshCwIcon className="w-4 h-4 animate-spin" />
+                      <span>Verificando y guardando token...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircleIcon className="w-4 h-4" />
+                      <span>Vincular Cuenta y Guardar</span>
+                    </>
+                  )}
+                </button>
+
+                {isUpdatingToken && (
+                  <button
+                    type="button"
+                    onClick={() => setIsUpdatingToken(false)}
+                    className="py-3 px-4 rounded-xl border border-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs font-semibold cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-zinc-500 px-1 pt-1">
+                <span>Tu contraseña nunca se guarda ni se transmite</span>
+                <span>Almacenamiento 100% local en SQLite</span>
+              </div>
+            </form>
           </div>
         )}
       </div>
