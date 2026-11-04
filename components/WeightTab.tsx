@@ -11,6 +11,7 @@ import {
   CalendarIcon,
   ClockIcon,
   UploadCloudIcon,
+  DownloadCloudIcon,
   SparklesIcon,
   PlusIcon,
   TrashIcon,
@@ -1935,7 +1936,7 @@ export function WeightTab() {
             {xiaomiSyncing ? (
               <RefreshCwIcon className="w-3.5 h-3.5 animate-spin text-orange-400" />
             ) : xiaomiConnected ? (
-              <UploadCloudIcon className="w-3.5 h-3.5 text-orange-400" />
+              <DownloadCloudIcon className="w-3.5 h-3.5 text-orange-400" />
             ) : (
               <QrCodeIcon className="w-3.5 h-3.5 text-zinc-400" />
             )}
