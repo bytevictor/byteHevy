@@ -81,7 +81,7 @@ export function JournalHeatmap({
       const y = new Date(w.startTimestamp * 1000).getFullYear();
       years.add(y);
     }
-    if (years.size === 0) years.add(new Date().getFullYear());
+    if (years.size === 0) years.add(2026);
     return Array.from(years).sort((a, b) => b - a);
   }, [workouts]);
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { ExerciseSummary, ExerciseDetailData, ExerciseSessionHistory, JournalWorkout } from "@/lib/actions";
 import { ProgressionChart, type ChartMetricView } from "./charts/ProgressionChart";
 import { ExerciseAnimationView } from "./ExerciseAnimationView";
@@ -391,13 +392,20 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
         <p className="text-sm text-zinc-400 max-w-sm mb-6">
           Sube tu exportación CSV de Hevy para comenzar a visualizar tus entrenamientos.
         </p>
-        {onGoToSync && (
+        {onGoToSync ? (
           <button
             onClick={onGoToSync}
             className="px-5 py-2.5 rounded-xl bg-accent text-zinc-950 text-sm font-semibold hover:bg-accent-light transition-colors cursor-pointer shadow-lg shadow-accent/10"
           >
             Importar archivo CSV
           </button>
+        ) : (
+          <Link
+            href="/ajustes"
+            className="px-5 py-2.5 rounded-xl bg-accent text-zinc-950 text-sm font-semibold hover:bg-accent-light transition-colors cursor-pointer shadow-lg shadow-accent/10"
+          >
+            Importar archivo CSV
+          </Link>
         )}
       </div>
     );

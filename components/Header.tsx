@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   DumbbellIcon,
   ScaleIcon,
@@ -20,8 +22,8 @@ import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
 export type TabId = "explorer" | "weight" | "goals" | "journal" | "settings" | "sync";
 
 interface HeaderProps {
-  activeTab: TabId;
-  setActiveTab: (tab: TabId) => void;
+  activeTab?: TabId;
+  setActiveTab?: (tab: TabId) => void;
   stats?: {
     workoutsCount: number;
     exercisesCount: number;
@@ -37,6 +39,7 @@ export function Header({
   loadingStats = false,
   onOpenHevySync,
 }: HeaderProps) {
+  const pathname = usePathname() || "/";
   const { seasons, activeSeasonId, activeSeason, setActiveSeasonId } = useSeason();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -56,23 +59,35 @@ export function Header({
     };
   }, [dropdownOpen]);
 
-  const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { id: "explorer", label: "Explorador", icon: DumbbellIcon },
-    { id: "weight", label: "Peso", icon: ScaleIcon },
-    { id: "journal", label: "Diario", icon: BookOpenIcon },
-    { id: "goals", label: "Objetivos", icon: TargetIcon },
+  const tabs: { id: TabId; label: string; href: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { id: "explorer", label: "Explorador", href: "/", icon: DumbbellIcon },
+    { id: "weight", label: "Peso", href: "/peso", icon: ScaleIcon },
+    { id: "journal", label: "Diario", href: "/diario", icon: BookOpenIcon },
+    { id: "goals", label: "Objetivos", href: "/objetivos", icon: TargetIcon },
   ];
 
-  // Normalized tab matching (treat "sync" as "settings")
-  const currentTab = activeTab === "sync" ? "settings" : activeTab;
+  // Normalized tab matching: prefer URL pathname, fallback to activeTab prop
+  const currentTab: TabId = activeTab
+    ? (activeTab === "sync" ? "settings" : activeTab)
+    : pathname.startsWith("/peso")
+    ? "weight"
+    : pathname.startsWith("/diario")
+    ? "journal"
+    : pathname.startsWith("/objetivos")
+    ? "goals"
+    : pathname.startsWith("/ajustes") || pathname.startsWith("/sync")
+    ? "settings"
+    : "explorer";
 
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-800/60 bg-[var(--header-bg)] backdrop-blur-xl transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[76px] flex items-center justify-between gap-3 sm:gap-4">
         {/* Left: Brand */}
-        <button
-          type="button"
-          onClick={() => setActiveTab("explorer")}
+        <Link
+          href="/"
+          onClick={() => {
+            if (setActiveTab) setActiveTab("explorer");
+          }}
           className="flex items-center gap-3 shrink-0 text-left cursor-pointer group rounded-xl p-1 -m-1 transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           title="Ir al Explorador de Entrenamientos"
           aria-label="byteHevy - Ir a la pestaña Explorador"
@@ -89,7 +104,7 @@ export function Header({
               Visualizador de Entrenamientos
             </span>
           </div>
-        </button>
+        </Link>
 
         {/* Center: Season Selector (Prominent, Left of Tabs) + Tabs */}
         <div className="flex items-center gap-2.5 sm:gap-3.5">
@@ -285,16 +300,17 @@ export function Header({
 
                 {/* Footer link to manage seasons */}
                 <div className="mt-1.5 pt-1.5 border-t border-zinc-800/80">
-                  <button
+                  <Link
+                    href="/ajustes"
                     onClick={() => {
-                      setActiveTab("settings");
+                      if (setActiveTab) setActiveTab("settings");
                       setDropdownOpen(false);
                     }}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors text-left cursor-pointer font-medium"
                   >
                     <SettingsIcon className="w-4 h-4 text-zinc-400" />
                     <span>Gestionar Seasons...</span>
-                  </button>
+                  </Link>
                 </div>
               </div>
             )}
@@ -306,9 +322,12 @@ export function Header({
               const Icon = t.icon;
               const isActive = currentTab === t.id;
               return (
-                <button
+                <Link
                   key={t.id}
-                  onClick={() => setActiveTab(t.id)}
+                  href={t.href}
+                  onClick={() => {
+                    if (setActiveTab) setActiveTab(t.id);
+                  }}
                   title={t.label}
                   className={`h-full flex items-center gap-2 sm:gap-2.5 px-3.5 sm:px-4.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
                     isActive
@@ -318,7 +337,7 @@ export function Header({
                 >
                   <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-accent-light" : "text-zinc-400"}`} />
                   <span className="whitespace-nowrap">{t.label}</span>
-                </button>
+                </Link>
               );
             })}
           </nav>
@@ -356,8 +375,11 @@ export function Header({
           )}
 
           {/* Standalone Settings Button (Rightmost) */}
-          <button
-            onClick={() => setActiveTab("settings")}
+          <Link
+            href="/ajustes"
+            onClick={() => {
+              if (setActiveTab) setActiveTab("settings");
+            }}
             title="Configuración"
             aria-label="Configuración"
             className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer border shadow-md ${
@@ -371,7 +393,7 @@ export function Header({
                 currentTab === "settings" ? "text-accent-light" : "text-zinc-400"
               }`}
             />
-          </button>
+          </Link>
         </div>
       </div>
     </header>

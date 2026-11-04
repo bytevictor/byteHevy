@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/theme-context";
+import { AppShell } from "@/components/AppShell";
 
 export const metadata: Metadata = {
-  title: "byteHevy | Visualizador de Entrenamientos",
+  title: {
+    template: "%s · byteHevy",
+    default: "byteHevy | Visualizador de Entrenamientos",
+  },
   description: "Visualizador técnico y minimalista de entrenamientos Hevy",
   icons: {
     icon: [
@@ -65,7 +69,9 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-[var(--background)] text-[var(--foreground)] font-sans transition-colors duration-200" suppressHydrationWarning>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <AppShell>{children}</AppShell>
+        </ThemeProvider>
       </body>
     </html>
   );

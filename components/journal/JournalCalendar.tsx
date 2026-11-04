@@ -60,12 +60,12 @@ export function JournalCalendar({
     return map;
   }, [workouts]);
 
-  // Determine initial month/year from latest workout or today
+  // Determine initial month/year from latest workout or default date
   const initialDate = useMemo(() => {
     if (workouts.length > 0) {
       return new Date(workouts[0].startTimestamp * 1000);
     }
-    return new Date();
+    return new Date("2026-01-01T00:00:00Z");
   }, [workouts]);
 
   const [currentYear, setCurrentYear] = useState(initialDate.getFullYear());

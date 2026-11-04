@@ -1,4 +1,3 @@
-import { chromium, type Browser } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -11,11 +10,10 @@ import {
 import { importCsvToDb, ImportResult } from "./csv-parser";
 
 const SESSION_DIR = path.join(process.cwd(), "data");
-const SESSION_FILE = path.join(SESSION_DIR, "hevy_session.json");
 
 /**
  * Convierte un array de entrenamientos devueltos por la API de Hevy
- * (/workouts_batch) al formato CSV estándar para su ingesta.
+ * (/workouts_batch) al formato CSV estándar para su ingesta en ByteHevy.
  */
 function workoutsBatchToCsv(workouts: any[]): string {
   const headers = [
@@ -108,6 +106,7 @@ async function fetchAllWorkoutsViaApi(
         {
           headers: {
             authorization: `Bearer ${accessToken}`,
+            "auth-token": accessToken,
             "x-api-key": "shelobs_hevy_web",
             "hevy-platform": "web",
           },
@@ -115,7 +114,11 @@ async function fetchAllWorkoutsViaApi(
       );
 
       if (res.status === 401 || res.status === 403) {
-        return { success: false, status: res.status, error: "Token de acceso expirado o inválido" };
+        return {
+          success: false,
+          status: res.status,
+          error: "Token de acceso expirado o inválido en Hevy",
+        };
       }
 
       if (!res.ok) {
@@ -144,153 +147,105 @@ async function fetchAllWorkoutsViaApi(
     const csvText = workoutsBatchToCsv(allWorkouts);
     return { success: true, csvText };
   } catch (err: any) {
-    return { success: false, error: err.message || "Error al conectar con la API de Hevy" };
+    return {
+      success: false,
+      error: err.message || "Error al conectar con la API de Hevy",
+    };
   }
 }
 
 /**
- * Lanza una ventana interactiva de Chromium para que el usuario inicie sesión en Hevy.
- * Captura el token devuelto por Hevy, guarda la sesión en SQLite y data/hevy_session.json,
- * y cierra la ventana automáticamente.
+ * Valida un token de sesión contra la API de Hevy y lo guarda en SQLite.
  */
-export async function launchHevyLogin(): Promise<{
+export async function verifyAndSaveHevyToken(params: {
+  accessToken: string;
+  refreshToken?: string | null;
+  userId?: string | null;
+  username?: string | null;
+  email?: string | null;
+}): Promise<{
   success: boolean;
   userId?: string;
   username?: string;
   error?: string;
 }> {
-  if (!fs.existsSync(SESSION_DIR)) {
-    fs.mkdirSync(SESSION_DIR, { recursive: true });
+  const token = params.accessToken.trim();
+  if (!token) {
+    return { success: false, error: "El token no puede estar vacío." };
   }
 
-  let browser: Browser | null = null;
   try {
-    browser = await chromium.launch({
-      headless: false,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-      ],
+    // 1. Probar el token contra el endpoint de workouts_batch para verificar validez
+    const res = await fetch("https://api.hevyapp.com/workouts_batch/0", {
+      headers: {
+        authorization: `Bearer ${token}`,
+        "auth-token": token,
+        "x-api-key": "shelobs_hevy_web",
+        "hevy-platform": "web",
+      },
     });
 
-    const context = await browser.newContext({
-      acceptDownloads: true,
-      viewport: { width: 1280, height: 850 },
-    });
-
-    const page = await context.newPage();
-
-    let capturedUserId: string | null = null;
-    let capturedAccessToken: string | null = null;
-    let capturedRefreshToken: string | null = null;
-    let capturedExpiresAt: string | null = null;
-    let capturedUsername: string | null = null;
-
-    // Escuchar respuestas de red para capturar el login y username
-    page.on("response", async (res) => {
-      const url = res.url();
-
-      if (url.includes("api.hevyapp.com/login") && res.status() >= 200 && res.status() < 300) {
-        try {
-          const json = await res.json();
-          capturedUserId = json.user_id || null;
-          capturedAccessToken = json.access_token || null;
-          capturedRefreshToken = json.refresh_token || null;
-          capturedExpiresAt = json.expires_at || null;
-        } catch {}
-      }
-
-      if (url.includes("user_workouts_paged") || url.includes("user_preferences")) {
-        try {
-          const parsedUrl = new URL(url);
-          const u = parsedUrl.searchParams.get("username");
-          if (u) capturedUsername = u;
-        } catch {}
-      }
-    });
-
-    await page.goto("https://hevy.com/login", { waitUntil: "networkidle" });
-
-    // Esperar a que el usuario complete el login (la URL cambia o recibimos token)
-    const loginSuccess = await new Promise<boolean>((resolve) => {
-      const checkInterval = setInterval(async () => {
-        try {
-          if (!browser || !browser.isConnected()) {
-            clearInterval(checkInterval);
-            resolve(false);
-            return;
-          }
-
-          const currentUrl = page.url();
-          if (capturedAccessToken && !currentUrl.includes("/login")) {
-            clearInterval(checkInterval);
-            await page.waitForTimeout(1500);
-            resolve(true);
-          }
-        } catch {
-          clearInterval(checkInterval);
-          resolve(false);
-        }
-      }, 500);
-
-      browser?.on("disconnected", () => {
-        clearInterval(checkInterval);
-        resolve(Boolean(capturedAccessToken));
-      });
-
-      setTimeout(() => {
-        clearInterval(checkInterval);
-        resolve(false);
-      }, 5 * 60 * 1000);
-    });
-
-    if (!loginSuccess || !capturedAccessToken) {
-      if (browser.isConnected()) await browser.close();
+    if (res.status === 401 || res.status === 403) {
       return {
         success: false,
-        error: "El inicio de sesión fue cancelado o no se detectó el token de Hevy.",
+        error: "El token no es válido o ha expirado en Hevy.",
       };
     }
 
-    // Guardar el estado de la sesión completa de Playwright (cookies + localStorage)
-    await context.storageState({ path: SESSION_FILE });
-
-    // Guardar en la base de datos SQLite
-    await saveHevyAuthTokens({
-      userId: capturedUserId,
-      accessToken: capturedAccessToken,
-      refreshToken: capturedRefreshToken,
-      expiresAt: capturedExpiresAt,
-      username: capturedUsername,
-    });
-
-    if (browser.isConnected()) {
-      await browser.close();
+    if (!res.ok) {
+      return {
+        success: false,
+        error: `Error al verificar con Hevy: ${res.statusText} (${res.status})`,
+      };
     }
+
+    let username = params.username || null;
+    let userId = params.userId || null;
+
+    // Si falta el username, intentar obtenerlo de user_preferences
+    if (!username) {
+      try {
+        const prefRes = await fetch("https://api.hevyapp.com/user_preferences", {
+          headers: {
+            authorization: `Bearer ${token}`,
+            "auth-token": token,
+            "x-api-key": "shelobs_hevy_web",
+            "hevy-platform": "web",
+          },
+        });
+        if (prefRes.ok) {
+          const prefData = await prefRes.json();
+          if (prefData?.username) username = prefData.username;
+          if (prefData?.user_id && !userId) userId = prefData.user_id;
+        }
+      } catch {}
+    }
+
+    // 2. Guardar en SQLite
+    await saveHevyAuthTokens({
+      accessToken: token,
+      refreshToken: params.refreshToken,
+      userId: userId,
+      username: username,
+      email: params.email,
+    });
 
     return {
       success: true,
-      userId: capturedUserId || undefined,
-      username: capturedUsername || undefined,
+      userId: userId || undefined,
+      username: username || undefined,
     };
   } catch (err: any) {
-    if (browser && browser.isConnected()) {
-      try {
-        await browser.close();
-      } catch {}
-    }
     return {
       success: false,
-      error: err.message || "Error al iniciar sesión con Hevy.",
+      error: `Error de conexión con Hevy: ${err.message || err}`,
     };
   }
 }
 
 /**
  * Sincroniza entrenamientos desde Hevy usando el token guardado en SQLite.
- * Intenta primero la vía rápida de API directa (1-2s).
- * Si requiere regenerar sesión, recurre a Playwright headless.
+ * Utiliza peticiones HTTP puras sin requerir navegadores ni Playwright en el servidor.
  */
 export async function syncHevyWorkouts(): Promise<{
   success: boolean;
@@ -305,7 +260,11 @@ export async function syncHevyWorkouts(): Promise<{
     };
   }
 
-  // 1. Intentar la vía directa de API con el accessToken guardado
+  if (!fs.existsSync(SESSION_DIR)) {
+    fs.mkdirSync(SESSION_DIR, { recursive: true });
+  }
+
+  // 1. Descargar entrenamientos usando el token guardado
   const apiRes = await fetchAllWorkoutsViaApi(authRecord.accessToken);
   if (apiRes.success && apiRes.csvText) {
     // Guardar respaldo de los datos obtenidos en workouts.csv
@@ -322,98 +281,11 @@ export async function syncHevyWorkouts(): Promise<{
     };
   }
 
-  // 2. Si la API devolvió 401 (token expirado) y tenemos sesión de Playwright en disco, intentar vía headless
-  if (apiRes.status === 401 && fs.existsSync(SESSION_FILE)) {
-    let browser: Browser | null = null;
-    try {
-      browser = await chromium.launch({
-        headless: true,
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-        ],
-      });
-
-      const context = await browser.newContext({
-        storageState: SESSION_FILE,
-        acceptDownloads: true,
-      });
-
-      const page = await context.newPage();
-
-      let refreshedToken: string | null = null;
-      page.on("response", async (res) => {
-        if (res.url().includes("api.hevyapp.com/login") && res.ok()) {
-          try {
-            const j = await res.json();
-            if (j.access_token) refreshedToken = j.access_token;
-          } catch {}
-        }
-      });
-
-      await page.goto("https://hevy.com/settings?export=", {
-        waitUntil: "networkidle",
-        timeout: 30000,
-      });
-
-      if (page.url().includes("/login")) {
-        await disconnectHevyAuth();
-        await browser.close();
-        return {
-          success: false,
-          error: "La sesión de Hevy ha expirado. Por favor, vuelve a conectar tu cuenta.",
-        };
-      }
-
-      const exportBtn = page
-        .locator(
-          'button:has-text("Export Workouts"), button:has-text("Exportar entrenamientos"), button:has-text("Export Data"), button:has-text("Exportar datos"), button:has-text("Export"), button:has-text("Exportar")'
-        )
-        .first();
-
-      await exportBtn.waitFor({ state: "visible", timeout: 15000 });
-
-      const [download] = await Promise.all([
-        page.waitForEvent("download", { timeout: 45000 }),
-        exportBtn.click(),
-      ]);
-
-      const stream = await download.createReadStream();
-      const chunks: Buffer[] = [];
-      for await (const chunk of stream) chunks.push(Buffer.from(chunk));
-      const csvText = Buffer.concat(chunks).toString("utf-8");
-
-      // Si se refrescó el token, actualizarlo
-      if (refreshedToken) {
-        await saveHevyAuthTokens({ accessToken: refreshedToken });
-      }
-
-      await context.storageState({ path: SESSION_FILE });
-      await browser.close();
-
-      const importResult = await importCsvToDb(csvText);
-      await updateHevyLastSync(Date.now(), importResult.newWorkouts);
-
-      return { success: true, result: importResult };
-    } catch (err: any) {
-      if (browser && browser.isConnected()) {
-        try {
-          await browser.close();
-        } catch {}
-      }
-      return {
-        success: false,
-        error: `Error al sincronizar con Hevy: ${err.message || err}`,
-      };
-    }
-  }
-
-  if (apiRes.status === 401) {
+  if (apiRes.status === 401 || apiRes.status === 403) {
     await disconnectHevyAuth();
     return {
       success: false,
-      error: "La sesión de Hevy ha expirado. Por favor, vuelve a iniciar sesión con 1 clic.",
+      error: "La sesión de Hevy ha expirado. Por favor, vuelve a vincular tu cuenta.",
     };
   }
 
