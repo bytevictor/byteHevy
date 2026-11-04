@@ -310,6 +310,18 @@ export function WeightTab() {
     fetchXiaomiStatus();
   }, [fetchXiaomiStatus]);
 
+  // Escuchar sincronizaciones globales o externas para recargar pesajes en vivo
+  useEffect(() => {
+    const handleSyncComplete = () => {
+      loadRecords();
+      fetchXiaomiStatus();
+    };
+    window.addEventListener("bytehevy-sync-complete", handleSyncComplete);
+    return () => {
+      window.removeEventListener("bytehevy-sync-complete", handleSyncComplete);
+    };
+  }, [loadRecords, fetchXiaomiStatus]);
+
   // Sincronización rápida desde el toolbar
   const handleXiaomiQuickSync = async () => {
     if (!xiaomiConnected) {

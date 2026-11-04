@@ -15,9 +15,11 @@ import {
   CalendarIcon,
   CheckIcon,
   PlusIcon,
+  RefreshCwIcon,
 } from "./Icons";
 import { useSeason } from "@/lib/season-context";
 import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
+import { useSync } from "@/lib/sync-context";
 
 export type TabId = "explorer" | "weight" | "goals" | "journal" | "settings" | "sync";
 
@@ -41,6 +43,14 @@ export function Header({
 }: HeaderProps) {
   const pathname = usePathname() || "/";
   const { seasons, activeSeasonId, activeSeason, setActiveSeasonId } = useSeason();
+  const {
+    hevyConnected,
+    hevyUsername,
+    xiaomiConnected,
+    xiaomiUserId,
+    isGlobalSyncing,
+    triggerGlobalSync,
+  } = useSync();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -362,17 +372,54 @@ export function Header({
             </div>
           ) : null}
 
-          {/* Hevy Cloud Sync Button */}
-          {onOpenHevySync && (
-            <button
-              onClick={onOpenHevySync}
-              title="Sincronizar con Hevy (Cloud)"
-              aria-label="Sincronizar con Hevy"
-              className="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer border shadow-md bg-zinc-900/90 border-zinc-800/80 text-zinc-400 hover:text-blue-400 hover:border-blue-500/40 hover:bg-blue-500/10 group"
-            >
-              <ByteHevyLogo className="w-5 h-5 transition-transform group-hover:scale-105" />
-            </button>
-          )}
+          {/* Global Cloud Sync & Connection Monitor Button */}
+          <button
+            type="button"
+            onClick={triggerGlobalSync}
+            disabled={isGlobalSyncing}
+            className="h-11 px-3 sm:px-3.5 rounded-full flex items-center gap-2 sm:gap-2.5 border shadow-md bg-zinc-900/90 border-zinc-800/80 hover:bg-zinc-850 hover:border-zinc-700/80 transition-all duration-200 cursor-pointer active:scale-[0.98] group relative"
+            title={`Sincronización Cloud Global\n• Hevy: ${
+              hevyConnected
+                ? `Conectado (@${hevyUsername || "usuario"})`
+                : "Desconectado"
+            }\n• Xiaomi: ${
+              xiaomiConnected
+                ? `Conectado (${xiaomiUserId || "báscula"})`
+                : "Desconectado"
+            }\nHaz clic para sincronizar todos los datos`}
+            aria-label="Sincronización Cloud Global"
+          >
+            <RefreshCwIcon
+              className={`w-4 h-4 shrink-0 transition-transform ${
+                isGlobalSyncing
+                  ? "animate-spin text-blue-400"
+                  : "text-zinc-400 group-hover:text-zinc-200"
+              }`}
+            />
+
+            {/* Dos bolitas indicadoras de estado */}
+            <div className="flex items-center gap-1.5 pl-0.5">
+              {/* Bolita Hevy: Blanco potente si conectado, parpadeo fuerte en rojo si no */}
+              <span
+                className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+                  hevyConnected
+                    ? "bg-white shadow-[0_0_8px_rgba(255,255,255,0.95),0_0_14px_rgba(255,255,255,0.4)]"
+                    : "bg-rose-500 animate-blink-red"
+                }`}
+                title={`Hevy: ${hevyConnected ? "Conectado" : "Desconectado"}`}
+              />
+
+              {/* Bolita Xiaomi: Naranja de Xiaomi si conectado, parpadeo fuerte en rojo si no */}
+              <span
+                className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+                  xiaomiConnected
+                    ? "bg-[#FF6900] shadow-[0_0_8px_rgba(255,105,0,0.95),0_0_14px_rgba(255,105,0,0.4)]"
+                    : "bg-rose-500 animate-blink-red"
+                }`}
+                title={`Xiaomi: ${xiaomiConnected ? "Conectado" : "Desconectado"}`}
+              />
+            </div>
+          </button>
 
           {/* Standalone Settings Button (Rightmost) */}
           <Link

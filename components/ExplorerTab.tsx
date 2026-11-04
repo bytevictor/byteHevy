@@ -19,9 +19,12 @@ import {
   XIcon,
   InfoIcon,
   CrownIcon,
+  ByteHevyLogo,
+  RefreshCwIcon,
 } from "./Icons";
 import { useSeason } from "@/lib/season-context";
 import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
+import { useSync } from "@/lib/sync-context";
 
 // Estilos de medallas olímpicas (Oro, Plata y Bronce) para el Top 3 de ejercicios
 const RANK_BADGE_STYLES: Record<number, { bg: string; title: string }> = {
@@ -49,6 +52,7 @@ interface ExplorerTabProps {
 
 export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabProps) {
   const { activeSeasonId, activeSeason, setActiveSeasonId } = useSeason();
+  const { hevyConnected, isHevySyncing, triggerHevySync } = useSync();
   const seasonColor = activeSeason ? getSeasonColor(activeSeason) : null;
   const [exercises, setExercises] = useState<ExerciseSummary[]>(initialExercises);
   const [loadingList, setLoadingList] = useState(!initialExercises || initialExercises.length === 0);
@@ -275,6 +279,14 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
     }
 
     loadList();
+
+    const handleSyncComplete = () => {
+      loadList();
+    };
+    window.addEventListener("bytehevy-sync-complete", handleSyncComplete);
+    return () => {
+      window.removeEventListener("bytehevy-sync-complete", handleSyncComplete);
+    };
   }, [activeSeasonId]);
 
   // Fetch detail when selectedId or activeSeasonId changes
@@ -425,24 +437,53 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
       <div className="lg:col-span-4 xl:col-span-4 flex flex-col gap-3 lg:sticky lg:top-[84px] lg:h-[calc(100vh-7.25rem)] min-h-0">
         {/* Top pinned controls */}
         <div className="shrink-0 flex flex-col gap-2.5">
-          {/* Search */}
-          <div className="relative">
-            <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-            <input
-              type="text"
-              placeholder="Buscar ejercicio..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-zinc-900/60 border border-zinc-800/80 rounded-xl pl-10 pr-9 py-2.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 cursor-pointer"
-              >
-                <XIcon className="w-3.5 h-3.5" />
-              </button>
-            )}
+          {/* Search & Granular Hevy Sync Button */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+              <input
+                type="text"
+                placeholder="Buscar ejercicio..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-zinc-900/60 border border-zinc-800/80 rounded-xl pl-10 pr-9 py-2.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                >
+                  <XIcon className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Botón granular de Sincronizar Hevy */}
+            <button
+              type="button"
+              onClick={triggerHevySync}
+              disabled={isHevySyncing}
+              title={
+                hevyConnected
+                  ? "Sincronizar entrenamientos con Hevy"
+                  : "Conectar cuenta de Hevy para sincronizar"
+              }
+              className={`h-[38px] px-3 rounded-xl border flex items-center gap-1.5 text-xs font-semibold shrink-0 transition-all cursor-pointer shadow-sm active:scale-[0.98] ${
+                hevyConnected
+                  ? "bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300"
+                  : "bg-zinc-900 border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+              } disabled:opacity-50`}
+            >
+              <ByteHevyLogo className="w-4 h-4" />
+              <RefreshCwIcon
+                className={`w-3.5 h-3.5 ${
+                  isHevySyncing ? "animate-spin text-blue-400" : "text-zinc-400"
+                }`}
+              />
+              <span className="hidden sm:inline">
+                {isHevySyncing ? "Sincronizando..." : "Hevy"}
+              </span>
+            </button>
           </div>
 
           {/* Category Filter Pills */}

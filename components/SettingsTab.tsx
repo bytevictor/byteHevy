@@ -21,8 +21,10 @@ import {
   PhotoIcon,
   UserIcon,
   ByteHevyLogo,
+  ScaleIcon,
+  QrCodeIcon,
 } from "./Icons";
-import { HevySyncModal } from "./HevySyncModal";
+import { useSync } from "@/lib/sync-context";
 import { ThemeCustomizer } from "./ThemeCustomizer";
 import { ExerciseMediaManager } from "./ExerciseMediaManager";
 import { BiometricProfileSettings } from "./BiometricProfileSettings";
@@ -100,62 +102,22 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const mediaFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Hevy Cloud Sync state
-  const [hevyModalOpen, setHevyModalOpen] = useState(false);
-  const [hevyStatus, setHevyStatus] = useState<{
-    is_connected: boolean;
-    username: string | null;
-    user_id: string | null;
-    last_sync: string | null;
-  } | null>(null);
-  const [hevySyncing, setHevySyncing] = useState(false);
-  const [hevyFeedback, setHevyFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  const fetchHevyStatus = useCallback(async () => {
-    try {
-      const res = await fetch("/api/hevy/status");
-      if (res.ok) {
-        const data = await res.json();
-        setHevyStatus(data);
-      }
-    } catch (e) {
-      console.error("Error al obtener estado de Hevy:", e);
-    }
-  }, []);
-
-  const handleQuickHevySync = async () => {
-    if (!hevyStatus?.is_connected) {
-      setHevyModalOpen(true);
-      return;
-    }
-    setHevySyncing(true);
-    setHevyFeedback(null);
-    try {
-      const res = await fetch("/api/hevy/sync", { method: "POST" });
-      const data = await res.json();
-      if (data.success) {
-        const count = data.result?.newWorkouts || 0;
-        setHevyFeedback({
-          type: "success",
-          text: `¡Sincronizado! ${count > 0 ? `${count} nuevos entrenamientos importados.` : "Base de datos al día con Hevy."}`,
-        });
-        await fetchHevyStatus();
-        if (onSyncComplete) onSyncComplete();
-      } else {
-        setHevyFeedback({
-          type: "error",
-          text: data.error || "Error al sincronizar con Hevy.",
-        });
-      }
-    } catch (e: any) {
-      setHevyFeedback({
-        type: "error",
-        text: e.message || "Error de conexión al sincronizar con Hevy.",
-      });
-    } finally {
-      setHevySyncing(false);
-    }
-  };
+  // Cloud Sync Context (Hevy + Xiaomi)
+  const {
+    hevyConnected,
+    hevyUsername,
+    lastHevySync,
+    isHevySyncing,
+    triggerHevySync,
+    setHevyModalOpen,
+    xiaomiConnected,
+    xiaomiUserId,
+    lastXiaomiSync,
+    isXiaomiSyncing,
+    triggerXiaomiSync,
+    setXiaomiModalOpen,
+    refreshStatuses,
+  } = useSync();
 
   const fetchMediaStatus = useCallback(async () => {
     setMediaLoading(true);
@@ -174,7 +136,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
 
   useEffect(() => {
     let isMounted = true;
-    fetchHevyStatus();
+    refreshStatuses();
     fetch("/api/exercise-media/restore")
       .then((res) => res.json())
       .then((json) => {
@@ -188,7 +150,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
     return () => {
       isMounted = false;
     };
-  }, [fetchHevyStatus]);
+  }, [refreshStatuses]);
   const [seasonForm, setSeasonForm] = useState<{
     name: string;
     startDate: string;
@@ -618,83 +580,145 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
       {/* Theme & Appearance Customizer */}
       {showAppearance && <ThemeCustomizer />}
 
-      {/* 2. Top / Central Section: Sincronización Automática con Hevy (Cloud Sync) */}
+      {/* 2. Conexiones Cloud & Integraciones (Hevy + Xiaomi) */}
       <section className="flex flex-col gap-4">
-        <div className="p-5 rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-950/20 via-zinc-900/40 to-zinc-900/60 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-b from-blue-500/20 to-blue-600/10 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0 shadow-md">
-              <ByteHevyLogo className="w-7 h-7" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-zinc-100">Sincronización Automática con Hevy</h3>
-                {hevyStatus?.is_connected ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <CheckCircleIcon className="w-3 h-3" />
-                    Conectado {hevyStatus.username ? `@${hevyStatus.username}` : ""}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700/60">
-                    Desconectado
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                {hevyStatus?.is_connected
-                  ? `Última sincronización: ${hevyStatus.last_sync || "Reciente"}. Descarga directa sin subir archivos manualmente.`
-                  : "Conecta tu cuenta para sincronizar con 1 clic sin guardar contraseñas."}
-              </p>
-            </div>
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+            <RefreshCwIcon className="w-4 h-4" />
           </div>
-
-          <div className="flex items-center gap-2.5 self-start sm:self-center shrink-0">
-            {hevyStatus?.is_connected ? (
-              <>
-                <button
-                  onClick={handleQuickHevySync}
-                  disabled={hevySyncing}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-md shadow-blue-500/20 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50"
-                >
-                  <RefreshCwIcon className={`w-3.5 h-3.5 ${hevySyncing ? "animate-spin" : ""}`} />
-                  <span>{hevySyncing ? "Sincronizando..." : "Sincronizar Hevy"}</span>
-                </button>
-                <button
-                  onClick={() => setHevyModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-zinc-700/80 bg-zinc-900/90 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 text-xs font-semibold transition-colors cursor-pointer"
-                  title="Gestionar estado de conexión con Hevy"
-                >
-                  <SettingsIcon className="w-3.5 h-3.5 text-zinc-400" />
-                  <span>Ajustes</span>
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setHevyModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-md shadow-blue-500/20 transition-all cursor-pointer active:scale-[0.98]"
-              >
-                <UploadCloudIcon className="w-3.5 h-3.5" />
-                <span>Conectar con Hevy</span>
-              </button>
-            )}
+          <div>
+            <h3 className="text-base font-bold text-zinc-100">
+              Conexiones Cloud & Integraciones
+            </h3>
+            <p className="text-xs text-zinc-400">
+              Gestiona tus accesos remotos y sincroniza entrenamientos y pesajes con 1 clic
+            </p>
           </div>
         </div>
 
-        {hevyFeedback && (
-          <div
-            className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in duration-150 ${
-              hevyFeedback.type === "success"
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-                : "bg-rose-500/10 border-rose-500/30 text-rose-300"
-            }`}
-          >
-            {hevyFeedback.type === "success" ? (
-              <CheckCircleIcon className="w-4 h-4 shrink-0 text-emerald-400" />
-            ) : (
-              <AlertTriangleIcon className="w-4 h-4 shrink-0 text-rose-400" />
-            )}
-            <span>{hevyFeedback.text}</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Tarjeta 1: Hevy */}
+          <div className="p-5 rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-950/20 via-zinc-900/40 to-zinc-900/60 backdrop-blur-md flex flex-col justify-between gap-4 shadow-lg">
+            <div className="flex items-start gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-b from-blue-500/20 to-blue-600/10 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0 shadow-md">
+                <ByteHevyLogo className="w-7 h-7" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-bold text-zinc-100">Hevy Cloud</h4>
+                  {hevyConnected ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <CheckCircleIcon className="w-3 h-3" />
+                      Conectado {hevyUsername ? `@${hevyUsername}` : ""}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-blink-red" />
+                      Desconectado
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                  {hevyConnected
+                    ? `Última sinc: ${lastHevySync || "Reciente"}. Sincroniza entrenamientos, ejercicios y series.`
+                    : "Descarga automática de entrenamientos directamente a tu SQLite local."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/80">
+              {hevyConnected ? (
+                <>
+                  <button
+                    onClick={triggerHevySync}
+                    disabled={isHevySyncing}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-md shadow-blue-500/20 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50"
+                  >
+                    <RefreshCwIcon className={`w-3.5 h-3.5 ${isHevySyncing ? "animate-spin" : ""}`} />
+                    <span>{isHevySyncing ? "Sincronizando..." : "Sincronizar Hevy"}</span>
+                  </button>
+                  <button
+                    onClick={() => setHevyModalOpen(true)}
+                    className="flex items-center gap-1.5 py-2.5 px-3 rounded-xl border border-zinc-700/80 bg-zinc-900/90 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 text-xs font-semibold transition-colors cursor-pointer"
+                    title="Configurar conexión con Hevy"
+                  >
+                    <SettingsIcon className="w-3.5 h-3.5 text-zinc-400" />
+                    <span>Ajustes</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setHevyModalOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-md shadow-blue-500/20 transition-all cursor-pointer active:scale-[0.98]"
+                >
+                  <UploadCloudIcon className="w-3.5 h-3.5" />
+                  <span>Conectar Hevy</span>
+                </button>
+              )}
+            </div>
           </div>
-        )}
+
+          {/* Tarjeta 2: Xiaomi */}
+          <div className="p-5 rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-950/20 via-zinc-900/40 to-zinc-900/60 backdrop-blur-md flex flex-col justify-between gap-4 shadow-lg">
+            <div className="flex items-start gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-b from-[#FF6900]/20 to-[#FF6900]/10 border border-[#FF6900]/30 flex items-center justify-center text-[#FF6900] shrink-0 shadow-md">
+                <ScaleIcon className="w-7 h-7" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-bold text-zinc-100">Xiaomi Mi Scale / Zepp</h4>
+                  {xiaomiConnected ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <CheckCircleIcon className="w-3 h-3" />
+                      Conectado {xiaomiUserId ? `(${xiaomiUserId})` : ""}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-blink-red" />
+                      Desconectado
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                  {xiaomiConnected
+                    ? `Última sinc: ${lastXiaomiSync || "Reciente"}. Sincroniza peso, grasa corporal y composición.`
+                    : "Vincula tu báscula escaneando el código QR de Mi Home / Zepp Life."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/80">
+              {xiaomiConnected ? (
+                <>
+                  <button
+                    onClick={triggerXiaomiSync}
+                    disabled={isXiaomiSyncing}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold bg-gradient-to-r from-orange-600 to-[#FF6900] hover:from-orange-500 hover:to-[#FF6900]/90 text-white shadow-md shadow-orange-500/20 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50"
+                  >
+                    <RefreshCwIcon className={`w-3.5 h-3.5 ${isXiaomiSyncing ? "animate-spin" : ""}`} />
+                    <span>{isXiaomiSyncing ? "Sincronizando..." : "Sincronizar Xiaomi"}</span>
+                  </button>
+                  <button
+                    onClick={() => setXiaomiModalOpen(true)}
+                    className="flex items-center gap-1.5 py-2.5 px-3 rounded-xl border border-zinc-700/80 bg-zinc-900/90 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 text-xs font-semibold transition-colors cursor-pointer"
+                    title="Configurar conexión con Xiaomi"
+                  >
+                    <SettingsIcon className="w-3.5 h-3.5 text-zinc-400" />
+                    <span>Ajustes</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setXiaomiModalOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-orange-600 to-[#FF6900] hover:from-orange-500 hover:to-[#FF6900]/90 text-white shadow-md shadow-orange-500/20 transition-all cursor-pointer active:scale-[0.98]"
+                >
+                  <QrCodeIcon className="w-3.5 h-3.5" />
+                  <span>Conectar Xiaomi (QR)</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* 3. Sincronización Manual de Datos CSV */}
@@ -1502,16 +1526,6 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
           </div>
         </div>
       )}
-
-      {/* Hevy Cloud Sync Modal */}
-      <HevySyncModal
-        isOpen={hevyModalOpen}
-        onClose={() => setHevyModalOpen(false)}
-        onSyncSuccess={() => {
-          fetchHevyStatus();
-          if (onSyncComplete) onSyncComplete();
-        }}
-      />
     </div>
   );
 }
