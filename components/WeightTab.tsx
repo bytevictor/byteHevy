@@ -498,6 +498,13 @@ export function WeightTab() {
       try {
         localStorage.setItem("bytehevy_weight_is_trend", "false");
       } catch {}
+      if (!showWeight) {
+        setShowWeight(true);
+        try {
+          localStorage.setItem("bytehevy_weight_show_weight", "true");
+        } catch {}
+      }
+      return;
     }
     setShowWeight((prev) => {
       const next = !prev;
@@ -514,6 +521,13 @@ export function WeightTab() {
       try {
         localStorage.setItem("bytehevy_weight_is_trend", "false");
       } catch {}
+      if (!showFat) {
+        setShowFat(true);
+        try {
+          localStorage.setItem("bytehevy_weight_show_fat", "true");
+        } catch {}
+      }
+      return;
     }
     setShowFat((prev) => {
       const next = !prev;
@@ -1896,10 +1910,10 @@ export function WeightTab() {
                     setXiaomiAutoStartQr(!xiaomiConnected);
                     setXiaomiModalOpen(true);
                   }}
-                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border flex items-center gap-1.5 transition-all cursor-pointer ${
+                  className={`border flex items-center justify-center transition-all cursor-pointer ${
                     xiaomiConnected
-                      ? "bg-orange-500/10 text-orange-400 border-orange-500/30 hover:bg-orange-500/20"
-                      : "bg-zinc-800/80 text-zinc-400 border-zinc-700/80 hover:bg-zinc-700/60 hover:text-zinc-200"
+                      ? "p-1.5 rounded-full bg-orange-500/10 border-orange-500/30 hover:bg-orange-500/20"
+                      : "px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-zinc-800/80 text-zinc-400 border-zinc-700/80 hover:bg-zinc-700/60 hover:text-zinc-200 gap-1.5"
                   }`}
                   title={
                     xiaomiConnected
@@ -1908,10 +1922,7 @@ export function WeightTab() {
                   }
                 >
                   {xiaomiConnected ? (
-                    <>
-                      <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />
-                      <span>Xiaomi Cloud Conectado</span>
-                    </>
+                    <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
                   ) : (
                     <>
                       <QrCodeIcon className="w-3 h-3 text-zinc-400" />
@@ -1959,16 +1970,6 @@ export function WeightTab() {
                 ? "Sincronizar Xiaomi"
                 : "Conectar Xiaomi"}
             </span>
-          </button>
-
-          <button
-            onClick={handleReloadFromDb}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-900 border border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all cursor-pointer shadow-sm"
-            title="Recargar datos desde la base de datos"
-          >
-            <RefreshCwIcon className={`w-3.5 h-3.5 ${loading ? "animate-spin text-accent-light" : "text-zinc-400"}`} />
-            <span>{loading ? "Cargando..." : "Recargar"}</span>
           </button>
 
           <button
@@ -2163,19 +2164,31 @@ export function WeightTab() {
               type="button"
               onClick={handleToggleWeight}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                !isTrendMode && showWeight
+                isTrendMode
+                  ? showWeight
+                    ? "bg-blue-500/10 text-blue-300/70 border border-blue-500/25 shadow-xs"
+                    : "text-zinc-600 hover:text-zinc-400 border border-transparent"
+                  : showWeight
                   ? "bg-blue-500/15 text-blue-200 border border-blue-500/40 shadow-xs"
                   : "text-zinc-500 hover:text-zinc-300 border border-transparent"
               }`}
               title={
-                !isTrendMode && showWeight
+                isTrendMode
+                  ? showWeight
+                    ? "Peso activo en segundo plano (haz clic para salir de Tendencia y ver Peso)"
+                    : "Activar Peso y salir de Tendencia"
+                  : showWeight
                   ? "Desactivar visualización de Peso y Media Móvil"
                   : "Activar visualización de Peso y Media Móvil (azul cobalto)"
               }
             >
               <span
                 className={`w-2 h-2 rounded-full transition-all ${
-                  !isTrendMode && showWeight
+                  isTrendMode
+                    ? showWeight
+                      ? "bg-blue-400/60 shadow-[0_0_6px_rgba(59,130,246,0.35)]"
+                      : "bg-zinc-700"
+                    : showWeight
                     ? "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]"
                     : "bg-zinc-600"
                 }`}
@@ -2187,19 +2200,31 @@ export function WeightTab() {
               type="button"
               onClick={handleToggleFat}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                !isTrendMode && showFat
+                isTrendMode
+                  ? showFat
+                    ? "bg-yellow-500/10 text-yellow-300/70 border border-yellow-500/25 shadow-xs"
+                    : "text-zinc-600 hover:text-zinc-400 border border-transparent"
+                  : showFat
                   ? "bg-yellow-500/15 text-yellow-200 border border-yellow-500/40 shadow-xs"
                   : "text-zinc-500 hover:text-zinc-300 border border-transparent"
               }`}
               title={
-                !isTrendMode && showFat
+                isTrendMode
+                  ? showFat
+                    ? "% Grasa activo en segundo plano (haz clic para salir de Tendencia y ver % Grasa)"
+                    : "Activar % Grasa y salir de Tendencia"
+                  : showFat
                   ? "Desactivar visualización de % Grasa"
                   : "Activar visualización de Porcentaje de Grasa (amarillo)"
               }
             >
               <span
                 className={`w-2 h-2 rounded-full transition-all ${
-                  !isTrendMode && showFat
+                  isTrendMode
+                    ? showFat
+                      ? "bg-yellow-400/60 shadow-[0_0_6px_rgba(250,204,21,0.35)]"
+                      : "bg-zinc-700"
+                    : showFat
                     ? "bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]"
                     : "bg-zinc-600"
                 }`}
