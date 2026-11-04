@@ -63,20 +63,26 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
     <header className="sticky top-0 z-40 border-b border-zinc-800/60 bg-[var(--header-bg)] backdrop-blur-xl transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[76px] flex items-center justify-between gap-3 sm:gap-4">
         {/* Left: Brand */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-zinc-800 to-zinc-900 border border-zinc-700/60 flex items-center justify-center shadow-md">
-            <ByteHevyLogo className="w-5 h-5" />
+        <button
+          type="button"
+          onClick={() => setActiveTab("explorer")}
+          className="flex items-center gap-3 shrink-0 text-left cursor-pointer group rounded-xl p-1 -m-1 transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          title="Ir al Explorador de Entrenamientos"
+          aria-label="byteHevy - Ir a la pestaña Explorador"
+        >
+          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-b from-zinc-800 to-zinc-900 border border-zinc-700/60 flex items-center justify-center shadow-md group-hover:border-accent/50 group-hover:shadow-accent/10 transition-all">
+            <ByteHevyLogo className="w-6 h-6 sm:w-7 sm:h-7 transition-transform group-hover:scale-105" />
           </div>
           <div className="flex flex-col">
-            <span className="text-lg font-bold tracking-tight leading-none">
-              <span className="text-zinc-100">byte</span>
+            <span className="text-xl sm:text-[22px] font-extrabold tracking-tight leading-none">
+              <span className="text-zinc-100 group-hover:text-white transition-colors">byte</span>
               <span className="text-accent-light">Hevy</span>
             </span>
-            <span className="text-[11px] text-zinc-500 font-normal mt-0.5 tracking-normal">
+            <span className="text-[11px] sm:text-xs text-zinc-500 font-normal mt-0.5 tracking-normal group-hover:text-zinc-400 transition-colors">
               Visualizador de Entrenamientos
             </span>
           </div>
-        </div>
+        </button>
 
         {/* Center: Season Selector (Prominent, Left of Tabs) + Tabs */}
         <div className="flex items-center gap-2.5 sm:gap-3.5">
