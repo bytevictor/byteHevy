@@ -7,7 +7,7 @@ import {
   disconnectHevyAuth,
   HevyAuthRecord,
 } from "./hevy-db";
-import { importCsvToDb, ImportResult } from "./csv-parser";
+import { importCsvToDb, ImportResult, formatSpanishDate } from "./csv-parser";
 
 const SESSION_DIR = path.join(process.cwd(), "data");
 
@@ -37,9 +37,9 @@ function workoutsBatchToCsv(workouts: any[]): string {
 
   for (const w of workouts) {
     const title = (w.name || "Entrenamiento").trim();
-    const startDate = new Date(w.start_time * 1000).toISOString();
+    const startDate = formatSpanishDate(w.start_time * 1000);
     const endDate = w.end_time
-      ? new Date(w.end_time * 1000).toISOString()
+      ? formatSpanishDate(w.end_time * 1000)
       : startDate;
     const description = (w.description || "").trim();
 

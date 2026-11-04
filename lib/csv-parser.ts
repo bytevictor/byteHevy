@@ -16,17 +16,77 @@ const SPANISH_MONTHS: Record<string, number> = {
   dic: 11, diciembre: 11,
 };
 
+export const SPANISH_SHORT_MONTHS = [
+  "ene", "feb", "mar", "abr", "may", "jun",
+  "jul", "ago", "sept", "oct", "nov", "dic",
+];
+
+/**
+ * Parsea una fecha en la zona horaria de España (Europe/Madrid).
+ */
+function parseDateInMadrid(year: number, month: number, day: number, hour: number, minute: number): number {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const targetIso = `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00`;
+  const testDate = new Date(`${year}-${pad(month)}-${pad(day)}T12:00:00Z`);
+  const madridHourStr = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Madrid",
+    hour: "numeric",
+    hour12: false,
+  }).format(testDate);
+  const offsetHours = parseInt(madridHourStr, 10) - 12;
+  const offsetSign = offsetHours >= 0 ? "+" : "-";
+  const offsetStr = `${offsetSign}${pad(Math.abs(offsetHours))}:00`;
+  const parsed = Date.parse(`${targetIso}${offsetStr}`);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * Formatea cualquier fecha o timestamp al formato canónico estándar de ByteHevy:
+ * Ej: "28 oct 2026, 17:12"
+ */
+export function formatSpanishDate(dateOrTimestamp: Date | number): string {
+  const d = typeof dateOrTimestamp === "number" ? new Date(dateOrTimestamp) : dateOrTimestamp;
+  if (!d || isNaN(d.getTime())) return "";
+
+  const formatter = new Intl.DateTimeFormat("es-ES", {
+    timeZone: "Europe/Madrid",
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+
+  const parts = formatter.formatToParts(d);
+  const partMap: Record<string, string> = {};
+  for (const p of parts) {
+    partMap[p.type] = p.value;
+  }
+
+  const day = parseInt(partMap.day || "1", 10);
+  const monthIdx = (parseInt(partMap.month || "1", 10) - 1 + 12) % 12;
+  const monthStr = SPANISH_SHORT_MONTHS[monthIdx];
+  const year = partMap.year || "2026";
+  const hour = (partMap.hour || "00").padStart(2, "0");
+  const minute = (partMap.minute || "00").padStart(2, "0");
+
+  return `${day} ${monthStr} ${year}, ${hour}:${minute}`;
+}
+
 export function parseSpanishDate(str: string): number {
   if (!str) return 0;
   const trimmed = str.trim();
 
-  // 1. Try standard JS Date parsing (covers "Nov 3, 2026, 8:39 PM", ISO, etc.)
-  const nativeTs = Date.parse(trimmed);
-  if (!Number.isNaN(nativeTs) && nativeTs > 0) {
-    return nativeTs;
+  // 1. Try standard JS Date parsing (covers ISO 8601 "2026-10-28T16:12:24.000Z", etc.)
+  if (trimmed.includes("T") || trimmed.endsWith("Z")) {
+    const nativeTs = Date.parse(trimmed);
+    if (!Number.isNaN(nativeTs) && nativeTs > 0) {
+      return nativeTs;
+    }
   }
 
-  // 2. Try Spanish date formats ("3 nov 2026, 20:39", "3 nov. 2026, 20:39", "03 noviembre 2026, 20:39")
+  // 2. Try Spanish date formats ("28 oct 2026, 17:12", "3 nov. 2026, 20:39", "03 noviembre 2026, 20:39")
   const match = trimmed.match(
     /^(\d{1,2})\s+([a-zA-Záéíóú]+)\.?\s+(\d{4}),?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/i
   );
@@ -38,8 +98,14 @@ export function parseSpanishDate(str: string): number {
     const minute = parseInt(match[5], 10);
     const month = SPANISH_MONTHS[monthStr] ?? -1;
     if (month >= 0) {
-      return new Date(year, month, day, hour, minute).getTime();
+      return parseDateInMadrid(year, month + 1, day, hour, minute);
     }
+  }
+
+  // 3. Fallback to standard Date parsing
+  const fallbackTs = Date.parse(trimmed);
+  if (!Number.isNaN(fallbackTs) && fallbackTs > 0) {
+    return fallbackTs;
   }
 
   return 0;
@@ -177,24 +243,27 @@ export async function importCsvToDb(csvText: string): Promise<ImportResult> {
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     const title = (row[idxTitle] || "").trim();
-    const startTimeStr = (row[idxStartTime] || "").trim();
-    if (!title && !startTimeStr) continue;
+    const rawStartTimeStr = (row[idxStartTime] || "").trim();
+    if (!title && !rawStartTimeStr) continue;
 
-    const key = `${startTimeStr}___${title}`;
+    const startMs = parseSpanishDate(rawStartTimeStr);
+    const normalizedStartTime = startMs > 0 ? formatSpanishDate(startMs) : rawStartTimeStr;
+
+    const key = `${normalizedStartTime}___${title}`;
     let workout = workoutsMap.get(key);
 
     if (!workout) {
-      const endTimeStr = (row[idxEndTime] || "").trim();
+      const rawEndTimeStr = (row[idxEndTime] || "").trim();
+      const endMs = parseSpanishDate(rawEndTimeStr);
+      const normalizedEndTime = endMs > 0 ? formatSpanishDate(endMs) : rawEndTimeStr;
       const desc = (row[idxDesc] || "").trim();
-      const startMs = parseSpanishDate(startTimeStr);
-      const endMs = parseSpanishDate(endTimeStr);
       const durationSec = endMs > startMs ? Math.round((endMs - startMs) / 1000) : 0;
 
       workout = {
         title: title || "Entrenamiento",
-        startTimeStr,
+        startTimeStr: normalizedStartTime,
         startTimestamp: Math.floor(startMs / 1000),
-        endTimeStr,
+        endTimeStr: normalizedEndTime,
         durationSeconds: durationSec,
         description: desc,
         sets: [],
@@ -225,10 +294,17 @@ export async function importCsvToDb(csvText: string): Promise<ImportResult> {
   }
 
   // Find existing workouts to skip duplicates
-  const existingRes = await db.execute("SELECT start_time, title FROM workouts");
+  const existingRes = await db.execute("SELECT start_time, start_timestamp, title FROM workouts");
   const existingSet = new Set(
     existingRes.rows.map((r) => `${r.start_time}___${r.title}`)
   );
+  const existingByTitle = new Map<string, number[]>();
+  for (const r of existingRes.rows) {
+    const t = String(r.title).trim();
+    const ts = Number(r.start_timestamp);
+    if (!existingByTitle.has(t)) existingByTitle.set(t, []);
+    existingByTitle.get(t)!.push(ts);
+  }
 
   // Cache existing exercises
   const exRes = await db.execute("SELECT id, name FROM exercises");
@@ -245,7 +321,19 @@ export async function importCsvToDb(csvText: string): Promise<ImportResult> {
 
   for (const workout of workoutsMap.values()) {
     const key = `${workout.startTimeStr}___${workout.title}`;
-    if (existingSet.has(key)) {
+    let isDuplicate = existingSet.has(key);
+
+    if (!isDuplicate) {
+      const timestamps = existingByTitle.get(workout.title);
+      if (timestamps) {
+        // Tolerancia de 120s para capturar pequeñas diferencias entre export CSV (sin segundos) y API (con segundos)
+        if (timestamps.some((ts) => Math.abs(ts - workout.startTimestamp) <= 120)) {
+          isDuplicate = true;
+        }
+      }
+    }
+
+    if (isDuplicate) {
       skippedWorkouts++;
       continue;
     }
