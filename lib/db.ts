@@ -258,6 +258,19 @@ export async function ensureSchema(db: Client) {
       created_at INTEGER DEFAULT (strftime('%s', 'now'))
     );`,
     `CREATE INDEX IF NOT EXISTS idx_scale_measurements_timestamp ON scale_measurements(timestamp_ms);`,
+    `CREATE TABLE IF NOT EXISTS hevy_auth (
+      id TEXT PRIMARY KEY DEFAULT 'primary',
+      user_id TEXT,
+      access_token TEXT,
+      refresh_token TEXT,
+      expires_at TEXT,
+      username TEXT,
+      email TEXT,
+      is_authenticated INTEGER DEFAULT 0,
+      last_sync_timestamp INTEGER DEFAULT 0,
+      last_sync_workouts_count INTEGER DEFAULT 0,
+      updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+    );`,
   ]);
 
   // Migration for seasons: ensure color column exists
