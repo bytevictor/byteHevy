@@ -548,7 +548,7 @@ export function HevySyncModal({
                       type="text"
                       value={manualToken}
                       onChange={(e) => setManualToken(e.target.value)}
-                      placeholder="eyJhbGciOi... o 6NTNQDHaO4..."
+                      placeholder="eyJhbGciOi... o token_de_acceso..."
                       className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500 font-mono"
                     />
                     <button
