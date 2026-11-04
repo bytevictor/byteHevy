@@ -47,6 +47,7 @@ export function HevySyncModal({
   } | null>(null);
 
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const bookmarkletLinkRef = useRef<HTMLAnchorElement>(null);
 
   // Obtener origen actual en el cliente (ej. http://192.168.1.50:3000)
   useEffect(() => {
@@ -194,6 +195,13 @@ export function HevySyncModal({
   const bookmarkletCode = origin
     ? `javascript:(function(){try{var t="${origin}";var tok=null,uId=null,uName=null,rTok=null;function s(st){if(!st)return;for(var i=0;i<st.length;i++){var k=st.key(i);var v=st.getItem(k);if(!v)continue;try{var o=JSON.parse(v);if(o&&typeof o==="object"){if(!tok&&(o.access_token||o.auth_token||o.token))tok=o.access_token||o.auth_token||o.token;if(!rTok&&o.refresh_token)rTok=o.refresh_token;if(!uId&&(o.user_id||o.userId||o.id))uId=o.user_id||o.userId||o.id;if(!uName&&(o.username||o.name))uName=o.username||o.name;}}catch(e){if(!tok&&/token|auth/i.test(k)&&v.length>20)tok=v.replace(/^["\x27]|["\x27]$/g,"");}}}s(window.localStorage);if(!tok)s(window.sessionStorage);if(!tok&&document.cookie){var p=document.cookie.split(";");for(var j=0;j<p.length;j++){var pr=p[j].trim().split("=");if(/token|auth|session/i.test(pr[0])&&pr[1]&&pr[1].length>20){tok=decodeURIComponent(pr[1]);break;}}}if(tok){var d=document.createElement("div");d.style.cssText="position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:9999999;background:#18181b;color:#10b981;border:2px solid #10b981;border-radius:16px;padding:16px 28px;font-family:sans-serif;font-size:15px;font-weight:bold;box-shadow:0 10px 30px rgba(0,0,0,0.8);text-align:center;";d.innerHTML="✅ ¡Token de Hevy detectado!<br><span style=\\"font-size:12px;color:#a1a1aa;font-weight:normal;\\">Vinculando con ByteHevy...</span>";document.body.appendChild(d);var sent=false;if(window.opener){try{window.opener.postMessage({type:"BYTEHEVY_AUTH",accessToken:tok,refreshToken:rTok,userId:uId,username:uName},"*");sent=true;}catch(e){}}var u=t+"/api/hevy/callback?token="+encodeURIComponent(tok)+(uId?"&user_id="+encodeURIComponent(uId):"")+(uName?"&username="+encodeURIComponent(uName):"");setTimeout(function(){if(window.opener&&sent){window.close();}else{window.location.href=u;}},1000);}else{var m=prompt("No se detectó sesión iniciada en Hevy.\\n\\nSi ya has iniciado sesión, puedes pegar aquí tu token:");if(m&&m.trim()){window.location.href=t+"/api/hevy/callback?token="+encodeURIComponent(m.trim());}}}catch(err){alert("Error: "+err.message);}})();`
     : "";
+
+  // Asignar el href directamente en el DOM para evitar la restricción de seguridad de React con URLs javascript:
+  useEffect(() => {
+    if (bookmarkletLinkRef.current && bookmarkletCode) {
+      bookmarkletLinkRef.current.setAttribute("href", bookmarkletCode);
+    }
+  }, [bookmarkletCode]);
 
   // Abrir ventana emergente hacia Hevy
   const handleOpenPopup = () => {
@@ -471,8 +479,15 @@ export function HevySyncModal({
 
               <div className="flex items-center justify-center py-2">
                 <a
-                  href={bookmarkletCode}
+                  ref={bookmarkletLinkRef}
+                  href="#"
                   draggable="true"
+                  onDragStart={(e) => {
+                    if (bookmarkletCode) {
+                      e.dataTransfer.setData("text/uri-list", bookmarkletCode);
+                      e.dataTransfer.setData("text/plain", bookmarkletCode);
+                    }
+                  }}
                   onClick={(e) => {
                     e.preventDefault();
                     alert(
