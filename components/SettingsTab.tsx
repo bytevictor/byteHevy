@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { ImportResult } from "@/lib/csv-parser";
 import {
   UploadCloudIcon,
@@ -34,7 +35,6 @@ import {
   SEASON_COLOR_PALETTE,
   getSeasonColor,
   hexToRgba,
-  DEFAULT_SEASON_COLOR,
 } from "@/lib/season-colors";
 
 interface DbRestoreResult {
@@ -65,20 +65,56 @@ interface MediaCacheStatus {
   diskFilesCount: number;
 }
 
+type SettingsSubTab = "datos" | "temporadas" | "multimedia" | "perfil";
+
 interface SettingsTabProps {
   onSyncComplete?: () => void;
 }
 
 export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
-  // Sync state
+  const searchParams = useSearchParams();
+
+  // Tab state with query param sync
+  const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>(() => {
+    const tab = searchParams?.get("tab");
+    if (tab === "temporadas" || tab === "seasons") return "temporadas";
+    if (tab === "multimedia" || tab === "media") return "multimedia";
+    if (tab === "perfil" || tab === "appearance" || tab === "theme") return "perfil";
+    return "datos";
+  });
+
+  const handleSubTabChange = (tab: SettingsSubTab) => {
+    setActiveSubTab(tab);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", tab);
+      window.history.replaceState(null, "", url.toString());
+    }
+  };
+
+  // Cloud Sync Context (Hevy + Xiaomi)
+  const {
+    hevyConnected,
+    hevyUsername,
+    lastHevySync,
+    isHevySyncing,
+    triggerHevySync,
+    setHevyModalOpen,
+    xiaomiConnected,
+    xiaomiUserId,
+    lastXiaomiSync,
+    isXiaomiSyncing,
+    triggerXiaomiSync,
+    setXiaomiModalOpen,
+    refreshStatuses,
+  } = useSync();
+
+  // CSV Sync state
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
-  const [showBiometrics, setShowBiometrics] = useState(false);
-  const [showAppearance, setShowAppearance] = useState(false);
-  const [showMediaManager, setShowMediaManager] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Season context & modal state
@@ -102,23 +138,6 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const mediaFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Cloud Sync Context (Hevy + Xiaomi)
-  const {
-    hevyConnected,
-    hevyUsername,
-    lastHevySync,
-    isHevySyncing,
-    triggerHevySync,
-    setHevyModalOpen,
-    xiaomiConnected,
-    xiaomiUserId,
-    lastXiaomiSync,
-    isXiaomiSyncing,
-    triggerXiaomiSync,
-    setXiaomiModalOpen,
-    refreshStatuses,
-  } = useSync();
-
   const fetchMediaStatus = useCallback(async () => {
     setMediaLoading(true);
     try {
@@ -136,7 +155,6 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
 
   useEffect(() => {
     let isMounted = true;
-    refreshStatuses();
     fetch("/api/exercise-media/restore")
       .then((res) => res.json())
       .then((json) => {
@@ -150,7 +168,9 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
     return () => {
       isMounted = false;
     };
-  }, [refreshStatuses]);
+  }, []);
+
+  // Season form state
   const [seasonForm, setSeasonForm] = useState<{
     name: string;
     startDate: string;
@@ -169,6 +189,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
   const [seasonSubmitting, setSeasonSubmitting] = useState(false);
   const [seasonError, setSeasonError] = useState<string | null>(null);
 
+  // CSV Handlers
   const handleFile = async (file: File) => {
     if (!file) return;
     setUploading(true);
@@ -186,6 +207,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
       if (json.success) {
         setResult(json.data);
         await refreshSeasons();
+        await refreshStatuses();
         await fetchMediaStatus();
         if (onSyncComplete) onSyncComplete();
       } else {
@@ -230,6 +252,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
         setResult(null);
         setDbResult(null);
         await refreshSeasons();
+        await refreshStatuses();
         await fetchMediaStatus();
         alert("Base de datos SQLite reiniciada con éxito.");
         if (onSyncComplete) onSyncComplete();
@@ -276,6 +299,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
       if (json.success) {
         setDbResult(json.data);
         await refreshSeasons();
+        await refreshStatuses();
         await fetchMediaStatus();
         if (onSyncComplete) onSyncComplete();
       } else {
@@ -429,7 +453,6 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
       }
 
       await refreshSeasons();
-      // If creating new, automatically activate it
       if (!editingSeason && json.data?.id) {
         setActiveSeasonId(json.data.id);
       }
@@ -466,7 +489,6 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
     }
   };
 
-  // Helper to format date nicely
   const formatDateDisplay = (dateStr: string) => {
     try {
       const [y, m, d] = dateStr.split("-").map(Number);
@@ -482,7 +504,6 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
     return dateStr;
   };
 
-  // Helper to calculate days or duration
   const getSeasonDuration = (startStr: string, endStr: string | null) => {
     try {
       const start = new Date(startStr);
@@ -504,820 +525,874 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
   };
 
   return (
-    <div className="py-6 max-w-4xl mx-auto flex flex-col gap-8">
-      {/* 1. Header with Appearance & 3D Media shortcuts */}
-      <div className="p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2.5">
-            <SettingsIcon className="w-5 h-5 text-accent-light" />
-            <span>Configuración del Sistema</span>
-          </h2>
-          <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-            Actualiza tus datos de Hevy, define tus temporadas de entrenamiento para aislar tus marcas y personaliza la estética visual.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap self-start sm:self-center shrink-0">
-          <button
-            onClick={() => setShowMediaManager((prev) => !prev)}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-sm ${
-              showMediaManager
-                ? "bg-accent/15 border-accent/40 text-accent-light ring-1 ring-accent/20"
-                : "bg-zinc-900 border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
-            }`}
-            title="Editar y buscar carátulas/vídeos 3D de ejercicios"
-          >
-            <FilmIcon
-              className={`w-4 h-4 transition-transform duration-300 ${
-                showMediaManager ? "scale-110 text-accent-light" : "text-zinc-400"
-              }`}
-            />
-            <span>{showMediaManager ? "Ocultar Carátulas 3D" : "Carátulas & Vídeos 3D"}</span>
-          </button>
-
-          <button
-            onClick={() => setShowBiometrics((prev) => !prev)}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-sm ${
-              showBiometrics
-                ? "bg-accent/15 border-accent/40 text-accent-light ring-1 ring-accent/20"
-                : "bg-zinc-900 border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
-            }`}
-            title="Definir altura y edad para cálculos de BMI y bioimpedancia"
-          >
-            <UserIcon
-              className={`w-4 h-4 transition-transform duration-300 ${
-                showBiometrics ? "scale-110 text-accent-light" : "text-zinc-400"
-              }`}
-            />
-            <span>{showBiometrics ? "Ocultar Perfil Biométrico" : "Perfil Biométrico"}</span>
-          </button>
-
-          <button
-            onClick={() => setShowAppearance((prev) => !prev)}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-sm ${
-              showAppearance
-                ? "bg-accent/15 border-accent/40 text-accent-light ring-1 ring-accent/20"
-                : "bg-zinc-900 border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
-            }`}
-            title="Configurar temas y color secundario"
-          >
-            <SettingsIcon
-              className={`w-4 h-4 transition-transform duration-300 ${
-                showAppearance ? "rotate-90 text-accent-light" : "text-zinc-400"
-              }`}
-            />
-            <span>{showAppearance ? "Ocultar Apariencia" : "Personalizar Apariencia"}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Exercise Cover Art & 3D Media Manager */}
-      {showMediaManager && <ExerciseMediaManager />}
-
-      {/* Biometric Profile (Altura, Edad & BMI) */}
-      {showBiometrics && <BiometricProfileSettings />}
-
-      {/* Theme & Appearance Customizer */}
-      {showAppearance && <ThemeCustomizer />}
-
-      {/* 2. Conexiones Cloud & Integraciones (Hevy + Xiaomi) */}
-      <section className="flex flex-col gap-4">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-            <RefreshCwIcon className="w-4 h-4" />
-          </div>
+    <div className="py-6 max-w-4xl mx-auto flex flex-col gap-6">
+      {/* 1. Header con Título Principal y Sub-pestañas Modernas */}
+      <div className="flex flex-col gap-4">
+        <div className="p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h3 className="text-base font-bold text-zinc-100">
-              Conexiones Cloud & Integraciones
-            </h3>
-            <p className="text-xs text-zinc-400">
-              Gestiona tus accesos remotos y sincroniza entrenamientos y pesajes con 1 clic
+            <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2.5">
+              <SettingsIcon className="w-5 h-5 text-accent-light" />
+              <span>Configuración y Preferencias</span>
+            </h2>
+            <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+              Administra tus fuentes de datos, organiza tus etapas de entrenamiento, supervisa la multimedia 3D y personaliza tu experiencia.
             </p>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Tarjeta 1: Hevy */}
-          <div className="p-5 rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-950/20 via-zinc-900/40 to-zinc-900/60 backdrop-blur-md flex flex-col justify-between gap-4 shadow-lg">
-            <div className="flex items-start gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-b from-blue-500/20 to-blue-600/10 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0 shadow-md">
-                <ByteHevyLogo className="w-7 h-7" />
+          {/* Estado de sincronización rápido en la cabecera */}
+          <div className="flex items-center gap-2 flex-wrap self-start sm:self-center shrink-0">
+            {hevyConnected && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium shrink-0">
+                <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                <span>Hevy @{hevyUsername || "conectado"}</span>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="text-sm font-bold text-zinc-100">Hevy Cloud</h4>
-                  {hevyConnected ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      <CheckCircleIcon className="w-3 h-3" />
-                      Conectado {hevyUsername ? `@${hevyUsername}` : ""}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-blink-red" />
-                      Desconectado
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                  {hevyConnected
-                    ? `Última sinc: ${lastHevySync || "Reciente"}. Sincroniza entrenamientos, ejercicios y series.`
-                    : "Descarga automática de entrenamientos directamente a tu SQLite local."}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/80">
-              {hevyConnected ? (
-                <>
-                  <button
-                    onClick={triggerHevySync}
-                    disabled={isHevySyncing}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-md shadow-blue-500/20 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50"
-                  >
-                    <RefreshCwIcon className={`w-3.5 h-3.5 ${isHevySyncing ? "animate-spin" : ""}`} />
-                    <span>{isHevySyncing ? "Sincronizando..." : "Sincronizar Hevy"}</span>
-                  </button>
-                  <button
-                    onClick={() => setHevyModalOpen(true)}
-                    className="flex items-center gap-1.5 py-2.5 px-3 rounded-xl border border-zinc-700/80 bg-zinc-900/90 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 text-xs font-semibold transition-colors cursor-pointer"
-                    title="Configurar conexión con Hevy"
-                  >
-                    <SettingsIcon className="w-3.5 h-3.5 text-zinc-400" />
-                    <span>Ajustes</span>
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setHevyModalOpen(true)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-md shadow-blue-500/20 transition-all cursor-pointer active:scale-[0.98]"
-                >
-                  <UploadCloudIcon className="w-3.5 h-3.5" />
-                  <span>Conectar Hevy</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Tarjeta 2: Xiaomi */}
-          <div className="p-5 rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-950/20 via-zinc-900/40 to-zinc-900/60 backdrop-blur-md flex flex-col justify-between gap-4 shadow-lg">
-            <div className="flex items-start gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-b from-[#FF6900]/20 to-[#FF6900]/10 border border-[#FF6900]/30 flex items-center justify-center text-[#FF6900] shrink-0 shadow-md">
-                <ScaleIcon className="w-7 h-7" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="text-sm font-bold text-zinc-100">Xiaomi Mi Scale / Zepp</h4>
-                  {xiaomiConnected ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      <CheckCircleIcon className="w-3 h-3" />
-                      Conectado {xiaomiUserId ? `(${xiaomiUserId})` : ""}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-blink-red" />
-                      Desconectado
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                  {xiaomiConnected
-                    ? `Última sinc: ${lastXiaomiSync || "Reciente"}. Sincroniza peso, grasa corporal y composición.`
-                    : "Vincula tu báscula escaneando el código QR de Mi Home / Zepp Life."}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/80">
-              {xiaomiConnected ? (
-                <>
-                  <button
-                    onClick={triggerXiaomiSync}
-                    disabled={isXiaomiSyncing}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold bg-gradient-to-r from-orange-600 to-[#FF6900] hover:from-orange-500 hover:to-[#FF6900]/90 text-white shadow-md shadow-orange-500/20 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50"
-                  >
-                    <RefreshCwIcon className={`w-3.5 h-3.5 ${isXiaomiSyncing ? "animate-spin" : ""}`} />
-                    <span>{isXiaomiSyncing ? "Sincronizando..." : "Sincronizar Xiaomi"}</span>
-                  </button>
-                  <button
-                    onClick={() => setXiaomiModalOpen(true)}
-                    className="flex items-center gap-1.5 py-2.5 px-3 rounded-xl border border-zinc-700/80 bg-zinc-900/90 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 text-xs font-semibold transition-colors cursor-pointer"
-                    title="Configurar conexión con Xiaomi"
-                  >
-                    <SettingsIcon className="w-3.5 h-3.5 text-zinc-400" />
-                    <span>Ajustes</span>
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setXiaomiModalOpen(true)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-orange-600 to-[#FF6900] hover:from-orange-500 hover:to-[#FF6900]/90 text-white shadow-md shadow-orange-500/20 transition-all cursor-pointer active:scale-[0.98]"
-                >
-                  <QrCodeIcon className="w-3.5 h-3.5" />
-                  <span>Conectar Xiaomi (QR)</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. Sincronización Manual de Datos CSV */}
-      <section className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-accent/15 border border-accent/30 flex items-center justify-center text-accent-light">
-              <UploadCloudIcon className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-zinc-100">Importación Manual de Archivos (CSV)</h3>
-              <p className="text-xs text-zinc-400">
-                Alternativa manual si prefieres arrastrar y soltar un archivo .csv exportado de Hevy.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Drag & Drop Area */}
-        <div
-          onDragEnter={handleDrag}
-          onDragLeave={handleDrag}
-          onDragOver={handleDrag}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          className={`p-9 rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-            dragActive
-              ? "border-accent-light bg-accent/10 scale-[1.01]"
-              : "border-zinc-800 bg-zinc-900/30 hover:border-zinc-700 hover:bg-zinc-900/50 shadow-inner"
-          }`}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            className="hidden"
-            onChange={(e) => {
-              if (e.target.files && e.target.files[0]) {
-                handleFile(e.target.files[0]);
-              }
-            }}
-          />
-
-          <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-accent-light mb-3 shadow-md">
-            <UploadCloudIcon className="w-6 h-6" />
-          </div>
-
-          <h3 className="text-sm font-semibold text-zinc-200 mb-1">
-            {uploading ? "Procesando archivo CSV..." : "Haz clic o arrastra tu exportación de Hevy aquí"}
-          </h3>
-          <p className="text-xs text-zinc-500 max-w-sm">
-            Deduplicación automática por ID y fecha. Los datos existentes no se sobrescriben repetidamente.
-          </p>
-
-          {uploading && (
-            <div className="mt-4 flex items-center gap-2 text-xs font-mono text-accent-light">
-              <RefreshCwIcon className="w-4 h-4 animate-spin" />
-              <span>Parseando sesiones y deduplicando...</span>
-            </div>
-          )}
-        </div>
-
-        {/* Result feedback */}
-        {result && (
-          <div className="p-5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 flex flex-col gap-2">
-            <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold">
-              <CheckIcon className="w-5 h-5" />
-              <span>Sincronización completada exitosamente</span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-xs font-mono tabular-nums">
-              <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800">
-                <span className="text-zinc-500 block text-[10px] font-sans">Nuevos Entrenamientos</span>
-                <span className="text-base font-bold text-zinc-100">+{result.newWorkouts}</span>
-              </div>
-              <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800">
-                <span className="text-zinc-500 block text-[10px] font-sans">Entrenamientos Omitidos</span>
-                <span className="text-base font-bold text-zinc-400">{result.skippedWorkouts}</span>
-              </div>
-              <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800">
-                <span className="text-zinc-500 block text-[10px] font-sans">Nuevas Series</span>
-                <span className="text-base font-bold text-zinc-100">+{result.newSets}</span>
-              </div>
-              <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800">
-                <span className="text-zinc-500 block text-[10px] font-sans">Filas Leídas</span>
-                <span className="text-base font-bold text-zinc-400">{result.totalRows}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="p-4 rounded-2xl border border-red-500/30 bg-red-500/10 text-xs text-red-300">
-            <strong>Error de importación:</strong> {error}
-          </div>
-        )}
-      </section>
-
-      {/* 3. Below: Gestor de SEASONS (Temporadas de Entrenamiento) */}
-      <section className="flex flex-col gap-4 pt-2">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
-              <CalendarIcon className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-zinc-100">Gestor de Seasons</h3>
-              <p className="text-xs text-zinc-400">
-                Aísla tus etapas de entrenamiento para eliminar distorsiones de periodos de inactividad.
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={openNewSeasonModal}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-semibold text-xs shadow-md transition-all cursor-pointer self-start sm:self-center"
-          >
-            <PlusIcon className="w-4 h-4" />
-            <span>Nueva Season</span>
-          </button>
-        </div>
-
-        {/* Global/Historical Card */}
-        <div
-          className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-            !activeSeasonId || activeSeasonId === "all"
-              ? "bg-zinc-900/90 border-amber-500/40 ring-1 ring-amber-500/20 shadow-md"
-              : "bg-zinc-900/40 border-zinc-800 hover:border-zinc-700"
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center text-amber-400 shrink-0">
-              <TrophyIcon className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h4 className="text-sm font-bold text-zinc-100">Histórico Completo</h4>
-                {(!activeSeasonId || activeSeasonId === "all") && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    Activa
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                Muestra todos los entrenamientos y récords acumulados de toda tu vida deportiva.
-              </p>
-            </div>
-          </div>
-
-          {activeSeasonId && activeSeasonId !== "all" && (
-            <button
-              onClick={() => setActiveSeasonId("all")}
-              className="px-3.5 py-1.5 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 transition-colors cursor-pointer self-start sm:self-center shrink-0"
-            >
-              Activar Histórico
-            </button>
-          )}
-        </div>
-
-        {/* Seasons Cards Grid */}
-        {seasons.length === 0 ? (
-          <div className="p-8 rounded-2xl border border-zinc-800/80 bg-zinc-900/20 text-center flex flex-col items-center justify-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-zinc-800/60 flex items-center justify-center text-zinc-500">
-              <CalendarIcon className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold text-zinc-200">No hay seasons definidas todavía</h4>
-              <p className="text-xs text-zinc-400 max-w-md mt-1">
-                Crea seasons (por ejemplo: por años, etapas de preparación o bloques tras una pausa) para analizar tu progresión y récords de forma aislada.
-              </p>
-            </div>
-            <button
-              onClick={openNewSeasonModal}
-              className="mt-2 flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-medium text-zinc-200 transition-colors cursor-pointer"
-            >
-              <PlusIcon className="w-4 h-4 text-amber-400" />
-              <span>Crear mi primera season</span>
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {seasons.map((season) => {
-              const isActive = activeSeasonId === season.id;
-              const duration = getSeasonDuration(season.startDate, season.endDate);
-              const seasonColor = getSeasonColor(season);
-
-              return (
-                <div
-                  key={season.id}
-                  style={
-                    isActive
-                      ? {
-                          borderColor: hexToRgba(seasonColor, 0.45),
-                          backgroundColor: hexToRgba(seasonColor, 0.05),
-                          boxShadow: `0 0 20px ${hexToRgba(seasonColor, 0.12)}`,
-                        }
-                      : undefined
-                  }
-                  className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
-                    isActive
-                      ? "ring-1"
-                      : "bg-zinc-900/40 border-zinc-800 hover:border-zinc-700"
-                  }`}
-                >
-                  {/* Top info */}
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="w-3 h-3 rounded-full shrink-0 shadow-xs border border-white/10"
-                            style={{ backgroundColor: seasonColor }}
-                            title={`Color: ${seasonColor}`}
-                          />
-                          <h4 className="text-sm font-bold text-zinc-100 truncate">{season.name}</h4>
-                          {isActive && (
-                            <span
-                              className="px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0"
-                              style={{
-                                backgroundColor: hexToRgba(seasonColor, 0.18),
-                                color: seasonColor,
-                                borderColor: hexToRgba(seasonColor, 0.35),
-                              }}
-                            >
-                              Activa
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-zinc-400 mt-1 flex items-center gap-1.5 flex-wrap font-mono">
-                          <span>{formatDateDisplay(season.startDate)}</span>
-                          <span className="text-zinc-600">→</span>
-                          <span
-                            style={!season.endDate ? { color: seasonColor, fontWeight: 600 } : undefined}
-                          >
-                            {season.endDate ? formatDateDisplay(season.endDate) : "Actualidad"}
-                          </span>
-                          {duration && <span className="text-zinc-500 font-sans">({duration})</span>}
-                        </div>
-                      </div>
-
-                      {/* Workout count badge */}
-                      <div className="px-2.5 py-1 rounded-xl bg-zinc-800/80 border border-zinc-700/60 text-[11px] font-mono text-zinc-300 shrink-0 text-center">
-                        <span className="font-bold text-zinc-100">{season.workoutCount ?? 0}</span>
-                        <span className="text-zinc-500 text-[10px] block font-sans">entrenos</span>
-                      </div>
-                    </div>
-
-                    {season.description && (
-                      <p className="text-xs text-zinc-400 mt-2.5 line-clamp-2 leading-relaxed">
-                        {season.description}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Actions footer */}
-                  <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between gap-2">
-                    <div>
-                      {isActive ? (
-                        <span
-                          className="text-[11px] font-medium flex items-center gap-1.5"
-                          style={{ color: seasonColor }}
-                        >
-                          <span
-                            className="w-1.5 h-1.5 rounded-full animate-pulse"
-                            style={{ backgroundColor: seasonColor }}
-                          />
-                          Filtrando la app
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => setActiveSeasonId(season.id)}
-                          className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
-                        >
-                          Activar
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => openEditSeasonModal(season)}
-                        className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer"
-                        title="Editar temporada"
-                      >
-                        <EditIcon className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteSeason(season)}
-                        className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
-                        title="Eliminar temporada"
-                      >
-                        <TrashIcon className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* 4. Segundo Actualizador de Almacenamiento: Base de Datos SQLite (.db) y Sincronizador de Imágenes */}
-      <section className="flex flex-col gap-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-accent/15 border border-accent/30 flex items-center justify-center text-accent-light">
-              <DatabaseIcon className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-zinc-100">
-                Segundo Actualizador de Almacenamiento (Base de Datos SQLite .db)
-              </h3>
-              <p className="text-xs text-zinc-400">
-                Restaura un archivo <code className="text-zinc-300 font-mono">bytehevy.db</code> completo para migrar entre contenedores o descarga una copia de respaldo.
-              </p>
-            </div>
-          </div>
-
-          <a
-            href="/api/database/backup"
-            download
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-zinc-700 bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition-all cursor-pointer shadow-sm self-start sm:self-center shrink-0"
-            title="Descargar copia de seguridad actual de bytehevy.db"
-          >
-            <DownloadIcon className="w-4 h-4 text-accent-light" />
-            <span>Descargar Copia (.db)</span>
-          </a>
-        </div>
-
-        {/* Dropzone para .db */}
-        <div
-          onDragEnter={handleDbDrag}
-          onDragLeave={handleDbDrag}
-          onDragOver={handleDbDrag}
-          onDrop={handleDbDrop}
-          onClick={() => dbFileInputRef.current?.click()}
-          className={`p-9 rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-            dbDragActive
-              ? "border-accent-light bg-accent/10 scale-[1.01]"
-              : "border-zinc-800 bg-zinc-900/30 hover:border-zinc-700 hover:bg-zinc-900/50 shadow-inner"
-          }`}
-        >
-          <input
-            ref={dbFileInputRef}
-            type="file"
-            accept=".db,.sqlite,.sqlite3"
-            className="hidden"
-            onChange={(e) => {
-              if (e.target.files && e.target.files[0]) {
-                handleDbFile(e.target.files[0]);
-              }
-            }}
-          />
-
-          <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-accent-light mb-3 shadow-md">
-            <DatabaseIcon className="w-6 h-6" />
-          </div>
-
-          <h4 className="text-sm font-semibold text-zinc-200 mb-1">
-            {dbUploading
-              ? "Validando integridad y restaurando base de datos SQLite..."
-              : "Arrastra y suelta tu archivo .db aquí o haz clic para explorar"}
-          </h4>
-          <p className="text-xs text-zinc-500 max-w-sm">
-            Admite archivos SQLite 3 (<span className="text-zinc-400 font-mono">.db, .sqlite</span>). Se generará automáticamente un respaldo previo de tus datos.
-          </p>
-        </div>
-
-        {/* Error de restauración de DB */}
-        {dbError && (
-          <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-xs flex items-start gap-3">
-            <AlertTriangleIcon className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-red-200">Error en la restauración de la base de datos</p>
-              <p className="mt-0.5 text-red-300/90">{dbError}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Éxito de restauración de DB */}
-        {dbResult && (
-          <div className="p-5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-emerald-400 text-sm font-semibold">
-              <CheckCircleIcon className="w-4 h-4" />
-              <span>Base de datos SQLite restaurada correctamente ({dbResult.fileSizeFormatted})</span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center pt-1">
-              <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
-                <span className="block text-base font-bold text-zinc-100">{dbResult.workoutsCount}</span>
-                <span className="text-[11px] text-zinc-400 font-medium">Entrenamientos</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
-                <span className="block text-base font-bold text-zinc-100">{dbResult.exercisesCount}</span>
-                <span className="text-[11px] text-zinc-400 font-medium">Ejercicios</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
-                <span className="block text-base font-bold text-zinc-100">{dbResult.setsCount}</span>
-                <span className="text-[11px] text-zinc-400 font-medium">Series</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
-                <span className="block text-base font-bold text-zinc-100">{dbResult.seasonsCount}</span>
-                <span className="text-[11px] text-zinc-400 font-medium">Temporadas</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
-                <span className="block text-base font-bold text-zinc-100">{dbResult.goalsCount}</span>
-                <span className="text-[11px] text-zinc-400 font-medium">Objetivos</span>
-              </div>
-            </div>
-
-            {dbResult.mediaMissingCount > 0 ? (
-              <div className="mt-1 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <AlertTriangleIcon className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>
-                    <strong>Atención:</strong> {dbResult.mediaMissingCount} de los {dbResult.exercisesCount} ejercicios no tienen animación 3D en disco.
-                  </span>
-                </div>
-                <button
-                  onClick={handleRestoreMedia}
-                  disabled={mediaRestoring}
-                  className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-zinc-950 font-semibold text-xs transition-colors shrink-0 cursor-pointer disabled:opacity-50"
-                >
-                  {mediaRestoring ? "Descargando..." : "Descargar imágenes ahora"}
-                </button>
-              </div>
-            ) : (
-              <div className="mt-1 text-xs text-emerald-400/90 flex items-center gap-1.5">
-                <CheckIcon className="w-3.5 h-3.5" />
-                <span>Todas las animaciones 3D están verificadas y disponibles localmente ({dbResult.mediaPresentCount} ejercicios).</span>
+            )}
+            {xiaomiConnected && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-medium shrink-0">
+                <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                <span>Xiaomi Báscula</span>
               </div>
             )}
           </div>
-        )}
+        </div>
 
-        {/* Panel dedicado de Restauración y Sincronización de Imágenes 3D */}
-        <div className="p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        {/* Barra de Sub-pestañas */}
+        <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-zinc-900/70 border border-zinc-800/80 backdrop-blur-md overflow-x-auto">
+          <button
+            onClick={() => handleSubTabChange("datos")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              activeSubTab === "datos"
+                ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
+            }`}
+          >
+            <UploadCloudIcon className="w-4 h-4 text-accent-light" />
+            <span>Datos & Conexiones</span>
+          </button>
+
+          <button
+            onClick={() => handleSubTabChange("temporadas")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              activeSubTab === "temporadas"
+                ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
+            }`}
+          >
+            <CalendarIcon className="w-4 h-4 text-amber-400" />
+            <span>Temporadas (Seasons)</span>
+            {seasons.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-zinc-800/90 text-zinc-300 border border-zinc-700/60">
+                {seasons.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => handleSubTabChange("multimedia")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              activeSubTab === "multimedia"
+                ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
+            }`}
+          >
+            <FilmIcon className="w-4 h-4 text-blue-400" />
+            <span>Multimedia 3D</span>
+            {mediaStatus && mediaStatus.missingCount > 0 && (
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" title={`${mediaStatus.missingCount} pendientes`} />
+            )}
+          </button>
+
+          <button
+            onClick={() => handleSubTabChange("perfil")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              activeSubTab === "perfil"
+                ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
+            }`}
+          >
+            <UserIcon className="w-4 h-4 text-emerald-400" />
+            <span>Perfil & Apariencia</span>
+          </button>
+        </div>
+      </div>
+
+      {/* =========================================================================
+          SUB-TAB 1: DATOS Y CONEXIONES (CSV PRIMERO, LUEGO LAS CONEXIONES)
+         ========================================================================= */}
+      {activeSubTab === "datos" && (
+        <div className="flex flex-col gap-6 animate-in fade-in duration-150">
+          {/* 1. PRIMERO: Importador Manual de Archivos CSV */}
+          <section className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-accent/15 border border-accent/30 flex items-center justify-center text-accent-light shrink-0">
+                  <UploadCloudIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-zinc-100">1. Importación Manual de Archivos (CSV)</h3>
+                  <p className="text-xs text-zinc-400">
+                    Carga directa y sin conexión de tu archivo de exportación .csv de Hevy.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Drag & Drop Area */}
+            <div
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`p-9 rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+                dragActive
+                  ? "border-accent-light bg-accent/10 scale-[1.01]"
+                  : "border-zinc-800 bg-zinc-900/30 hover:border-zinc-700 hover:bg-zinc-900/50 shadow-inner"
+              }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    handleFile(e.target.files[0]);
+                  }
+                }}
+              />
+
+              <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-accent-light mb-3 shadow-md">
+                <UploadCloudIcon className="w-6 h-6" />
+              </div>
+
+              <h3 className="text-sm font-semibold text-zinc-200 mb-1">
+                {uploading ? "Procesando archivo CSV..." : "Haz clic o arrastra tu exportación de Hevy aquí"}
+              </h3>
+              <p className="text-xs text-zinc-500 max-w-sm">
+                Deduplicación automática por ID y fecha. Los datos existentes no se sobrescriben repetidamente.
+              </p>
+
+              {uploading && (
+                <div className="mt-4 flex items-center gap-2 text-xs font-mono text-accent-light">
+                  <RefreshCwIcon className="w-4 h-4 animate-spin" />
+                  <span>Parseando sesiones y deduplicando...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Result feedback */}
+            {result && (
+              <div className="p-5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold">
+                  <CheckIcon className="w-5 h-5" />
+                  <span>Sincronización completada exitosamente</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-xs font-mono tabular-nums">
+                  <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800">
+                    <span className="text-zinc-500 block text-[10px] font-sans">Nuevos Entrenamientos</span>
+                    <span className="text-base font-bold text-zinc-100">+{result.newWorkouts}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800">
+                    <span className="text-zinc-500 block text-[10px] font-sans">Entrenamientos Omitidos</span>
+                    <span className="text-base font-bold text-zinc-400">{result.skippedWorkouts}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800">
+                    <span className="text-zinc-500 block text-[10px] font-sans">Nuevas Series</span>
+                    <span className="text-base font-bold text-zinc-100">+{result.newSets}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800">
+                    <span className="text-zinc-500 block text-[10px] font-sans">Filas Leídas</span>
+                    <span className="text-base font-bold text-zinc-400">{result.totalRows}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div className="p-4 rounded-2xl border border-red-500/30 bg-red-500/10 text-xs text-red-300">
+                <strong>Error de importación:</strong> {error}
+              </div>
+            )}
+          </section>
+
+          {/* 2. LUEGO: Conexiones Cloud & Integraciones (Hevy + Xiaomi) */}
+          <section className="flex flex-col gap-4">
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700/80 flex items-center justify-center text-accent-light">
-                <PhotoIcon className="w-4 h-4" />
+              <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+                <RefreshCwIcon className="w-4 h-4" />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                  <span>Caché y Restauración de Imágenes 3D</span>
-                  {mediaStatus && (
-                    <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                        mediaStatus.missingCount === 0
-                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                          : "bg-amber-500/10 border-amber-500/30 text-amber-400"
-                      }`}
-                    >
-                      {mediaStatus.missingCount === 0
-                        ? "100% Sincronizado"
-                        : `${mediaStatus.missingCount} pendientes`}
-                    </span>
-                  )}
-                </h4>
-                <p className="text-xs text-zinc-400 mt-0.5">
-                  Verifica que las animaciones de <code className="text-zinc-300 font-mono">public/media/exercises/</code> coincidan con tus ejercicios o descárgalas desde el CDN si faltan o han cambiado.
+                <h3 className="text-base font-bold text-zinc-100">
+                  2. Conexiones Cloud & Integraciones
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  Gestiona tus accesos remotos y sincroniza entrenamientos y pesajes con 1 clic.
                 </p>
               </div>
             </div>
 
-            <button
-              onClick={fetchMediaStatus}
-              disabled={mediaLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 text-xs transition-colors cursor-pointer self-start sm:self-center shrink-0 disabled:opacity-50"
-              title="Auditar archivos multimedia en disco"
-            >
-              <RefreshCwIcon className={`w-3.5 h-3.5 ${mediaLoading ? "animate-spin" : ""}`} />
-              <span>Verificar Estado</span>
-            </button>
-          </div>
-
-          {/* Métricas de estado de medios */}
-          {mediaStatus && (
-            <div className="p-3.5 rounded-xl bg-zinc-950/50 border border-zinc-800/70 flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-4 flex-wrap">
-                <div>
-                  <span className="text-zinc-500 block text-[10px] uppercase tracking-wider font-semibold">Ejercicios en disco</span>
-                  <span className="font-semibold text-zinc-200">
-                    {mediaStatus.cachedCount} / {mediaStatus.totalExercises} listos
-                  </span>
-                </div>
-                <div className="w-px h-6 bg-zinc-800 hidden sm:block" />
-                <div>
-                  <span className="text-zinc-500 block text-[10px] uppercase tracking-wider font-semibold">Espacio en disco</span>
-                  <span className="font-semibold text-zinc-200">{mediaStatus.diskUsageFormatted}</span>
-                </div>
-                {mediaStatus.missingCount > 0 && (
-                  <>
-                    <div className="w-px h-6 bg-zinc-800 hidden sm:block" />
-                    <div>
-                      <span className="text-zinc-500 block text-[10px] uppercase tracking-wider font-semibold">Faltantes</span>
-                      <span className="font-semibold text-amber-400">{mediaStatus.missingCount} ejercicios</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Tarjeta 1: Hevy */}
+              <div className="p-5 rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-950/20 via-zinc-900/40 to-zinc-900/60 backdrop-blur-md flex flex-col justify-between gap-4 shadow-lg">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-b from-blue-500/20 to-blue-600/10 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0 shadow-md">
+                    <ByteHevyLogo className="w-7 h-7" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-sm font-bold text-zinc-100">Hevy Cloud</h4>
+                      {hevyConnected ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          <CheckCircleIcon className="w-3 h-3" />
+                          Conectado {hevyUsername ? `@${hevyUsername}` : ""}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700/60">
+                          Desconectado
+                        </span>
+                      )}
                     </div>
-                  </>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      {hevyConnected
+                        ? `Última sinc: ${lastHevySync || "Reciente"}. Descarga directa de entrenamientos sin subir archivos.`
+                        : "Conecta tu cuenta para sincronizar tus entrenamientos de Hevy con 1 clic."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/60 justify-end">
+                  {hevyConnected ? (
+                    <>
+                      <button
+                        onClick={triggerHevySync}
+                        disabled={isHevySyncing}
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-md shadow-blue-500/20 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50"
+                      >
+                        <RefreshCwIcon className={`w-3.5 h-3.5 ${isHevySyncing ? "animate-spin" : ""}`} />
+                        <span>{isHevySyncing ? "Sincronizando..." : "Sincronizar Hevy"}</span>
+                      </button>
+                      <button
+                        onClick={() => setHevyModalOpen(true)}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-700/80 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 text-xs font-semibold transition-colors cursor-pointer"
+                        title="Gestionar estado de conexión con Hevy"
+                      >
+                        <SettingsIcon className="w-3.5 h-3.5 text-zinc-400" />
+                        <span>Ajustes</span>
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setHevyModalOpen(true)}
+                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-md shadow-blue-500/20 transition-all cursor-pointer active:scale-[0.98]"
+                    >
+                      <UploadCloudIcon className="w-3.5 h-3.5" />
+                      <span>Conectar con Hevy</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Tarjeta 2: Xiaomi Mi Scale / Zepp */}
+              <div className="p-5 rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-950/20 via-zinc-900/40 to-zinc-900/60 backdrop-blur-md flex flex-col justify-between gap-4 shadow-lg">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-b from-[#FF6900]/20 to-[#FF6900]/10 border border-[#FF6900]/30 flex items-center justify-center text-[#FF6900] shrink-0 shadow-md">
+                    <ScaleIcon className="w-7 h-7" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-sm font-bold text-zinc-100">Xiaomi Mi Scale / Zepp</h4>
+                      {xiaomiConnected ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          <CheckCircleIcon className="w-3 h-3" />
+                          Conectado {xiaomiUserId ? `(${xiaomiUserId})` : ""}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700/60">
+                          Desconectado
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      {xiaomiConnected
+                        ? `Última sinc: ${lastXiaomiSync || "Reciente"}. Sincroniza peso, grasa corporal y bioimpedancia.`
+                        : "Inicia sesión con tu cuenta de Xiaomi o Zepp mediante código QR para sincronizar tu báscula."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/60 justify-end">
+                  {xiaomiConnected ? (
+                    <>
+                      <button
+                        onClick={triggerXiaomiSync}
+                        disabled={isXiaomiSyncing}
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#FF6900] hover:bg-[#e05d00] text-white shadow-md shadow-orange-500/20 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50"
+                      >
+                        <RefreshCwIcon className={`w-3.5 h-3.5 ${isXiaomiSyncing ? "animate-spin" : ""}`} />
+                        <span>{isXiaomiSyncing ? "Sincronizando..." : "Sincronizar Xiaomi"}</span>
+                      </button>
+                      <button
+                        onClick={() => setXiaomiModalOpen(true)}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-700/80 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 text-xs font-semibold transition-colors cursor-pointer"
+                        title="Configurar conexión con Xiaomi"
+                      >
+                        <SettingsIcon className="w-3.5 h-3.5 text-zinc-400" />
+                        <span>Ajustes</span>
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setXiaomiModalOpen(true)}
+                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#FF6900] hover:bg-[#e05d00] text-white shadow-md shadow-orange-500/20 transition-all cursor-pointer active:scale-[0.98]"
+                    >
+                      <QrCodeIcon className="w-3.5 h-3.5" />
+                      <span>Conectar Xiaomi (QR)</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 3. Copias de Seguridad y Base de Datos SQLite (.db) */}
+          <section className="flex flex-col gap-4 pt-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-accent/15 border border-accent/30 flex items-center justify-center text-accent-light shrink-0">
+                  <DatabaseIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-zinc-100">
+                    3. Base de Datos SQLite (.db) y Copias de Seguridad
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    Descarga una copia completa de tu archivo <code className="text-zinc-300 font-mono">bytehevy.db</code> o restaura un respaldo previo.
+                  </p>
+                </div>
+              </div>
+
+              <a
+                href="/api/database/backup"
+                download
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-zinc-700 bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition-all cursor-pointer shadow-sm self-start sm:self-center shrink-0"
+                title="Descargar copia de seguridad actual de bytehevy.db"
+              >
+                <DownloadIcon className="w-4 h-4 text-accent-light" />
+                <span>Descargar Copia (.db)</span>
+              </a>
+            </div>
+
+            {/* Dropzone para .db */}
+            <div
+              onDragEnter={handleDbDrag}
+              onDragLeave={handleDbDrag}
+              onDragOver={handleDbDrag}
+              onDrop={handleDbDrop}
+              onClick={() => dbFileInputRef.current?.click()}
+              className={`p-9 rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+                dbDragActive
+                  ? "border-accent-light bg-accent/10 scale-[1.01]"
+                  : "border-zinc-800 bg-zinc-900/30 hover:border-zinc-700 hover:bg-zinc-900/50 shadow-inner"
+              }`}
+            >
+              <input
+                ref={dbFileInputRef}
+                type="file"
+                accept=".db,.sqlite,.sqlite3"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    handleDbFile(e.target.files[0]);
+                  }
+                }}
+              />
+
+              <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-accent-light mb-3 shadow-md">
+                <DatabaseIcon className="w-6 h-6" />
+              </div>
+
+              <h4 className="text-sm font-semibold text-zinc-200 mb-1">
+                {dbUploading
+                  ? "Validando integridad y restaurando base de datos SQLite..."
+                  : "Arrastra y suelta tu archivo .db aquí o haz clic para explorar"}
+              </h4>
+              <p className="text-xs text-zinc-500 max-w-sm">
+                Admite archivos SQLite 3 (<span className="text-zinc-400 font-mono">.db, .sqlite</span>). Se generará automáticamente un respaldo previo de tus datos.
+              </p>
+            </div>
+
+            {/* Error de restauración de DB */}
+            {dbError && (
+              <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-xs flex items-start gap-3">
+                <AlertTriangleIcon className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-red-200">Error en la restauración de la base de datos</p>
+                  <p className="mt-0.5 text-red-300/90">{dbError}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Éxito de restauración de DB */}
+            {dbResult && (
+              <div className="p-5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 flex flex-col gap-3">
+                <div className="flex items-center gap-2 text-emerald-400 text-sm font-semibold">
+                  <CheckCircleIcon className="w-4 h-4" />
+                  <span>Base de datos SQLite restaurada correctamente ({dbResult.fileSizeFormatted})</span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center pt-1">
+                  <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
+                    <span className="block text-base font-bold text-zinc-100">{dbResult.workoutsCount}</span>
+                    <span className="text-[11px] text-zinc-400 font-medium">Entrenamientos</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
+                    <span className="block text-base font-bold text-zinc-100">{dbResult.exercisesCount}</span>
+                    <span className="text-[11px] text-zinc-400 font-medium">Ejercicios</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
+                    <span className="block text-base font-bold text-zinc-100">{dbResult.setsCount}</span>
+                    <span className="text-[11px] text-zinc-400 font-medium">Series</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
+                    <span className="block text-base font-bold text-zinc-100">{dbResult.seasonsCount}</span>
+                    <span className="text-[11px] text-zinc-400 font-medium">Temporadas</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
+                    <span className="block text-base font-bold text-zinc-100">{dbResult.goalsCount}</span>
+                    <span className="text-[11px] text-zinc-400 font-medium">Objetivos</span>
+                  </div>
+                </div>
+
+                {dbResult.mediaMissingCount > 0 ? (
+                  <div className="mt-1 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangleIcon className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>
+                        <strong>Atención:</strong> {dbResult.mediaMissingCount} de los {dbResult.exercisesCount} ejercicios no tienen animación 3D en disco.
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => handleSubTabChange("multimedia")}
+                      className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-zinc-950 font-semibold text-xs transition-colors shrink-0 cursor-pointer"
+                    >
+                      Ir a Multimedia 3D
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-1 text-xs text-emerald-400/90 flex items-center gap-1.5">
+                    <CheckIcon className="w-3.5 h-3.5" />
+                    <span>Todas las animaciones 3D están verificadas y disponibles localmente ({dbResult.mediaPresentCount} ejercicios).</span>
+                  </div>
                 )}
               </div>
+            )}
+          </section>
 
-              <div className="flex items-center gap-2">
-                <input
-                  type="file"
-                  ref={mediaFileInputRef}
-                  accept=".gif,.mp4,.webm,.png,.jpg,.jpeg,.webp"
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      handleCustomMediaUpload(e.target.files[0]);
-                    }
-                  }}
-                />
-                <button
-                  onClick={() => mediaFileInputRef.current?.click()}
-                  className="px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200 text-xs transition-colors cursor-pointer"
-                  title="Subir un archivo .gif o de vídeo local directamente"
-                >
-                  + Subir GIF local
-                </button>
-              </div>
+          {/* 4. Mantenimiento y Zona de Peligro */}
+          <div className="p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
+            <div>
+              <h4 className="text-sm font-semibold text-zinc-200">
+                Almacenamiento Local Autónomo
+              </h4>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Tus datos residen en <code className="text-zinc-300 font-mono">data/bytehevy.db</code> y los vídeos 3D en <code className="text-zinc-300 font-mono">public/media/exercises/</code>.
+              </p>
             </div>
-          )}
-
-          {/* Opciones y botón de acción */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-            <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={mediaForce}
-                onChange={(e) => setMediaForce(e.target.checked)}
-                className="rounded border-zinc-700 bg-zinc-800 text-accent focus:ring-accent/30"
-              />
-              <span>Forzar regeneración completa (re-descargar todas las imágenes desde CDN aunque ya existan)</span>
-            </label>
 
             <button
-              onClick={handleRestoreMedia}
-              disabled={mediaRestoring}
-              className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-accent hover:bg-accent-hover text-zinc-950 font-semibold text-xs transition-all shadow-md cursor-pointer self-start sm:self-center shrink-0 disabled:opacity-50"
+              onClick={handleClearDb}
+              disabled={clearing}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20 transition-colors cursor-pointer self-start sm:self-center disabled:opacity-50"
             >
-              <RefreshCwIcon className={`w-3.5 h-3.5 ${mediaRestoring ? "animate-spin" : ""}`} />
-              <span>
-                {mediaRestoring
-                  ? "Sincronizando imágenes 3D..."
-                  : mediaForce
-                  ? "Re-descargar Todo el Catálogo"
-                  : "Reparar y Sincronizar Imágenes"}
-              </span>
+              <TrashIcon className="w-4 h-4" />
+              <span>{clearing ? "Vaciando..." : "Vaciar entrenamientos"}</span>
             </button>
           </div>
+        </div>
+      )}
 
-          {/* Feedback de resultado de restauración de imágenes */}
-          {mediaResult && (
-            <div className="p-3.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-xs text-emerald-300 flex items-start gap-2.5">
-              <CheckIcon className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+      {/* =========================================================================
+          SUB-TAB 2: GESTOR DE TEMPORADAS (SEASONS)
+         ========================================================================= */}
+      {activeSubTab === "temporadas" && (
+        <section className="flex flex-col gap-4 animate-in fade-in duration-150">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                <CalendarIcon className="w-4 h-4" />
+              </div>
               <div>
-                <p className="font-semibold text-emerald-200">Sincronización de imágenes finalizada</p>
-                <p className="text-emerald-300/90 mt-0.5">
-                  {mediaResult.downloaded} imágenes descargadas/actualizadas, {mediaResult.alreadyValid} ya estaban listas ({mediaResult.diskUsageFormatted} en disco).
-                  {mediaResult.failed > 0 && ` (${mediaResult.failed} descargas pendientes por conexión)`}
+                <h3 className="text-base font-bold text-zinc-100">Gestor de Seasons (Temporadas)</h3>
+                <p className="text-xs text-zinc-400">
+                  Aísla tus etapas de entrenamiento para eliminar distorsiones de periodos de inactividad o comparar fases.
                 </p>
               </div>
             </div>
-          )}
 
-          {mediaError && (
-            <div className="p-3.5 rounded-xl border border-red-500/30 bg-red-500/10 text-xs text-red-300 flex items-start gap-2.5">
-              <AlertTriangleIcon className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <button
+              onClick={openNewSeasonModal}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-semibold text-xs shadow-md transition-all cursor-pointer self-start sm:self-center shrink-0"
+            >
+              <PlusIcon className="w-4 h-4" />
+              <span>Nueva Season</span>
+            </button>
+          </div>
+
+          {/* Global/Historical Card */}
+          <div
+            className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+              !activeSeasonId || activeSeasonId === "all"
+                ? "bg-zinc-900/90 border-amber-500/40 ring-1 ring-amber-500/20 shadow-md"
+                : "bg-zinc-900/40 border-zinc-800 hover:border-zinc-700"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center text-amber-400 shrink-0">
+                <TrophyIcon className="w-5 h-5" />
+              </div>
               <div>
-                <p className="font-semibold text-red-200">Error al sincronizar imágenes</p>
-                <p className="text-red-300/90 mt-0.5">{mediaError}</p>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-zinc-100">Histórico Completo</h4>
+                  {(!activeSeasonId || activeSeasonId === "all") && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      Activa
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Muestra todos los entrenamientos y récords acumulados de toda tu vida deportiva.
+                </p>
               </div>
             </div>
+
+            {activeSeasonId && activeSeasonId !== "all" && (
+              <button
+                onClick={() => setActiveSeasonId("all")}
+                className="px-3.5 py-1.5 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 transition-colors cursor-pointer self-start sm:self-center shrink-0"
+              >
+                Activar Histórico
+              </button>
+            )}
+          </div>
+
+          {/* Seasons Cards Grid */}
+          {seasons.length === 0 ? (
+            <div className="p-8 rounded-2xl border border-zinc-800/80 bg-zinc-900/20 text-center flex flex-col items-center justify-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-zinc-800/60 flex items-center justify-center text-zinc-500">
+                <CalendarIcon className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-zinc-200">No hay seasons definidas todavía</h4>
+                <p className="text-xs text-zinc-400 max-w-md mt-1">
+                  Crea seasons (por ejemplo: por años, etapas de volumen/definición o bloques tras una pausa) para analizar tu progresión y récords de forma aislada.
+                </p>
+              </div>
+              <button
+                onClick={openNewSeasonModal}
+                className="mt-2 flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-medium text-zinc-200 transition-colors cursor-pointer"
+              >
+                <PlusIcon className="w-4 h-4 text-amber-400" />
+                <span>Crear mi primera season</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {seasons.map((season) => {
+                const isActive = activeSeasonId === season.id;
+                const duration = getSeasonDuration(season.startDate, season.endDate);
+                const seasonColor = getSeasonColor(season);
+
+                return (
+                  <div
+                    key={season.id}
+                    style={
+                      isActive
+                        ? {
+                            borderColor: hexToRgba(seasonColor, 0.45),
+                            backgroundColor: hexToRgba(seasonColor, 0.05),
+                            boxShadow: `0 0 20px ${hexToRgba(seasonColor, 0.12)}`,
+                          }
+                        : undefined
+                    }
+                    className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                      isActive
+                        ? "ring-1"
+                        : "bg-zinc-900/40 border-zinc-800 hover:border-zinc-700"
+                    }`}
+                  >
+                    {/* Top info */}
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="w-3 h-3 rounded-full shrink-0 shadow-xs border border-white/10"
+                              style={{ backgroundColor: seasonColor }}
+                              title={`Color: ${seasonColor}`}
+                            />
+                            <h4 className="text-sm font-bold text-zinc-100 truncate">{season.name}</h4>
+                            {isActive && (
+                              <span
+                                className="px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0"
+                                style={{
+                                  backgroundColor: hexToRgba(seasonColor, 0.18),
+                                  color: seasonColor,
+                                  borderColor: hexToRgba(seasonColor, 0.35),
+                                }}
+                              >
+                                Activa
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-zinc-400 mt-1 flex items-center gap-1.5 flex-wrap font-mono">
+                            <span>{formatDateDisplay(season.startDate)}</span>
+                            <span className="text-zinc-600">→</span>
+                            <span
+                              style={!season.endDate ? { color: seasonColor, fontWeight: 600 } : undefined}
+                            >
+                              {season.endDate ? formatDateDisplay(season.endDate) : "Actualidad"}
+                            </span>
+                            {duration && <span className="text-zinc-500 font-sans">({duration})</span>}
+                          </div>
+                        </div>
+
+                        {/* Workout count badge */}
+                        <div className="px-2.5 py-1 rounded-xl bg-zinc-800/80 border border-zinc-700/60 text-[11px] font-mono text-zinc-300 shrink-0 text-center">
+                          <span className="font-bold text-zinc-100">{season.workoutCount ?? 0}</span>
+                          <span className="text-zinc-500 text-[10px] block font-sans">entrenos</span>
+                        </div>
+                      </div>
+
+                      {season.description && (
+                        <p className="text-xs text-zinc-400 mt-2.5 line-clamp-2 leading-relaxed">
+                          {season.description}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Actions footer */}
+                    <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between gap-2">
+                      <div>
+                        {isActive ? (
+                          <span
+                            className="text-[11px] font-medium flex items-center gap-1.5"
+                            style={{ color: seasonColor }}
+                          >
+                            <span
+                              className="w-1.5 h-1.5 rounded-full animate-pulse"
+                              style={{ backgroundColor: seasonColor }}
+                            />
+                            Filtrando la app
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => setActiveSeasonId(season.id)}
+                            className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
+                          >
+                            Activar
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => openEditSeasonModal(season)}
+                          className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer"
+                          title="Editar temporada"
+                        >
+                          <EditIcon className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSeason(season)}
+                          className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                          title="Eliminar temporada"
+                        >
+                          <TrashIcon className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
-        </div>
-      </section>
+        </section>
+      )}
 
-      {/* 5. Bottom: Maintenance Box */}
-      <div className="p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h4 className="text-sm font-semibold text-zinc-200">
-            Almacenamiento Local Autónomo
-          </h4>
-          <p className="text-xs text-zinc-400 mt-0.5">
-            Tus datos residen en <code className="text-zinc-300 font-mono">data/bytehevy.db</code> y los vídeos 3D en <code className="text-zinc-300 font-mono">public/media/exercises/</code>.
-          </p>
-        </div>
+      {/* =========================================================================
+          SUB-TAB 3: MULTIMEDIA 3D & CARÁTULAS
+         ========================================================================= */}
+      {activeSubTab === "multimedia" && (
+        <section className="flex flex-col gap-6 animate-in fade-in duration-150">
+          {/* Panel dedicado de Restauración y Auditoría de Caché */}
+          <div className="p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                  <PhotoIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                    <span>Caché y Restauración de Animaciones 3D</span>
+                    {mediaStatus && (
+                      <span
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                          mediaStatus.missingCount === 0
+                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                            : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                        }`}
+                      >
+                        {mediaStatus.missingCount === 0
+                          ? "100% Sincronizado"
+                          : `${mediaStatus.missingCount} pendientes`}
+                      </span>
+                    )}
+                  </h4>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Verifica que las animaciones de <code className="text-zinc-300 font-mono">public/media/exercises/</code> coincidan con tus ejercicios o descárgalas desde el CDN si faltan.
+                  </p>
+                </div>
+              </div>
 
-        <button
-          onClick={handleClearDb}
-          disabled={clearing}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20 transition-colors cursor-pointer self-start sm:self-center disabled:opacity-50"
-        >
-          <TrashIcon className="w-4 h-4" />
-          <span>{clearing ? "Vaciando..." : "Vaciar entrenamientos"}</span>
-        </button>
-      </div>
+              <button
+                onClick={fetchMediaStatus}
+                disabled={mediaLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 text-xs transition-colors cursor-pointer self-start sm:self-center shrink-0 disabled:opacity-50"
+                title="Auditar archivos multimedia en disco"
+              >
+                <RefreshCwIcon className={`w-3.5 h-3.5 ${mediaLoading ? "animate-spin" : ""}`} />
+                <span>Verificar Estado</span>
+              </button>
+            </div>
+
+            {/* Métricas de estado de medios */}
+            {mediaStatus && (
+              <div className="p-3.5 rounded-xl bg-zinc-950/50 border border-zinc-800/70 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div>
+                    <span className="text-zinc-500 block text-[10px] uppercase tracking-wider font-semibold">Ejercicios en disco</span>
+                    <span className="font-semibold text-zinc-200">
+                      {mediaStatus.cachedCount} / {mediaStatus.totalExercises} listos
+                    </span>
+                  </div>
+                  <div className="w-px h-6 bg-zinc-800 hidden sm:block" />
+                  <div>
+                    <span className="text-zinc-500 block text-[10px] uppercase tracking-wider font-semibold">Espacio en disco</span>
+                    <span className="font-semibold text-zinc-200">{mediaStatus.diskUsageFormatted}</span>
+                  </div>
+                  {mediaStatus.missingCount > 0 && (
+                    <>
+                      <div className="w-px h-6 bg-zinc-800 hidden sm:block" />
+                      <div>
+                        <span className="text-zinc-500 block text-[10px] uppercase tracking-wider font-semibold">Faltantes</span>
+                        <span className="font-semibold text-amber-400">{mediaStatus.missingCount} ejercicios</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    ref={mediaFileInputRef}
+                    accept=".gif,.mp4,.webm,.png,.jpg,.jpeg,.webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleCustomMediaUpload(e.target.files[0]);
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => mediaFileInputRef.current?.click()}
+                    className="px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200 text-xs transition-colors cursor-pointer"
+                    title="Subir un archivo .gif o de vídeo local directamente"
+                  >
+                    + Subir GIF local
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Opciones y botón de acción */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+              <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={mediaForce}
+                  onChange={(e) => setMediaForce(e.target.checked)}
+                  className="rounded border-zinc-700 bg-zinc-800 text-accent focus:ring-accent/30"
+                />
+                <span>Forzar regeneración completa (re-descargar todas las imágenes desde CDN)</span>
+              </label>
+
+              <button
+                onClick={handleRestoreMedia}
+                disabled={mediaRestoring}
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-accent hover:bg-accent-hover text-zinc-950 font-semibold text-xs transition-all shadow-md cursor-pointer self-start sm:self-center shrink-0 disabled:opacity-50"
+              >
+                <RefreshCwIcon className={`w-3.5 h-3.5 ${mediaRestoring ? "animate-spin" : ""}`} />
+                <span>
+                  {mediaRestoring
+                    ? "Sincronizando imágenes 3D..."
+                    : mediaForce
+                    ? "Re-descargar Todo el Catálogo"
+                    : "Reparar y Sincronizar Imágenes"}
+                </span>
+              </button>
+            </div>
+
+            {/* Feedback de resultado de restauración de imágenes */}
+            {mediaResult && (
+              <div className="p-3.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-xs text-emerald-300 flex items-start gap-2.5">
+                <CheckIcon className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-emerald-200">Sincronización de imágenes finalizada</p>
+                  <p className="text-emerald-300/90 mt-0.5">
+                    {mediaResult.downloaded} imágenes descargadas/actualizadas, {mediaResult.alreadyValid} ya estaban listas ({mediaResult.diskUsageFormatted} en disco).
+                    {mediaResult.failed > 0 && ` (${mediaResult.failed} descargas pendientes por conexión)`}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {mediaError && (
+              <div className="p-3.5 rounded-xl border border-red-500/30 bg-red-500/10 text-xs text-red-300 flex items-start gap-2.5">
+                <AlertTriangleIcon className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-red-200">Error al sincronizar imágenes</p>
+                  <p className="text-red-300/90 mt-0.5">{mediaError}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Gestor y buscador interactivo de carátulas 3D por ejercicio */}
+          <div>
+            <div className="mb-3">
+              <h4 className="text-sm font-bold text-zinc-200">Buscador y Personalizador de Carátulas</h4>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Elige qué animación o vídeo 3D se muestra para cada ejercicio de tu biblioteca.
+              </p>
+            </div>
+            <ExerciseMediaManager />
+          </div>
+        </section>
+      )}
+
+      {/* =========================================================================
+          SUB-TAB 4: PERFIL BIOMÉTRICO Y APARIENCIA
+         ========================================================================= */}
+      {activeSubTab === "perfil" && (
+        <section className="flex flex-col gap-6 animate-in fade-in duration-150">
+          {/* Biometric Profile (Altura, Edad & BMI) */}
+          <BiometricProfileSettings />
+
+          {/* Theme & Appearance Customizer */}
+          <ThemeCustomizer />
+        </section>
+      )}
 
       {/* Season Modal (Create / Edit) */}
       {isSeasonModalOpen && (
@@ -1529,4 +1604,3 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
     </div>
   );
 }
-
