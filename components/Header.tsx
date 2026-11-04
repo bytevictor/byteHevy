@@ -311,7 +311,7 @@ export function Header({
                 {/* Footer link to manage seasons */}
                 <div className="mt-1.5 pt-1.5 border-t border-zinc-800/80">
                   <Link
-                    href="/ajustes"
+                    href="/ajustes?tab=temporadas"
                     onClick={() => {
                       if (setActiveTab) setActiveTab("settings");
                       setDropdownOpen(false);
@@ -377,7 +377,7 @@ export function Header({
             type="button"
             onClick={triggerGlobalSync}
             disabled={isGlobalSyncing}
-            className="h-11 px-3 sm:px-3.5 rounded-full flex items-center gap-2 sm:gap-2.5 border shadow-md bg-zinc-900/90 border-zinc-800/80 hover:bg-zinc-850 hover:border-zinc-700/80 transition-all duration-200 cursor-pointer active:scale-[0.98] group relative"
+            className="w-11 h-11 rounded-full flex items-center justify-center border shadow-md bg-zinc-900/90 border-zinc-800/80 hover:bg-zinc-850 hover:border-zinc-700/80 transition-all duration-200 cursor-pointer active:scale-[0.98] group relative shrink-0"
             title={`Sincronización Cloud Global\n• Hevy: ${
               hevyConnected
                 ? `Conectado (@${hevyUsername || "usuario"})`
@@ -390,35 +390,32 @@ export function Header({
             aria-label="Sincronización Cloud Global"
           >
             <RefreshCwIcon
-              className={`w-4 h-4 shrink-0 transition-transform ${
+              className={`w-4.5 h-4.5 shrink-0 transition-transform ${
                 isGlobalSyncing
                   ? "animate-spin text-blue-400"
                   : "text-zinc-400 group-hover:text-zinc-200"
               }`}
             />
 
-            {/* Dos bolitas indicadoras de estado */}
-            <div className="flex items-center gap-1.5 pl-0.5">
-              {/* Bolita Hevy: Blanco potente si conectado, parpadeo fuerte en rojo si no */}
-              <span
-                className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
-                  hevyConnected
-                    ? "bg-white shadow-[0_0_8px_rgba(255,255,255,0.95),0_0_14px_rgba(255,255,255,0.4)]"
-                    : "bg-rose-500 animate-blink-red"
-                }`}
-                title={`Hevy: ${hevyConnected ? "Conectado" : "Desconectado"}`}
-              />
+            {/* Bolita Hevy: Esquina superior izquierda */}
+            <span
+              className={`absolute -top-0.5 -left-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-zinc-950 z-10 transition-all duration-300 pointer-events-none ${
+                hevyConnected
+                  ? "bg-white shadow-[0_0_8px_rgba(255,255,255,0.95),0_0_12px_rgba(255,255,255,0.4)]"
+                  : "bg-rose-500 animate-blink-red"
+              }`}
+              title={`Hevy: ${hevyConnected ? "Conectado" : "Desconectado"}`}
+            />
 
-              {/* Bolita Xiaomi: Naranja de Xiaomi si conectado, parpadeo fuerte en rojo si no */}
-              <span
-                className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
-                  xiaomiConnected
-                    ? "bg-[#FF6900] shadow-[0_0_8px_rgba(255,105,0,0.95),0_0_14px_rgba(255,105,0,0.4)]"
-                    : "bg-rose-500 animate-blink-red"
-                }`}
-                title={`Xiaomi: ${xiaomiConnected ? "Conectado" : "Desconectado"}`}
-              />
-            </div>
+            {/* Bolita Xiaomi: Esquina superior derecha */}
+            <span
+              className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-zinc-950 z-10 transition-all duration-300 pointer-events-none ${
+                xiaomiConnected
+                  ? "bg-[#FF6900] shadow-[0_0_8px_rgba(255,105,0,0.95),0_0_12px_rgba(255,105,0,0.4)]"
+                  : "bg-rose-500 animate-blink-red"
+              }`}
+              title={`Xiaomi: ${xiaomiConnected ? "Conectado" : "Desconectado"}`}
+            />
           </button>
 
           {/* Standalone Settings Button (Rightmost) */}
