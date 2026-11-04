@@ -399,9 +399,9 @@ export function Header({
 
             {/* Bolita Hevy: Esquina superior izquierda */}
             <span
-              className={`absolute -top-0.5 -left-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-zinc-950 z-10 transition-all duration-300 pointer-events-none ${
+              className={`absolute top-0.5 left-0.5 w-2 h-2 rounded-full ring-2 ring-zinc-950 z-10 transition-all duration-300 pointer-events-none ${
                 hevyConnected
-                  ? "bg-white shadow-[0_0_8px_rgba(255,255,255,0.95),0_0_12px_rgba(255,255,255,0.4)]"
+                  ? "bg-white shadow-[0_0_6px_rgba(255,255,255,0.95),0_0_10px_rgba(255,255,255,0.4)]"
                   : "bg-rose-500 animate-blink-red"
               }`}
               title={`Hevy: ${hevyConnected ? "Conectado" : "Desconectado"}`}
@@ -409,9 +409,9 @@ export function Header({
 
             {/* Bolita Xiaomi: Esquina superior derecha */}
             <span
-              className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-zinc-950 z-10 transition-all duration-300 pointer-events-none ${
+              className={`absolute top-0.5 right-0.5 w-2 h-2 rounded-full ring-2 ring-zinc-950 z-10 transition-all duration-300 pointer-events-none ${
                 xiaomiConnected
-                  ? "bg-[#FF6900] shadow-[0_0_8px_rgba(255,105,0,0.95),0_0_12px_rgba(255,105,0,0.4)]"
+                  ? "bg-[#FF6900] shadow-[0_0_6px_rgba(255,105,0,0.95),0_0_10px_rgba(255,105,0,0.4)]"
                   : "bg-rose-500 animate-blink-red"
               }`}
               title={`Xiaomi: ${xiaomiConnected ? "Conectado" : "Desconectado"}`}
