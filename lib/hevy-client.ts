@@ -15,7 +15,7 @@ const SESSION_FILE = path.join(SESSION_DIR, "hevy_session.json");
 
 /**
  * Convierte un array de entrenamientos devueltos por la API de Hevy
- * (tanto /workouts_batch interno como /v1/workouts oficial) al formato CSV estándar para su ingesta.
+ * (/workouts_batch) al formato CSV estándar para su ingesta.
  */
 function workoutsBatchToCsv(workouts: any[]): string {
   const headers = [
@@ -38,42 +38,29 @@ function workoutsBatchToCsv(workouts: any[]): string {
   const rows: string[] = [headers.map((h) => `"${h}"`).join(",")];
 
   for (const w of workouts) {
-    const title = (w.name || w.title || "Entrenamiento").trim();
-
-    let startDate = "";
-    if (typeof w.start_time === "number") {
-      startDate = new Date(w.start_time > 1e11 ? w.start_time : w.start_time * 1000).toISOString();
-    } else if (w.start_time) {
-      startDate = new Date(w.start_time).toISOString();
-    } else {
-      startDate = new Date().toISOString();
-    }
-
-    let endDate = startDate;
-    if (typeof w.end_time === "number") {
-      endDate = new Date(w.end_time > 1e11 ? w.end_time : w.end_time * 1000).toISOString();
-    } else if (w.end_time) {
-      endDate = new Date(w.end_time).toISOString();
-    }
-
+    const title = (w.name || "Entrenamiento").trim();
+    const startDate = new Date(w.start_time * 1000).toISOString();
+    const endDate = w.end_time
+      ? new Date(w.end_time * 1000).toISOString()
+      : startDate;
     const description = (w.description || "").trim();
 
     if (w.exercises && Array.isArray(w.exercises)) {
       for (const ex of w.exercises) {
-        const exTitle = (ex.title || ex.name || "Ejercicio").trim();
+        const exTitle = (ex.title || "Ejercicio").trim();
         const supersetId = ex.superset_id != null ? String(ex.superset_id) : "";
         const notes = (ex.notes || "").trim();
 
         if (ex.sets && Array.isArray(ex.sets)) {
           for (const s of ex.sets) {
             const setIndex = s.index != null ? s.index : 0;
-            const setType = s.type || s.indicator || "normal";
+            const setType = s.indicator || "normal";
             const weightKg = s.weight_kg != null ? s.weight_kg : "";
             const reps = s.reps != null ? s.reps : "";
             const distanceKm =
               s.distance_meters != null
                 ? (s.distance_meters / 1000).toFixed(2)
-                : (s.distance_km != null ? s.distance_km : "");
+                : "";
             const durationSec =
               s.duration_seconds != null ? s.duration_seconds : "";
             const rpe = s.rpe != null ? s.rpe : "";
@@ -106,52 +93,15 @@ function workoutsBatchToCsv(workouts: any[]): string {
 
 /**
  * Descarga todos los entrenamientos de la cuenta de Hevy usando el token
- * o API Key directamente mediante HTTP fetch. Soporta tanto la Developer API
- * oficial (/v1/workouts) como la API interna web (/workouts_batch).
+ * de acceso directamente contra la API interna de Hevy (/workouts_batch).
  */
 async function fetchAllWorkoutsViaApi(
   accessToken: string
 ): Promise<{ success: boolean; csvText?: string; error?: string; status?: number }> {
   try {
+    let lastIndex = 0;
     const allWorkouts: any[] = [];
 
-    // 1. Probar primero si es una Developer API Key oficial (GET /v1/workouts)
-    try {
-      const testDevRes = await fetch("https://api.hevyapp.com/v1/workouts?page=1&pageSize=10", {
-        headers: {
-          "api-key": accessToken,
-          Accept: "application/json",
-        },
-      });
-
-      if (testDevRes.ok) {
-        const firstPage = await testDevRes.json();
-        if (firstPage && Array.isArray(firstPage.workouts)) {
-          allWorkouts.push(...firstPage.workouts);
-        }
-        const pageCount = Number(firstPage.page_count) || 1;
-        for (let p = 2; p <= pageCount; p++) {
-          const pageRes = await fetch(`https://api.hevyapp.com/v1/workouts?page=${p}&pageSize=10`, {
-            headers: {
-              "api-key": accessToken,
-              Accept: "application/json",
-            },
-          });
-          if (pageRes.ok) {
-            const pageData = await pageRes.json();
-            if (pageData && Array.isArray(pageData.workouts)) {
-              allWorkouts.push(...pageData.workouts);
-            }
-          }
-        }
-
-        const csvText = workoutsBatchToCsv(allWorkouts);
-        return { success: true, csvText };
-      }
-    } catch {}
-
-    // 2. Si no es API Key oficial, usar el endpoint de Web App (/workouts_batch)
-    let lastIndex = 0;
     while (true) {
       const res = await fetch(
         `https://api.hevyapp.com/workouts_batch/${lastIndex}`,
@@ -165,7 +115,7 @@ async function fetchAllWorkoutsViaApi(
       );
 
       if (res.status === 401 || res.status === 403) {
-        return { success: false, status: res.status, error: "Token o API Key de acceso expirado o inválido" };
+        return { success: false, status: res.status, error: "Token de acceso expirado o inválido" };
       }
 
       if (!res.ok) {
@@ -182,6 +132,7 @@ async function fetchAllWorkoutsViaApi(
       }
 
       allWorkouts.push(...batch);
+      // Avanzar al siguiente índice
       const lastItem = batch[batch.length - 1];
       if (lastItem && typeof lastItem.index === "number") {
         lastIndex = lastItem.index + 1;
@@ -195,71 +146,6 @@ async function fetchAllWorkoutsViaApi(
   } catch (err: any) {
     return { success: false, error: err.message || "Error al conectar con la API de Hevy" };
   }
-}
-
-/**
- * Valida y guarda un token o Developer API Key de Hevy introducido directamente por el usuario.
- * No requiere navegador ni Playwright; funciona 100% en servidores headless/LXC.
- */
-export async function connectWithToken(token: string): Promise<{
-  success: boolean;
-  userId?: string;
-  username?: string;
-  error?: string;
-}> {
-  const cleanToken = token.trim();
-  if (!cleanToken) {
-    return { success: false, error: "El token o API Key no puede estar vacío." };
-  }
-
-  // 1. Probar como Developer API Key oficial (/v1/workouts)
-  try {
-    const devRes = await fetch("https://api.hevyapp.com/v1/workouts?page=1&pageSize=1", {
-      headers: {
-        "api-key": cleanToken,
-        Accept: "application/json",
-      },
-    });
-
-    if (devRes.ok) {
-      await saveHevyAuthTokens({
-        accessToken: cleanToken,
-        username: "Developer API",
-      });
-      return {
-        success: true,
-        username: "Developer API",
-      };
-    }
-  } catch {}
-
-  // 2. Probar como Bearer token web (/workouts_batch)
-  try {
-    const webRes = await fetch("https://api.hevyapp.com/workouts_batch/0", {
-      headers: {
-        authorization: `Bearer ${cleanToken}`,
-        "x-api-key": "shelobs_hevy_web",
-        "hevy-platform": "web",
-      },
-    });
-
-    if (webRes.ok) {
-      await saveHevyAuthTokens({
-        accessToken: cleanToken,
-        username: "Sesión Web",
-      });
-      return {
-        success: true,
-        username: "Sesión Web",
-      };
-    }
-  } catch {}
-
-  return {
-    success: false,
-    error:
-      "El token o API Key introducido no es válido o ha expirado. Por favor, verifica que lo hayas copiado correctamente desde la app de Hevy (Ajustes ➔ Developer API) o hevy.com.",
-  };
 }
 
 /**
@@ -279,32 +165,14 @@ export async function launchHevyLogin(): Promise<{
 
   let browser: Browser | null = null;
   try {
-    try {
-      browser = await chromium.launch({
-        headless: false,
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-        ],
-      });
-    } catch (launchErr: any) {
-      const msg = String(launchErr?.message || launchErr || "");
-      if (
-        msg.includes("Executable doesn't exist") ||
-        msg.includes("playwright install") ||
-        msg.includes("Target closed") ||
-        msg.includes("Missing X server") ||
-        msg.includes("DISPLAY")
-      ) {
-        return {
-          success: false,
-          error:
-            "En este entorno de servidor (despliegue headless/LXC) no hay un navegador gráfico disponible para inicio de sesión interactivo. Por favor, introduce tu API Key oficial de Hevy (en tu app móvil: Ajustes ➔ Developer API) o introduce tu token directamente.",
-        };
-      }
-      throw launchErr;
-    }
+    browser = await chromium.launch({
+      headless: false,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+      ],
+    });
 
     const context = await browser.newContext({
       acceptDownloads: true,
@@ -458,24 +326,14 @@ export async function syncHevyWorkouts(): Promise<{
   if (apiRes.status === 401 && fs.existsSync(SESSION_FILE)) {
     let browser: Browser | null = null;
     try {
-      try {
-        browser = await chromium.launch({
-          headless: true,
-          args: [
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-dev-shm-usage",
-          ],
-        });
-      } catch {
-        // En servidores sin Playwright instalado, marcar como expirado para reconexión con API Key
-        await disconnectHevyAuth();
-        return {
-          success: false,
-          error:
-            "La sesión o API Key de Hevy ha expirado. Por favor, renueva tu API Key o Token desde los ajustes de Hevy.",
-        };
-      }
+      browser = await chromium.launch({
+        headless: true,
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+        ],
+      });
 
       const context = await browser.newContext({
         storageState: SESSION_FILE,

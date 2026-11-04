@@ -37,7 +37,6 @@ export function HevySyncModal({
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [tokenInput, setTokenInput] = useState("");
   const [feedback, setFeedback] = useState<{
     type: "success" | "error" | "info";
     text: string;
@@ -63,74 +62,19 @@ export function HevySyncModal({
     if (isOpen) {
       fetchStatus();
       setFeedback(null);
-      setTokenInput("");
     }
   }, [isOpen, fetchStatus]);
 
-  // Vincular cuenta mediante API Key o Token directamente (recomendado para producción / servidor LXC)
-  const handleConnectWithToken = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const clean = tokenInput.trim();
-    if (!clean) {
-      setFeedback({
-        type: "error",
-        text: "Por favor, introduce tu API Key o Token de Hevy.",
-      });
-      return;
-    }
-
+  // Iniciar flujo de inicio de sesión oficial
+  const handleConnect = async () => {
     setIsConnecting(true);
     setFeedback({
       type: "info",
-      text: "Comprobando credenciales con los servidores de Hevy...",
+      text: "Se ha abierto una ventana de Hevy. Inicia sesión para vincular tu cuenta...",
     });
 
     try {
-      const res = await fetch("/api/hevy/auth/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: clean }),
-      });
-      const data = await res.json();
-
-      if (data.success) {
-        setFeedback({
-          type: "success",
-          text: `¡Cuenta vinculada correctamente${data.username ? ` (${data.username})` : ""}! Ya puedes sincronizar tus entrenamientos.`,
-        });
-        setTokenInput("");
-        await fetchStatus();
-        if (onSyncSuccess) onSyncSuccess();
-      } else {
-        setFeedback({
-          type: "error",
-          text: data.error || "No se pudo vincular la cuenta. Verifica que la clave sea correcta.",
-        });
-      }
-    } catch (err: any) {
-      setFeedback({
-        type: "error",
-        text: `Error de conexión: ${err.message || err}`,
-      });
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  // Iniciar flujo interactivo por navegador Playwright (solo funciona en entorno local de escritorio)
-  const handleConnectBrowser = async () => {
-    setIsConnecting(true);
-    setFeedback({
-      type: "info",
-      text: "Abriendo navegador para iniciar sesión en Hevy...",
-    });
-
-    try {
-      const res = await fetch("/api/hevy/auth/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
+      const res = await fetch("/api/hevy/auth/start", { method: "POST" });
       const data = await res.json();
 
       if (data.success) {
@@ -139,7 +83,6 @@ export function HevySyncModal({
           text: `¡Cuenta vinculada correctamente${data.username ? ` (@${data.username})` : ""}! Ya puedes sincronizar tus entrenamientos.`,
         });
         await fetchStatus();
-        if (onSyncSuccess) onSyncSuccess();
       } else {
         setFeedback({
           type: "error",
@@ -286,7 +229,7 @@ export function HevySyncModal({
             </div>
           ) : (
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Introduce tu <strong>API Key oficial de Hevy</strong> (disponible gratis en la app de Hevy &gt; Ajustes &gt; Developer API) o tu token de sesión web para sincronizar tus entrenamientos en 1 clic.
+              No hay sesión guardada. Al hacer clic en conectar, se abrirá la ventana oficial de Hevy para que inicies sesión. Tu contraseña nunca se guardará en tu máquina.
             </p>
           )}
         </div>
@@ -336,64 +279,23 @@ export function HevySyncModal({
               </button>
             </div>
           ) : (
-            <div className="flex flex-col gap-3.5">
-              <form onSubmit={handleConnectWithToken} className="flex flex-col gap-2">
-                <label className="text-xs font-semibold text-zinc-200 flex items-center justify-between">
-                  <span>API Key Oficial o Token de Hevy:</span>
-                  <span className="text-[10px] text-blue-400 font-mono">Recomendado</span>
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="password"
-                    placeholder="Pega aquí tu API Key de Hevy..."
-                    value={tokenInput}
-                    onChange={(e) => setTokenInput(e.target.value)}
-                    disabled={isConnecting}
-                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isConnecting || !tokenInput.trim()}
-                    className="px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-500/20 shrink-0"
-                  >
-                    {isConnecting ? (
-                      <RefreshCwIcon className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <span>Vincular</span>
-                    )}
-                  </button>
-                </div>
-              </form>
-
-              {/* Instructions Box */}
-              <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-200 flex flex-col gap-1.5">
-                <div className="font-semibold flex items-center gap-1.5 text-blue-300">
-                  <InfoIcon className="w-4 h-4 text-blue-400 shrink-0" />
-                  <span>¿Cómo obtener tu clave en 3 pasos?</span>
-                </div>
-                <ol className="list-decimal list-inside space-y-1 text-zinc-300 pl-0.5 text-[11px] leading-relaxed">
-                  <li>Abre la app de <strong>Hevy</strong> en tu teléfono.</li>
-                  <li>Ve a tu perfil ➔ <strong>Ajustes</strong> (engranaje ⚙️) ➔ <strong>Developer API</strong>.</li>
-                  <li>Toca en <strong>Generar API Key</strong> (o cópiala) y pégala arriba.</li>
-                </ol>
-                <span className="text-[10px] text-zinc-400 italic pt-1 border-t border-blue-500/20">
-                  💡 También puedes pegar tu token de sesión web de hevy.com si prefieres.
-                </span>
-              </div>
-
-              {/* Secondary Option: Local Browser Playwright */}
-              <div className="pt-1 border-t border-zinc-800/80 flex flex-col items-center">
-                <button
-                  type="button"
-                  onClick={handleConnectBrowser}
-                  disabled={isConnecting}
-                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1.5 cursor-pointer py-1"
-                >
-                  <ExternalLinkIcon className="w-3.5 h-3.5" />
-                  <span>O iniciar sesión abriendo ventana de navegador (solo modo local)</span>
-                </button>
-              </div>
-            </div>
+            <button
+              onClick={handleConnect}
+              disabled={isConnecting}
+              className="w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isConnecting ? (
+                <>
+                  <RefreshCwIcon className="w-4 h-4 animate-spin" />
+                  <span>Esperando inicio de sesión...</span>
+                </>
+              ) : (
+                <>
+                  <ExternalLinkIcon className="w-4 h-4" />
+                  <span>Conectar con Hevy</span>
+                </>
+              )}
+            </button>
           )}
 
           <div className="flex items-center justify-between text-[11px] text-zinc-500 px-1">

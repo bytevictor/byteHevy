@@ -1,33 +1,8 @@
 import { NextResponse } from "next/server";
-import { launchHevyLogin, connectWithToken } from "@/lib/hevy-client";
+import { launchHevyLogin } from "@/lib/hevy-client";
 
-export async function POST(request: Request) {
+export async function POST() {
   try {
-    const body = await request.json().catch(() => ({}));
-
-    // Si el usuario proporcionó un token o Developer API Key directamente
-    if (body.token && typeof body.token === "string" && body.token.trim()) {
-      const result = await connectWithToken(body.token);
-
-      if (!result.success) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: result.error || "Token o API Key inválido para Hevy",
-          },
-          { status: 400 }
-        );
-      }
-
-      return NextResponse.json({
-        success: true,
-        user_id: result.userId,
-        username: result.username,
-        message: "¡Conectado exitosamente con Hevy!",
-      });
-    }
-
-    // De lo contrario, intentar inicio de sesión por navegador (entorno local)
     const result = await launchHevyLogin();
 
     if (!result.success) {
