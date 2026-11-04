@@ -7,6 +7,7 @@ import { WeightTab } from "@/components/WeightTab";
 import { GoalsTab } from "@/components/GoalsTab";
 import { JournalTab } from "@/components/JournalTab";
 import { SettingsTab } from "@/components/SettingsTab";
+import { HevySyncModal } from "@/components/HevySyncModal";
 import { ExerciseSummary } from "@/lib/actions";
 import { SeasonProvider, useSeason } from "@/lib/season-context";
 import { UserProfileProvider } from "@/lib/user-profile-context";
@@ -36,8 +37,21 @@ function AppContent() {
       const journalJson = await journalRes.json();
       if (exJson.success && journalJson.success) {
         setExercises(exJson.data);
+
+        // Contar el número de ejercicios distintos realizados en las sesiones seleccionadas (temporada o histórico)
+        const uniqueExerciseIds = new Set<string>();
+        if (Array.isArray(journalJson.data)) {
+          for (const w of journalJson.data) {
+            if (Array.isArray(w.exercises)) {
+              for (const ex of w.exercises) {
+                if (ex.id) uniqueExerciseIds.add(String(ex.id));
+              }
+            }
+          }
+        }
+
         setStats({
-          exercisesCount: exJson.data.length,
+          exercisesCount: uniqueExerciseIds.size,
           workoutsCount: journalJson.data.length,
         });
       }
@@ -52,6 +66,8 @@ function AppContent() {
     loadStats();
   }, [activeSeasonId]);
 
+  const [hevyModalOpen, setHevyModalOpen] = useState(false);
+
   return (
     <div className="min-h-screen bg-[var(--background)] text-zinc-100 flex flex-col font-sans transition-colors duration-300 selection:bg-zinc-800 selection:text-accent-light">
       <Header
@@ -59,6 +75,7 @@ function AppContent() {
         setActiveTab={setActiveTab}
         stats={stats.workoutsCount > 0 ? stats : undefined}
         loadingStats={loadingStats}
+        onOpenHevySync={() => setHevyModalOpen(true)}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6">
@@ -83,6 +100,13 @@ function AppContent() {
           />
         )}
       </main>
+
+      {/* Hevy Cloud Sync Modal accesible desde el Header en cualquier pestaña */}
+      <HevySyncModal
+        isOpen={hevyModalOpen}
+        onClose={() => setHevyModalOpen(false)}
+        onSyncSuccess={loadStats}
+      />
 
       <footer className="border-t border-zinc-900/80 py-8 text-center text-xs text-zinc-500 font-normal">
         <span className="font-semibold text-zinc-400">byteHevy</span> · Visualizador de entrenamientos y progresión

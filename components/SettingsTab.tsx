@@ -20,7 +20,9 @@ import {
   AlertTriangleIcon,
   PhotoIcon,
   UserIcon,
+  ByteHevyLogo,
 } from "./Icons";
+import { HevySyncModal } from "./HevySyncModal";
 import { ThemeCustomizer } from "./ThemeCustomizer";
 import { ExerciseMediaManager } from "./ExerciseMediaManager";
 import { BiometricProfileSettings } from "./BiometricProfileSettings";
@@ -98,6 +100,63 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const mediaFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Hevy Cloud Sync state
+  const [hevyModalOpen, setHevyModalOpen] = useState(false);
+  const [hevyStatus, setHevyStatus] = useState<{
+    is_connected: boolean;
+    username: string | null;
+    user_id: string | null;
+    last_sync: string | null;
+  } | null>(null);
+  const [hevySyncing, setHevySyncing] = useState(false);
+  const [hevyFeedback, setHevyFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const fetchHevyStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/hevy/status");
+      if (res.ok) {
+        const data = await res.json();
+        setHevyStatus(data);
+      }
+    } catch (e) {
+      console.error("Error al obtener estado de Hevy:", e);
+    }
+  }, []);
+
+  const handleQuickHevySync = async () => {
+    if (!hevyStatus?.is_connected) {
+      setHevyModalOpen(true);
+      return;
+    }
+    setHevySyncing(true);
+    setHevyFeedback(null);
+    try {
+      const res = await fetch("/api/hevy/sync", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        const count = data.result?.newWorkouts || 0;
+        setHevyFeedback({
+          type: "success",
+          text: `¡Sincronizado! ${count > 0 ? `${count} nuevos entrenamientos importados.` : "Base de datos al día con Hevy."}`,
+        });
+        await fetchHevyStatus();
+        if (onSyncComplete) onSyncComplete();
+      } else {
+        setHevyFeedback({
+          type: "error",
+          text: data.error || "Error al sincronizar con Hevy.",
+        });
+      }
+    } catch (e: any) {
+      setHevyFeedback({
+        type: "error",
+        text: e.message || "Error de conexión al sincronizar con Hevy.",
+      });
+    } finally {
+      setHevySyncing(false);
+    }
+  };
+
   const fetchMediaStatus = useCallback(async () => {
     setMediaLoading(true);
     try {
@@ -115,6 +174,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
 
   useEffect(() => {
     let isMounted = true;
+    fetchHevyStatus();
     fetch("/api/exercise-media/restore")
       .then((res) => res.json())
       .then((json) => {
@@ -128,7 +188,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [fetchHevyStatus]);
   const [seasonForm, setSeasonForm] = useState<{
     name: string;
     startDate: string;
@@ -558,7 +618,86 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
       {/* Theme & Appearance Customizer */}
       {showAppearance && <ThemeCustomizer />}
 
-      {/* 2. Top / Central Section: Sincronización y Actualizador de Datos CSV */}
+      {/* 2. Top / Central Section: Sincronización Automática con Hevy (Cloud Sync) */}
+      <section className="flex flex-col gap-4">
+        <div className="p-5 rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-950/20 via-zinc-900/40 to-zinc-900/60 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-b from-blue-500/20 to-blue-600/10 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0 shadow-md">
+              <ByteHevyLogo className="w-7 h-7" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-zinc-100">Sincronización Automática con Hevy</h3>
+                {hevyStatus?.is_connected ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <CheckCircleIcon className="w-3 h-3" />
+                    Conectado {hevyStatus.username ? `@${hevyStatus.username}` : ""}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700/60">
+                    Desconectado
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                {hevyStatus?.is_connected
+                  ? `Última sincronización: ${hevyStatus.last_sync || "Reciente"}. Descarga directa sin subir archivos manualmente.`
+                  : "Conecta tu cuenta para sincronizar con 1 clic sin guardar contraseñas."}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 self-start sm:self-center shrink-0">
+            {hevyStatus?.is_connected ? (
+              <>
+                <button
+                  onClick={handleQuickHevySync}
+                  disabled={hevySyncing}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-md shadow-blue-500/20 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50"
+                >
+                  <RefreshCwIcon className={`w-3.5 h-3.5 ${hevySyncing ? "animate-spin" : ""}`} />
+                  <span>{hevySyncing ? "Sincronizando..." : "Sincronizar Hevy"}</span>
+                </button>
+                <button
+                  onClick={() => setHevyModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-zinc-700/80 bg-zinc-900/90 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 text-xs font-semibold transition-colors cursor-pointer"
+                  title="Gestionar estado de conexión con Hevy"
+                >
+                  <SettingsIcon className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Ajustes</span>
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setHevyModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-md shadow-blue-500/20 transition-all cursor-pointer active:scale-[0.98]"
+              >
+                <UploadCloudIcon className="w-3.5 h-3.5" />
+                <span>Conectar con Hevy</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {hevyFeedback && (
+          <div
+            className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in duration-150 ${
+              hevyFeedback.type === "success"
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                : "bg-rose-500/10 border-rose-500/30 text-rose-300"
+            }`}
+          >
+            {hevyFeedback.type === "success" ? (
+              <CheckCircleIcon className="w-4 h-4 shrink-0 text-emerald-400" />
+            ) : (
+              <AlertTriangleIcon className="w-4 h-4 shrink-0 text-rose-400" />
+            )}
+            <span>{hevyFeedback.text}</span>
+          </div>
+        )}
+      </section>
+
+      {/* 3. Sincronización Manual de Datos CSV */}
       <section className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -566,9 +705,9 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
               <UploadCloudIcon className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-zinc-100">Actualizador de Datos (CSV)</h3>
+              <h3 className="text-base font-bold text-zinc-100">Importación Manual de Archivos (CSV)</h3>
               <p className="text-xs text-zinc-400">
-                Sube tu exportación periódica de la app oficial de Hevy para incorporar nuevos entrenamientos.
+                Alternativa manual si prefieres arrastrar y soltar un archivo .csv exportado de Hevy.
               </p>
             </div>
           </div>
@@ -1363,6 +1502,16 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
           </div>
         </div>
       )}
+
+      {/* Hevy Cloud Sync Modal */}
+      <HevySyncModal
+        isOpen={hevyModalOpen}
+        onClose={() => setHevyModalOpen(false)}
+        onSyncSuccess={() => {
+          fetchHevyStatus();
+          if (onSyncComplete) onSyncComplete();
+        }}
+      />
     </div>
   );
 }

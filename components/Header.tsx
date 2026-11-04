@@ -27,9 +27,16 @@ interface HeaderProps {
     exercisesCount: number;
   };
   loadingStats?: boolean;
+  onOpenHevySync?: () => void;
 }
 
-export function Header({ activeTab, setActiveTab, stats, loadingStats = false }: HeaderProps) {
+export function Header({
+  activeTab,
+  setActiveTab,
+  stats,
+  loadingStats = false,
+  onOpenHevySync,
+}: HeaderProps) {
   const { seasons, activeSeasonId, activeSeason, setActiveSeasonId } = useSeason();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -329,12 +336,24 @@ export function Header({ activeTab, setActiveTab, stats, loadingStats = false }:
             <div className="hidden lg:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-900/60 border border-zinc-800/80 text-xs text-zinc-400 shadow-sm animate-in fade-in duration-200">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="font-medium text-zinc-300">{stats.exercisesCount}</span>
-              <span>ejercicios</span>
+              <span>{stats.exercisesCount === 1 ? "ejercicio" : "ejercicios"}</span>
               <span className="text-zinc-600">•</span>
               <span className="font-medium text-zinc-300">{stats.workoutsCount}</span>
-              <span>sesiones</span>
+              <span>{stats.workoutsCount === 1 ? "sesión" : "sesiones"}</span>
             </div>
           ) : null}
+
+          {/* Hevy Cloud Sync Button */}
+          {onOpenHevySync && (
+            <button
+              onClick={onOpenHevySync}
+              title="Sincronizar con Hevy (Cloud)"
+              aria-label="Sincronizar con Hevy"
+              className="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer border shadow-md bg-zinc-900/90 border-zinc-800/80 text-zinc-400 hover:text-blue-400 hover:border-blue-500/40 hover:bg-blue-500/10 group"
+            >
+              <ByteHevyLogo className="w-5 h-5 transition-transform group-hover:scale-105" />
+            </button>
+          )}
 
           {/* Standalone Settings Button (Rightmost) */}
           <button
