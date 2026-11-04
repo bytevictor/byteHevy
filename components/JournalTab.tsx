@@ -117,7 +117,7 @@ export function JournalTab() {
   }, [workouts]);
 
   return (
-    <div className="py-6 max-w-5xl mx-auto flex flex-col gap-6">
+    <div className="py-6 max-w-7xl mx-auto flex flex-col gap-6">
       {/* 1. Header with View Mode Switcher and Search */}
       <div className="flex flex-col gap-4 p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

@@ -88,7 +88,7 @@ export function JournalHeatmap({
   const [selectedYear, setSelectedYear] = useState<number>(availableYears[0]);
 
   // Generate 52/53 weeks matrix for the selected year
-  const { weeks, monthLabels, yearStats, maxSetsDay, weekdayDistribution } = useMemo(() => {
+  const { weeks, monthBlocks, yearStats, maxSetsDay, weekdayDistribution } = useMemo(() => {
     const startDate = new Date(selectedYear, 0, 1);
     const endDate = new Date(selectedYear, 11, 31);
 
@@ -108,11 +108,9 @@ export function JournalHeatmap({
       }[];
     }[] = [];
 
-    const monthCols: { label: string; weekIndex: number }[] = [];
     let currentWeek: (typeof generatedWeeks)[0]["days"] = [];
     const iterDate = new Date(calendarStart);
     let weekIdx = 0;
-    let lastMonth = -1;
 
     let totalYearWorkouts = 0;
     let totalYearSets = 0;
@@ -154,13 +152,6 @@ export function JournalHeatmap({
             };
           }
         }
-
-        // Track month label position
-        const monthNum = iterDate.getMonth();
-        if (monthNum !== lastMonth && iterDate.getDate() <= 7) {
-          monthCols.push({ label: MONTH_SHORT_NAMES[monthNum], weekIndex: weekIdx });
-          lastMonth = monthNum;
-        }
       }
 
       currentWeek.push({
@@ -182,9 +173,45 @@ export function JournalHeatmap({
       if (iterDate > endDate && currentWeek.length === 0) break;
     }
 
+    // Determinar la semana de inicio de cada mes (la semana que contiene el día 1 de dicho mes)
+    const monthStarts = new Map<number, number>();
+    monthStarts.set(0, 0); // Enero siempre arranca en la semana 0
+
+    for (let m = 1; m < 12; m++) {
+      const wIdx = generatedWeeks.findIndex((w) =>
+        w.days.some(
+          (d) =>
+            d.date.getFullYear() === selectedYear &&
+            d.date.getMonth() === m &&
+            d.date.getDate() === 1
+        )
+      );
+      monthStarts.set(m, wIdx !== -1 ? wIdx : 0);
+    }
+
+    const blocks: {
+      month: number;
+      label: string;
+      weeks: typeof generatedWeeks;
+    }[] = [];
+
+    for (let m = 0; m < 12; m++) {
+      const startW = monthStarts.get(m) ?? 0;
+      const endW =
+        m < 11
+          ? (monthStarts.get(m + 1) ?? generatedWeeks.length) - 1
+          : generatedWeeks.length - 1;
+      const weeksForMonth = generatedWeeks.slice(startW, endW + 1);
+      blocks.push({
+        month: m,
+        label: MONTH_SHORT_NAMES[m],
+        weeks: weeksForMonth,
+      });
+    }
+
     return {
       weeks: generatedWeeks,
-      monthLabels: monthCols,
+      monthBlocks: blocks,
       yearStats: {
         totalWorkouts: totalYearWorkouts,
         totalSets: totalYearSets,
@@ -354,86 +381,105 @@ export function JournalHeatmap({
       </div>
 
       {/* Main Heatmap Matrix Container */}
-      <div className="p-4 rounded-xl border border-zinc-800/80 bg-zinc-950/60 flex flex-col gap-2">
-        <div className="overflow-x-auto pb-2 scrollbar-thin">
-          <div className="min-w-[700px] flex flex-col gap-1.5">
-            {/* Months Header Labels */}
-            <div className="flex text-[10px] font-semibold text-zinc-400 pl-6 h-4">
-              {weeks.map((_, wIdx) => {
-                const labelObj = monthLabels.find((m) => m.weekIndex === wIdx);
-                return (
-                  <div key={wIdx} className="w-3.5 sm:w-4 shrink-0 text-left">
-                    {labelObj ? labelObj.label : ""}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Matrix Body: Weekday Labels + Day Cells */}
-            <div className="flex gap-1.5">
-              {/* Day of week labels on left (Mon to Sun) */}
-              <div className="flex flex-col gap-1 text-[9px] font-mono font-medium text-zinc-400 justify-between pr-1 select-none">
+      <div className="p-4 sm:p-5 rounded-2xl border border-zinc-800/80 bg-zinc-950/60 flex flex-col gap-3">
+        <div className="overflow-x-auto pb-3 custom-scrollbar">
+          <div className="flex items-stretch min-w-max">
+            {/* Left: Weekday Labels Column */}
+            <div className="flex flex-col shrink-0 select-none pr-2">
+              {/* Header spacer matching month labels row height */}
+              <div className="h-6 flex items-center pb-1 text-[10px] text-transparent select-none" aria-hidden="true">
+                ·
+              </div>
+              {/* Weekday letters matching the 7 day rows */}
+              <div className="flex flex-col gap-1 mt-1">
                 {WEEKDAY_NAMES.map((d, idx) => (
-                  <div key={idx} className="h-3.5 sm:h-4 flex items-center justify-center">
+                  <div
+                    key={idx}
+                    className="w-4 h-3.5 sm:h-4 flex items-center justify-center text-[9px] font-mono font-medium text-zinc-500"
+                  >
                     {idx % 2 === 0 ? d : ""}
                   </div>
                 ))}
               </div>
+            </div>
 
-              {/* Heatmap Columns (Weeks) */}
-              <div className="flex gap-1">
-                {weeks.map((week, wIdx) => (
-                  <div key={wIdx} className="flex flex-col gap-1 shrink-0">
-                    {week.days.map((day, dIdx) => {
-                      const isSelected = selectedDate === day.dateKey;
-                      const hasData = day.workouts.length > 0;
-                      const cellColor =
-                        mode === "sets"
-                          ? getSetsColor(day.totalSets, day.inSelectedYear)
-                          : getSessionsColor(day.workouts.length, day.inSelectedYear);
+            {/* Months and Weeks Grid with Vertical Dotted Separators */}
+            <div className="flex items-stretch">
+              {monthBlocks.map((mb, mIdx) => (
+                <React.Fragment key={mIdx}>
+                  {/* Línea vertical punteada que separa los meses entre los recuadros */}
+                  {mIdx > 0 && (
+                    <div
+                      className="w-0 border-l-2 border-dotted border-zinc-750/90 mx-1.5 self-stretch"
+                      title={`Separador de mes: ${mb.label}`}
+                      aria-hidden="true"
+                    />
+                  )}
 
-                      return (
-                        <div
-                          key={dIdx}
-                          onClick={() => {
-                            if (hasData) {
-                              onSelectDate(isSelected ? null : day.dateKey);
-                            }
-                          }}
-                          onMouseEnter={(e) => {
-                            if (day.inSelectedYear) {
-                              const rect = e.currentTarget.getBoundingClientRect();
-                              setHoveredDay({
-                                dateKey: day.dateKey,
-                                formattedDate: day.date.toLocaleDateString("es-ES", {
-                                  weekday: "short",
-                                  day: "numeric",
-                                  month: "short",
-                                  year: "numeric",
-                                }),
-                                workoutsCount: day.workouts.length,
-                                totalSets: day.totalSets,
-                                totalVolume: day.totalVolume,
-                                titles: day.workouts.map((w) => w.title),
-                                x: rect.left + rect.width / 2,
-                                y: rect.top,
-                              });
-                            }
-                          }}
-                          onMouseLeave={() => setHoveredDay(null)}
-                          className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-sm border transition-all ${cellColor} ${
-                            hasData ? "cursor-pointer" : "cursor-default"
-                          } ${
-                            isSelected
-                              ? "ring-2 ring-accent scale-125 z-10"
-                              : ""
-                          }`}
-                        />
-                      );
-                    })}
+                  {/* Bloque del Mes: Cabecera con nombre del mes + Columnas de semanas */}
+                  <div className="flex flex-col shrink-0">
+                    {/* Cabecera del Mes perfectamente alineada con sus semanas */}
+                    <div className="h-6 flex items-center text-[11px] font-bold text-zinc-300 font-mono tracking-tight pb-1 px-0.5">
+                      {mb.label}
+                    </div>
+
+                    {/* Columnas de Semanas del Mes */}
+                    <div className="flex gap-1 mt-1">
+                      {mb.weeks.map((week, wIdx) => (
+                        <div key={wIdx} className="flex flex-col gap-1 shrink-0">
+                          {week.days.map((day, dIdx) => {
+                            const isSelected = selectedDate === day.dateKey;
+                            const hasData = day.workouts.length > 0;
+                            const cellColor =
+                              mode === "sets"
+                                ? getSetsColor(day.totalSets, day.inSelectedYear)
+                                : getSessionsColor(day.workouts.length, day.inSelectedYear);
+
+                            return (
+                              <div
+                                key={dIdx}
+                                onClick={() => {
+                                  if (hasData) {
+                                    onSelectDate(isSelected ? null : day.dateKey);
+                                  }
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (day.inSelectedYear) {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setHoveredDay({
+                                      dateKey: day.dateKey,
+                                      formattedDate: day.date.toLocaleDateString("es-ES", {
+                                        weekday: "short",
+                                        day: "numeric",
+                                        month: "short",
+                                        year: "numeric",
+                                      }),
+                                      workoutsCount: day.workouts.length,
+                                      totalSets: day.totalSets,
+                                      totalVolume: day.totalVolume,
+                                      titles: day.workouts.map((w) => w.title),
+                                      x: rect.left + rect.width / 2,
+                                      y: rect.top,
+                                    });
+                                  }
+                                }}
+                                onMouseLeave={() => setHoveredDay(null)}
+                                className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-xs sm:rounded-sm border transition-all ${cellColor} ${
+                                  hasData ? "cursor-pointer" : "cursor-default"
+                                } ${
+                                  isSelected
+                                    ? "ring-2 ring-accent scale-125 z-10"
+                                    : ""
+                                }`}
+                              />
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
+                </React.Fragment>
+              ))}
             </div>
           </div>
         </div>
