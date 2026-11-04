@@ -410,7 +410,7 @@ export function JournalHeatmap({
                   {/* Línea vertical punteada que separa los meses entre los recuadros */}
                   {mIdx > 0 && (
                     <div
-                      className="w-0 border-l-2 border-dotted border-zinc-750/90 mx-1.5 self-stretch"
+                      className="w-0 border-l border-dotted border-zinc-700/35 mx-1 self-stretch"
                       title={`Separador de mes: ${mb.label}`}
                       aria-hidden="true"
                     />

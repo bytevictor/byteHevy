@@ -91,7 +91,7 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-800/60 bg-[var(--header-bg)] backdrop-blur-xl transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[76px] flex items-center justify-between gap-3 sm:gap-4">
+      <div className="max-w-[1330px] mx-auto px-4 sm:px-6 h-[76px] flex items-center justify-between gap-3 sm:gap-4">
         {/* Left: Brand */}
         <Link
           href="/"

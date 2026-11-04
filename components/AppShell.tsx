@@ -93,7 +93,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
         loadingStats={loadingStats}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6">
+      <main className="flex-1 max-w-[1330px] w-full mx-auto px-4 sm:px-6">
         {children}
       </main>
 
