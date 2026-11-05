@@ -4,14 +4,41 @@
  */
 
 export interface UserBiometricProfile {
-  alturaCm: number;        // Altura en centímetros (ej: 180)
-  edad: number;            // Edad en años (ej: 26)
-  sexo: "male" | "female"; // Sexo biológico para fórmulas BIA / FFMI
+  alturaCm: number;              // Altura en centímetros (ej: 180)
+  fechaNacimiento?: string;      // Formato YYYY-MM-DD (ej: "1999-01-20")
+  edad: number;                  // Edad en años calculada al vuelo
+  sexo: "male" | "female";       // Sexo biológico para fórmulas BIA / FFMI
+}
+
+export const DEFAULT_BIRTH_DATE = "1999-01-20";
+
+/**
+ * Calcula con precisión la edad a partir de la fecha de nacimiento
+ * respecto a una fecha de referencia (por defecto, la fecha actual).
+ */
+export function calculateAge(fechaNacimiento?: string | null, referenceDate: Date = new Date()): number {
+  if (!fechaNacimiento || typeof fechaNacimiento !== "string") return 27;
+  const parts = fechaNacimiento.split("-");
+  if (parts.length !== 3) return 27;
+
+  const birthYear = parseInt(parts[0], 10);
+  const birthMonth = parseInt(parts[1], 10) - 1; // 0-indexed
+  const birthDay = parseInt(parts[2], 10);
+
+  if (isNaN(birthYear) || isNaN(birthMonth) || isNaN(birthDay)) return 27;
+
+  let age = referenceDate.getFullYear() - birthYear;
+  const monthDiff = referenceDate.getMonth() - birthMonth;
+  if (monthDiff < 0 || (monthDiff === 0 && referenceDate.getDate() < birthDay)) {
+    age--;
+  }
+  return Math.max(0, age);
 }
 
 export const DEFAULT_USER_PROFILE: UserBiometricProfile = {
   alturaCm: 180,
-  edad: 26,
+  fechaNacimiento: DEFAULT_BIRTH_DATE,
+  edad: calculateAge(DEFAULT_BIRTH_DATE),
   sexo: "male",
 };
 

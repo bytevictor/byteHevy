@@ -4,8 +4,10 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import {
   UserBiometricProfile,
   DEFAULT_USER_PROFILE,
+  DEFAULT_BIRTH_DATE,
   BmiCategoryInfo,
   calculateBmi,
+  calculateAge,
   getBmiCategory,
   getIdealWeightRange,
   calculateFfmi,
@@ -14,7 +16,9 @@ import {
 export type { UserBiometricProfile, BmiCategoryInfo };
 export {
   DEFAULT_USER_PROFILE,
+  DEFAULT_BIRTH_DATE,
   calculateBmi,
+  calculateAge,
   getBmiCategory,
   getIdealWeightRange,
   calculateFfmi,
@@ -25,6 +29,7 @@ interface UserProfileContextType {
   updateProfile: (newValues: Partial<UserBiometricProfile>) => void;
   resetProfile: () => void;
   isHydrated: boolean;
+  calculateAge: (fechaNacimiento?: string | null, referenceDate?: Date) => number;
   calculateBmi: (pesoKg: number) => number;
   getBmiCategory: (bmi: number) => BmiCategoryInfo;
   getIdealWeightRange: () => { min: number; max: number };
@@ -44,13 +49,18 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (typeof parsed.alturaCm === "number" && typeof parsed.edad === "number") {
-          setProfile({
-            alturaCm: parsed.alturaCm || DEFAULT_USER_PROFILE.alturaCm,
-            edad: parsed.edad || DEFAULT_USER_PROFILE.edad,
-            sexo: parsed.sexo === "female" ? "female" : "male",
-          });
-        }
+        const birthDate =
+          typeof parsed.fechaNacimiento === "string" && parsed.fechaNacimiento.trim()
+            ? parsed.fechaNacimiento.trim()
+            : DEFAULT_BIRTH_DATE;
+        const computedAge = calculateAge(birthDate);
+
+        setProfile({
+          alturaCm: typeof parsed.alturaCm === "number" ? parsed.alturaCm : DEFAULT_USER_PROFILE.alturaCm,
+          fechaNacimiento: birthDate,
+          edad: computedAge,
+          sexo: parsed.sexo === "female" ? "female" : "male",
+        });
       }
     } catch (e) {
       // ignore
@@ -60,11 +70,18 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
 
   const updateProfile = useCallback((newValues: Partial<UserBiometricProfile>) => {
     setProfile((prev) => {
+      const updatedBirthDate =
+        typeof newValues.fechaNacimiento === "string" && newValues.fechaNacimiento.trim()
+          ? newValues.fechaNacimiento.trim()
+          : prev.fechaNacimiento || DEFAULT_BIRTH_DATE;
+      const updatedAge = calculateAge(updatedBirthDate);
+
       const updated: UserBiometricProfile = {
         ...prev,
         ...newValues,
         alturaCm: newValues.alturaCm !== undefined ? Number(newValues.alturaCm) : prev.alturaCm,
-        edad: newValues.edad !== undefined ? Number(newValues.edad) : prev.edad,
+        fechaNacimiento: updatedBirthDate,
+        edad: updatedAge,
         sexo: newValues.sexo || prev.sexo,
       };
       try {
@@ -107,6 +124,7 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
         updateProfile,
         resetProfile,
         isHydrated,
+        calculateAge,
         calculateBmi: calcBmi,
         getBmiCategory,
         getIdealWeightRange: getWeightRange,

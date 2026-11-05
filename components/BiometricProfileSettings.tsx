@@ -18,10 +18,10 @@ import {
 } from "@/lib/user-profile-context";
 
 export function BiometricProfileSettings() {
-  const { profile, updateProfile, resetProfile } = useUserProfile();
+  const { profile, updateProfile, resetProfile, calculateAge } = useUserProfile();
 
   const [altura, setAltura] = useState(String(profile.alturaCm));
-  const [edad, setEdad] = useState(String(profile.edad));
+  const [fechaNacimiento, setFechaNacimiento] = useState(profile.fechaNacimiento || "1999-01-20");
   const [sexo, setSexo] = useState<"male" | "female">(profile.sexo);
   const [sampleWeight, setSampleWeight] = useState("77.4");
   const [savedFeedback, setSavedFeedback] = useState(false);
@@ -29,12 +29,12 @@ export function BiometricProfileSettings() {
   // Sync state with profile when it loads from storage
   useEffect(() => {
     setAltura(String(profile.alturaCm));
-    setEdad(String(profile.edad));
+    setFechaNacimiento(profile.fechaNacimiento || "1999-01-20");
     setSexo(profile.sexo);
   }, [profile]);
 
   const parsedAltura = parseFloat(altura) || 0;
-  const parsedEdad = parseInt(edad, 10) || 0;
+  const computedAge = calculateAge(fechaNacimiento);
   const parsedWeight = parseFloat(sampleWeight) || 0;
 
   const currentBmi = calculateBmi(parsedWeight, parsedAltura);
@@ -47,14 +47,15 @@ export function BiometricProfileSettings() {
       alert("Por favor introduce una altura válida (entre 100 y 250 cm).");
       return;
     }
-    if (parsedEdad < 10 || parsedEdad > 120) {
-      alert("Por favor introduce una edad válida (entre 10 y 120 años).");
+    if (!fechaNacimiento) {
+      alert("Por favor introduce una fecha de nacimiento válida.");
       return;
     }
 
     updateProfile({
       alturaCm: parsedAltura,
-      edad: parsedEdad,
+      fechaNacimiento,
+      edad: computedAge,
       sexo,
     });
 
@@ -63,7 +64,7 @@ export function BiometricProfileSettings() {
   };
 
   const handleReset = () => {
-    if (confirm("¿Restaurar valores biométricos por defecto (178 cm, 26 años)?")) {
+    if (confirm("¿Restaurar valores biométricos por defecto (180 cm, 20/01/1999)?")) {
       resetProfile();
       setSavedFeedback(true);
       setTimeout(() => setSavedFeedback(false), 2000);
@@ -134,27 +135,25 @@ export function BiometricProfileSettings() {
             </p>
           </div>
 
-          {/* Edad */}
+          {/* Fecha de Nacimiento / Edad al vuelo */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-zinc-300">Edad</label>
+            <label className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
+              <span>Fecha de Nacimiento</span>
+              <span className="text-[11px] font-mono text-accent-light font-bold">
+                🎂 {computedAge} años calculados al vuelo
+              </span>
+            </label>
             <div className="relative">
               <input
-                type="number"
-                step="1"
-                min="10"
-                max="120"
-                value={edad}
-                onChange={(e) => setEdad(e.target.value)}
+                type="date"
+                value={fechaNacimiento}
+                onChange={(e) => setFechaNacimiento(e.target.value)}
                 required
-                className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 text-sm font-mono font-bold focus:outline-none focus:border-accent-light transition-colors"
-                placeholder="26"
+                className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 text-sm font-mono font-bold focus:outline-none focus:border-accent-light transition-colors [color-scheme:dark]"
               />
-              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-mono text-zinc-500">
-                años
-              </span>
             </div>
             <p className="text-[11px] text-zinc-500">
-              Factor de ajuste metabólico para agua corporal total y tasa libre de grasa.
+              Tu edad se calcula dinámicamente en tiempo real y permite contextualizar pesajes históricos.
             </p>
           </div>
 
