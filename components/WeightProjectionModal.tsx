@@ -300,36 +300,37 @@ export function WeightProjectionModal({
             </div>
           </div>
 
-          {/* Controles de Configuración de Ventana y Horizonte */}
-          <div className="flex items-center gap-2.5 flex-wrap self-start lg:self-center">
-            {/* Ventana de Calibración (incluye opción desde los últimos 7 días) */}
-            <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-sm">
+          {/* Controles de Configuración de Ventana y Horizonte estrictamente en horizontal */}
+          <div className="flex items-center gap-2 shrink-0 flex-nowrap overflow-x-auto">
+            {/* Ventana de Calibración */}
+            <div className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded-xl px-2.5 py-1.5 text-xs sm:text-sm shrink-0">
               <span className="text-zinc-400 font-mono text-xs uppercase font-semibold">Calibración:</span>
               <select
                 value={calibrationWindowDays}
                 onChange={(e) => setCalibrationWindowDays(Number(e.target.value))}
-                className="bg-transparent text-zinc-200 text-sm font-bold focus:outline-none cursor-pointer"
+                className="bg-transparent text-zinc-200 text-xs sm:text-sm font-bold focus:outline-none cursor-pointer"
               >
-                <option value={7} className="bg-zinc-900">Últimos 7 días (1 sem - Ultra reactivo)</option>
-                <option value={14} className="bg-zinc-900">Últimos 14 días (2 semanas)</option>
-                <option value={30} className="bg-zinc-900">Últimos 30 días (~1 mes)</option>
-                <option value={45} className="bg-zinc-900">Últimos 45 días (Equilibrado)</option>
-                <option value={60} className="bg-zinc-900">Últimos 60 días (Robusto)</option>
-                <option value={90} className="bg-zinc-900">Últimos 90 días (Trimestral)</option>
+                <option value={7} className="bg-zinc-900">Últimos 7 días</option>
+                <option value={14} className="bg-zinc-900">Últimos 14 días</option>
+                <option value={30} className="bg-zinc-900">Últimos 30 días</option>
+                <option value={45} className="bg-zinc-900">Últimos 45 días</option>
+                <option value={60} className="bg-zinc-900">Últimos 60 días</option>
+                <option value={90} className="bg-zinc-900">Últimos 90 días</option>
               </select>
             </div>
 
-            {/* Horizonte Temporal con Badge de Recomendación Científica */}
-            <div className="flex items-center gap-2 bg-zinc-950 border border-accent/40 rounded-xl px-3 py-1.5 text-sm shadow-xs shadow-accent/10">
-              <CalendarIcon className="w-4 h-4 text-accent-light" />
+            {/* Horizonte Temporal (sin texto superfluo para evitar solapamientos) */}
+            <div className="flex items-center gap-1.5 bg-zinc-950 border border-accent/40 rounded-xl px-2.5 py-1.5 text-xs sm:text-sm shrink-0 shadow-xs shadow-accent/10">
+              <CalendarIcon className="w-3.5 h-3.5 text-accent-light shrink-0" />
+              <span className="text-accent-light font-mono text-xs uppercase font-semibold">Horizonte:</span>
               <select
                 value={selectedHorizonId}
                 onChange={(e) => setSelectedHorizonId(e.target.value as ProjectionHorizonId)}
-                className="bg-transparent text-accent-light font-bold text-sm focus:outline-none cursor-pointer"
+                className="bg-transparent text-accent-light font-bold text-xs sm:text-sm focus:outline-none cursor-pointer"
               >
                 {HORIZON_PRESETS.map((h) => (
                   <option key={h.id} value={h.id} className="bg-zinc-900 text-zinc-200">
-                    {h.label} {h.isRecommended ? "⭐ (Recomendado científicamente)" : ""}
+                    {h.label}
                   </option>
                 ))}
               </select>
@@ -338,7 +339,7 @@ export function WeightProjectionModal({
             {/* Botón Cerrar */}
             <button
               onClick={onClose}
-              className="w-9 h-9 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer ml-1"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer shrink-0 ml-1"
               title="Cerrar modal"
             >
               <XIcon className="w-4 h-4" />
@@ -362,7 +363,7 @@ export function WeightProjectionModal({
             </div>
           ) : (
             <>
-              {/* 1. Selector de Modo / Perspectiva Analítica (Tipografía generosa) */}
+              {/* 1. Selector de Modo / Perspectiva Analítica */}
               <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-zinc-900/90 border border-zinc-800 overflow-x-auto shadow-inner">
                 <button
                   type="button"
@@ -428,84 +429,6 @@ export function WeightProjectionModal({
                   <TargetIcon className="w-4 h-4" />
                   <span>5. Proyección Inversa (Meta)</span>
                 </button>
-              </div>
-
-              {/* 2. Cartel Explicativo Riguroso del Modo Activo (Texto claro y legible) */}
-              <div className="p-5 rounded-2xl bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-900 border border-accent/30 shadow-md">
-                {activeMode === "cone" && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2.5 text-accent-light font-bold text-sm uppercase tracking-wider">
-                      <ActivityIcon className="w-4 h-4" />
-                      <span>Modo 1: Regresión WLS con Cono de Predicción al 68% (1σ) y 95% (2σ)</span>
-                    </div>
-                    <p className="text-sm text-zinc-200 leading-relaxed font-normal">
-                      <strong>Fundamento Matemático:</strong> Ajusta una regresión lineal con ponderación exponencial decreciente en el tiempo (<span className="font-mono text-accent-light font-semibold">λ=t/45d</span>). Calcula el intervalo de predicción formal que contempla tanto la incertidumbre de los parámetros muestrales como la varianza aleatoria individual futura.
-                    </p>
-                    <p className="text-xs text-zinc-400 leading-relaxed">
-                      <strong>Por qué es útil:</strong> En biología, una línea recta sola es una falacia. Este modelo te muestra el <em>rango de dispersión probabilístico real</em> donde aterrizará tu peso, ensanchándose proporcionalmente a <span className="font-mono text-zinc-300">√(1 + 1/N + Δt²)</span>.
-                    </p>
-                  </div>
-                )}
-
-                {activeMode === "metabolic" && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2.5 text-accent-light font-bold text-sm uppercase tracking-wider">
-                      <TrendingDownIcon className="w-4 h-4" />
-                      <span>Modo 2: Ecuación Diferencial Asintótica de Adaptación Metabólica (Plateau)</span>
-                    </div>
-                    <p className="text-sm text-zinc-200 leading-relaxed font-normal">
-                      <strong>Fundamento Físico:</strong> Basado en el modelo dinámico de Kevin Hall (NIH). Modela el freno metabólico (<span className="font-mono text-accent-light font-semibold">dW/dt = -k(W - W∞)</span>), donde el gasto energético en reposo decrece a medida que disminuye la masa celular activa.
-                    </p>
-                    <p className="text-xs text-zinc-400 leading-relaxed">
-                      <strong>Por qué es útil:</strong> Permite saber si tu ritmo actual está entrando en una meseta fisiológica natural y predice el peso límite de equilibrio (<span className="font-mono font-bold text-accent-light">{report.metabolic.asymptoteWeight} kg</span>) si no modificas tus calorías o tu nivel de actividad física.
-                    </p>
-                  </div>
-                )}
-
-                {activeMode === "montecarlo" && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2.5 text-accent-light font-bold text-sm uppercase tracking-wider">
-                      <ZapIcon className="w-4 h-4" />
-                      <span>Modo 3: Simulación Estocástica de Monte Carlo (1.000 Iteraciones AR(1))</span>
-                    </div>
-                    <p className="text-sm text-zinc-200 leading-relaxed font-normal">
-                      <strong>Fundamento Estadístico:</strong> Corre 1.000 simulaciones numéricas del camino aleatorio del peso incorporando la autocorrelación serial empírica (<span className="font-mono text-accent-light font-semibold">AR(1), ρ={report.linear.durbinWatson ? ((2 - report.linear.durbinWatson) / 2).toFixed(2) : "0.20"}</span>) observada en tus fluctuaciones hídricas.
-                    </p>
-                    <p className="text-xs text-zinc-400 leading-relaxed">
-                      <strong>Por qué es útil:</strong> Revela las densidades empíricas de los percentiles P10, P25, P50 (mediana), P75 y P90. Muestra escenarios optimistas vs conservadores respetando las leyes de correlación temporal del cuerpo humano.
-                    </p>
-                  </div>
-                )}
-
-                {activeMode === "thermo" && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2.5 text-accent-light font-bold text-sm uppercase tracking-wider">
-                      <FlameIcon className="w-4 h-4" />
-                      <span>Modo 4: Termodinámica & Balance Energético Neto Real Implícito</span>
-                    </div>
-                    <p className="text-sm text-zinc-200 leading-relaxed font-normal">
-                      <strong>Fundamento Termodinámico:</strong> Aplica la constante energética de tejido humano mixto (<span className="font-mono text-accent-light font-semibold">~7.700 kcal/kg</span> de Wishnofsky) sobre la primera derivada temporal de tu peso (<span className="font-mono text-zinc-300">Ẇ = dW/dt</span>).
-                    </p>
-                    <p className="text-xs text-zinc-400 leading-relaxed">
-                      <strong>Por qué es útil:</strong> No depende de si calculaste bien tus calorías en una app: te dice el <em>déficit o superávit neto real sostenido por tus mitocondrias</em> con su intervalo de confianza estadístico.
-                    </p>
-                  </div>
-                )}
-
-                {activeMode === "inverse" && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2.5 text-accent-light font-bold text-sm uppercase tracking-wider">
-                      <TargetIcon className="w-4 h-4" />
-                      <span>Modo 5: Proyección Inversa / Time-to-Target (Tiempo Estimado hacia Peso Objetivo)</span>
-                    </div>
-                    <p className="text-sm text-zinc-200 leading-relaxed font-normal">
-                      <strong>Fundamento Analítico:</strong> Resuelve el problema inverso en el espacio de estados: dado un peso objetivo meta <span className="font-mono text-accent-light font-semibold">W_meta</span>, calcula la fecha más probable de llegada (P50) junto con la ventana de dispersión P10-P90.
-                    </p>
-                    <p className="text-xs text-zinc-400 leading-relaxed">
-                      <strong>Por qué es útil:</strong> Diagnostica si tu ritmo actual es físicamente viable para tu meta o si existe divergencia termodinámica (ritmo en sentido contrario al objetivo deseado).
-                    </p>
-                  </div>
-                )}
               </div>
 
               {/* 3. Panel Ribbon de Telemetría Numérica (Tipografía amplia) */}
@@ -1230,6 +1153,155 @@ export function WeightProjectionModal({
                   </div>
                 </div>
               )}
+
+              {/* =========================================================================
+                  CARTEL EXPLICATIVO DUAL (SIMPLE + COMPLEJO) DEL MODO ACTIVO (AL FINAL)
+                 ========================================================================= */}
+              <div className="p-5 sm:p-6 rounded-2xl bg-zinc-900/80 border border-zinc-800 shadow-xl space-y-4">
+                {/* Cabecera del Cartel */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3.5">
+                  <div className="flex items-center gap-2.5">
+                    <span className="p-2 rounded-xl bg-accent/15 border border-accent/40 text-accent-light shrink-0">
+                      {activeMode === "cone" && <ActivityIcon className="w-5 h-5" />}
+                      {activeMode === "metabolic" && <TrendingDownIcon className="w-5 h-5" />}
+                      {activeMode === "montecarlo" && <ZapIcon className="w-5 h-5" />}
+                      {activeMode === "thermo" && <FlameIcon className="w-5 h-5" />}
+                      {activeMode === "inverse" && <TargetIcon className="w-5 h-5" />}
+                    </span>
+                    <div>
+                      <h4 className="text-base sm:text-lg font-extrabold text-zinc-100 tracking-tight">
+                        {activeMode === "cone" && "Modo 1: Regresión WLS & Cono de Predicción (1σ y 2σ)"}
+                        {activeMode === "metabolic" && "Modo 2: Adaptación Metabólica & Relajación Asintótica (Plateau)"}
+                        {activeMode === "montecarlo" && "Modo 3: Simulación Estocástica de Monte Carlo (1.000 Trayectorias)"}
+                        {activeMode === "thermo" && "Modo 4: Termodinámica & Balance Energético Neto Real Implícito"}
+                        {activeMode === "inverse" && "Modo 5: Proyección Inversa / Time-to-Target (Tiempo a Meta)"}
+                      </h4>
+                      <span className="text-xs text-zinc-400 font-mono">
+                        Guía de lectura dual · Explicación rápida y deducción físico-matemática
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contenido en 2 Columnas para optimizar el espacio horizontal */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* COLUMNA 1: EXPLICACIÓN SIMPLE Y DIRECTA */}
+                  <div className="p-4 rounded-xl bg-zinc-950/80 border border-emerald-500/25 flex flex-col gap-2.5">
+                    <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider">
+                      <SparklesIcon className="w-4 h-4 shrink-0" />
+                      <span>Explicación Rápida & Directa (¿Qué estás viendo?)</span>
+                    </div>
+                    {activeMode === "cone" && (
+                      <div className="text-sm text-zinc-300 leading-relaxed space-y-2">
+                        <p>
+                          La línea punteada muestra hacia dónde se dirige tu peso si sigues el mismo ritmo de las últimas semanas.
+                        </p>
+                        <p>
+                          En lugar de darte un número rígido que casi nunca se cumple por las fluctuaciones de líquidos o digestión, el área sombreada (el cono) marca el margen normal de variación: hay un <strong className="text-emerald-400">95% de probabilidad</strong> de que tu peso real caiga dentro de esa franja. A más días en el futuro, más se abre el cono por la incertidumbre acumulada.
+                        </p>
+                      </div>
+                    )}
+                    {activeMode === "metabolic" && (
+                      <div className="text-sm text-zinc-300 leading-relaxed space-y-2">
+                        <p>
+                          El peso nunca sube ni baja de forma recta indefinidamente; el cuerpo se adapta y quema menos energía en reposo conforme cambia tu masa.
+                        </p>
+                        <p>
+                          La curva verde proyecta ese freno fisiológico natural y te indica tu <strong className="text-emerald-400">peso límite de equilibrio ({report.metabolic.asymptoteWeight} kg)</strong> si mantienes exactamente la misma comida y ejercicio actuales sin hacer nuevos recortes ni aumentos.
+                        </p>
+                      </div>
+                    )}
+                    {activeMode === "montecarlo" && (
+                      <div className="text-sm text-zinc-300 leading-relaxed space-y-2">
+                        <p>
+                          Simulamos por ordenador 1.000 futuros posibles día por día teniendo en cuenta tus subidas y bajadas diarias habituales.
+                        </p>
+                        <p>
+                          Te da 3 caminos de referencia: el más probable o mediano (<strong className="text-emerald-400">P50</strong>), un escenario optimista si las variaciones de agua te acompañan (<strong className="text-emerald-400">P10</strong>) y uno más conservador si tienes semanas más lentas o retención (<strong className="text-zinc-200">P90</strong>).
+                        </p>
+                      </div>
+                    )}
+                    {activeMode === "thermo" && (
+                      <div className="text-sm text-zinc-300 leading-relaxed space-y-2">
+                        <p>
+                          Calcula directamente desde tu báscula cuántas calorías diarias reales de superávit o déficit experimenta tu cuerpo, sin depender de si pesaste o anotaste bien la comida en una aplicación.
+                        </p>
+                        <p>
+                          Un balance de <strong className="text-emerald-400">{report.thermodynamics.impliedNetKcalDaily > 0 ? `+${report.thermodynamics.impliedNetKcalDaily}` : report.thermodynamics.impliedNetKcalDaily} kcal/día</strong> significa que tu metabolismo está movilizando o almacenando esa energía neta diaria en tejido biológico.
+                        </p>
+                      </div>
+                    )}
+                    {activeMode === "inverse" && (
+                      <div className="text-sm text-zinc-300 leading-relaxed space-y-2">
+                        <p>
+                          Indica el peso que te gustaría alcanzar y el sistema calcula la fecha estimada de llegada al ritmo actual.
+                        </p>
+                        <p>
+                          Si tu tendencia actual va en dirección contraria a tu objetivo (por ejemplo, subiendo de peso cuando buscas perderlo), el sistema te avisa de inmediato de una <strong className="text-amber-400">divergencia</strong> para ajustar tu ingesta o actividad sin perder tiempo.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* COLUMNA 2: FUNDAMENTO COMPLEJO Y TÉCNICO */}
+                  <div className="p-4 rounded-xl bg-zinc-950/80 border border-accent/30 flex flex-col gap-2.5">
+                    <div className="flex items-center gap-2 text-accent-light font-bold text-xs uppercase tracking-wider">
+                      <ActivityIcon className="w-4 h-4 shrink-0" />
+                      <span>Fundamento Técnico Avanzado (Rigor Matemático & Físico)</span>
+                    </div>
+                    {activeMode === "cone" && (
+                      <div className="text-xs sm:text-sm text-zinc-300 leading-relaxed space-y-2">
+                        <p>
+                          <strong>Regresión Ponderada (WLS):</strong> Ajuste lineal ponderado por mínimos cuadrados con decaimiento exponencial temporal (<span className="font-mono text-accent-light font-semibold">λ=t/45d</span>), dando más peso a la información reciente.
+                        </p>
+                        <p className="text-zinc-400">
+                          <strong>Intervalos de Predicción Formal:</strong> Contempla la incertidumbre paramétrica muestral y el ruido estocástico futuro (<span className="font-mono text-zinc-300">PI = ŷ ± t · RMSE · √(1 + 1/N + Δt²/Sxx)</span>). Los conos al 68% (1σ) y 95% (2σ) modelan la dispersión probabilística biológica real.
+                        </p>
+                      </div>
+                    )}
+                    {activeMode === "metabolic" && (
+                      <div className="text-xs sm:text-sm text-zinc-300 leading-relaxed space-y-2">
+                        <p>
+                          <strong>Dinámica de Kevin Hall (NIH):</strong> Resuelve la ecuación diferencial de relajación de primer orden (<span className="font-mono text-accent-light font-semibold">dW/dt = -k(W - W∞)</span>), con solución exacta <span className="font-mono text-zinc-300">W(t) = W∞ + (W₀ - W∞)e^(-kt)</span>.
+                        </p>
+                        <p className="text-zinc-400">
+                          <strong>Parámetros fisiológicos:</strong> Amortiguación <span className="font-mono text-zinc-300">k = {report.metabolic.rateConstantK} d⁻¹</span> (vida media de <span className="font-mono text-zinc-300">{report.metabolic.halfLifeDays} días</span>) provocada por la caída de masa celular activa y respuesta homeostática del gasto energético basal.
+                        </p>
+                      </div>
+                    )}
+                    {activeMode === "montecarlo" && (
+                      <div className="text-xs sm:text-sm text-zinc-300 leading-relaxed space-y-2">
+                        <p>
+                          <strong>Proceso Estocástico AR(1):</strong> 1.000 iteraciones del camino aleatorio: <span className="font-mono text-accent-light font-semibold">ΔW_t = μ + ρ(ΔW_t-1 - μ) + ε_t</span>, con <span className="font-mono text-zinc-300">ε_t ~ N(0, σ²)</span> y autocorrelación <span className="font-mono text-zinc-300">ρ={report.linear.durbinWatson ? ((2 - report.linear.durbinWatson) / 2).toFixed(2) : "0.20"}</span> calibrada vía Durbin-Watson.
+                        </p>
+                        <p className="text-zinc-400">
+                          <strong>Inercia Biológica:</strong> Modela la autocorrelación de retención de fluidos intracelulares y extracelulares (el exceso de glucógeno o sodio se disipa en 48-72h, no en 24h), derivando la función de densidad empírica de percentiles P10-P90.
+                        </p>
+                      </div>
+                    )}
+                    {activeMode === "thermo" && (
+                      <div className="text-xs sm:text-sm text-zinc-300 leading-relaxed space-y-2">
+                        <p>
+                          <strong>Primer Principio & Wishnofsky:</strong> Aplica la densidad energética de tejido mixto humano (<span className="font-mono text-accent-light font-semibold">κ ≈ 7.700 kcal/kg</span>) sobre la derivada temporal de primer orden: <span className="font-mono text-zinc-300">ΔE = κ · (dW/dt)</span>.
+                        </p>
+                        <p className="text-zinc-400">
+                          <strong>Incertidumbre Térmica:</strong> Margen de confianza al 95% de <span className="font-mono text-zinc-300">±{report.thermodynamics.confidenceKcalMargin} kcal/día</span> derivado del error estándar de la pendiente lineal, eliminando el sesgo de estimación subjetiva de calorías.
+                        </p>
+                      </div>
+                    )}
+                    {activeMode === "inverse" && (
+                      <div className="text-xs sm:text-sm text-zinc-300 leading-relaxed space-y-2">
+                        <p>
+                          <strong>Inversión Cinemática:</strong> Resuelve el problema inverso en el espacio de estados <span className="font-mono text-accent-light font-semibold">Δt = (W_meta - W₀) / Ẇ</span> y verifica consistencia de signos (<span className="font-mono text-zinc-300">sgn(Ẇ) == sgn(W_meta - W₀)</span>).
+                        </p>
+                        <p className="text-zinc-400">
+                          <strong>Propagación Estocástica:</strong> Si converge, propaga los cuantiles de velocidad para derivar las fechas probabilísticas mediana (P50), optimista (P10) y conservadora (P90) con detección automática de asíntotas inalcanzables.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </>
           )}
         </div>
