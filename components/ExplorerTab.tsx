@@ -6,6 +6,7 @@ import { ExerciseSummary, ExerciseDetailData, ExerciseSessionHistory, JournalWor
 import { ProgressionChart, type ChartMetricView } from "./charts/ProgressionChart";
 import { ExerciseAnimationView } from "./ExerciseAnimationView";
 import { WorkoutSessionModal } from "./WorkoutSessionModal";
+import { ExerciseMediaPickerModal } from "./ExerciseMediaPickerModal";
 import { getExerciseMedia, MUSCLE_LABELS } from "@/lib/exercise-media";
 import { ExerciseMedia } from "@/types/exercise-media";
 import { ExplorerSkeleton, ExplorerDetailSkeleton } from "./skeletons/ExplorerSkeleton";
@@ -67,6 +68,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
   const [loadingFullWorkout, setLoadingFullWorkout] = useState<boolean>(false);
   const [currentMedia, setCurrentMedia] = useState<ExerciseMedia | null>(null);
   const [mediaCache, setMediaCache] = useState<Record<string, ExerciseMedia>>({});
+  const [isMediaPickerOpen, setIsMediaPickerOpen] = useState<boolean>(false);
   const [chartMetric, setChartMetric] = useState<ChartMetricView>("top_set");
 
   useEffect(() => {
@@ -666,6 +668,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 <div className="w-full lg:w-[350px] xl:w-[390px] shrink-0 flex items-center justify-center my-auto">
                   <ExerciseAnimationView
                     media={activeMedia}
+                    onReassignMedia={() => setIsMediaPickerOpen(true)}
                     className="w-full h-[270px] sm:h-[285px] lg:h-[295px] rounded-xl shadow-lg"
                   />
                 </div>
@@ -1344,6 +1347,23 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
         onClose={() => setFullWorkoutModal(null)}
         highlightExerciseName={detailData?.exercise.name}
       />
+
+      {/* Modal para reasignar carátula 3D directamente desde el Explorador */}
+      {detailData && (
+        <ExerciseMediaPickerModal
+          isOpen={isMediaPickerOpen}
+          onClose={() => setIsMediaPickerOpen(false)}
+          exerciseName={detailData.exercise.name}
+          currentMedia={activeMedia}
+          onMediaUpdated={(updatedMedia) => {
+            setCurrentMedia(updatedMedia);
+            setMediaCache((prev) => ({
+              ...prev,
+              [detailData.exercise.name.toLowerCase().trim()]: updatedMedia,
+            }));
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -3,12 +3,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import { ExerciseMedia } from "@/types/exercise-media";
 import { MUSCLE_LABELS } from "@/lib/exercise-media";
+import { FilmIcon } from "./Icons";
 
 interface ExerciseAnimationViewProps {
   media: ExerciseMedia;
   compact?: boolean;
   className?: string;
   autoPlayWhenVisible?: boolean;
+  onReassignMedia?: () => void;
 }
 
 export function ExerciseAnimationView({
@@ -16,6 +18,7 @@ export function ExerciseAnimationView({
   compact = false,
   className = "",
   autoPlayWhenVisible = true,
+  onReassignMedia,
 }: ExerciseAnimationViewProps) {
   const [isPlaying, setIsPlaying] = useState(true);
   const [isLoading, setIsLoading] = useState(Boolean(media.videoUrl || media.gifUrl));
@@ -176,12 +179,21 @@ export function ExerciseAnimationView({
           </div>
         )}
 
-        {/* Subtle interactive hint */}
-        <div className="absolute bottom-2.5 right-3 z-10 pointer-events-none opacity-0 group-hover/canvas:opacity-100 transition-opacity duration-200">
-          <span className="px-2 py-0.5 rounded bg-zinc-900/80 border border-zinc-700/60 backdrop-blur-sm text-[9px] font-mono text-zinc-400 shadow-sm">
-            Toca para {isPlaying ? "pausar" : "reanudar"}
-          </span>
-        </div>
+        {/* Botón interactivo para Reasignar Imagen / Multimedia */}
+        {onReassignMedia && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onReassignMedia();
+            }}
+            className="absolute bottom-2.5 right-2.5 z-20 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-950/85 hover:bg-zinc-900 text-zinc-200 hover:text-white border border-zinc-700/80 hover:border-accent/60 backdrop-blur-md shadow-lg text-[11px] font-semibold transition-all cursor-pointer group/btn active:scale-95"
+            title="Reasignar o cambiar la imagen de este ejercicio en el buscador de multimedia"
+          >
+            <FilmIcon className="w-3.5 h-3.5 text-accent-light group-hover/btn:scale-110 transition-transform" />
+            <span>Reasignar imagen</span>
+          </button>
+        )}
       </div>
 
       {/* Bottom Muscle & Equipment Bar (only in full mode) */}
