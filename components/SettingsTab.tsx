@@ -97,6 +97,7 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
   // Cloud Sync Context (Hevy + Xiaomi)
   const {
     hevyConnected,
+    hevyHasRefreshToken,
     hevyUsername,
     lastHevySync,
     isHevySyncing,
@@ -726,10 +727,17 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="text-sm font-bold text-zinc-100">Hevy Cloud</h4>
                       {hevyConnected ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          <CheckCircleIcon className="w-3 h-3" />
-                          Conectado {hevyUsername ? `@${hevyUsername}` : ""}
-                        </span>
+                        hevyHasRefreshToken ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" title="Sesión permanente con auto-renovación continua">
+                            <CheckCircleIcon className="w-3 h-3" />
+                            Permanente {hevyUsername ? `@${hevyUsername}` : ""}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20" title="Token temporal (expira en ~1 hora sin refresh_token)">
+                            <AlertTriangleIcon className="w-3 h-3" />
+                            Temporal (~1h) {hevyUsername ? `@${hevyUsername}` : ""}
+                          </span>
+                        )
                       ) : (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700/60">
                           Desconectado
@@ -738,7 +746,11 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
                     </div>
                     <p className="text-xs text-zinc-400 mt-1">
                       {hevyConnected
-                        ? `Última sinc: ${lastHevySync || "Reciente"}. Descarga directa de entrenamientos sin subir archivos.`
+                        ? `Última sinc: ${lastHevySync || "Reciente"}. ${
+                            hevyHasRefreshToken
+                              ? "Auto-renovación continua activa."
+                              : "Sesión temporal de 1 hora."
+                          } Descarga directa a SQLite.`
                         : "Conecta tu cuenta para sincronizar tus entrenamientos de Hevy con 1 clic."}
                     </p>
                   </div>

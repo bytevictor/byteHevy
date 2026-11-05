@@ -23,6 +23,8 @@ export async function GET() {
       {
         success: true,
         is_connected: auth.isAuthenticated && Boolean(auth.accessToken),
+        has_refresh_token: Boolean(auth.refreshToken),
+        expires_at: auth.expiresAt,
         last_sync: formattedLastSync,
         last_sync_timestamp: auth.lastSyncTimestamp,
         last_sync_workouts_count: auth.lastSyncWorkoutsCount,

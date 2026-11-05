@@ -90,23 +90,168 @@ function workoutsBatchToCsv(workouts: any[]): string {
 }
 
 /**
+ * Procesa cualquier formato de entrada proporcionado por el usuario:
+ * - Cookie completa de hevy.com (contiene auth2.0-token=...)
+ * - Cookie auth2.0-token en formato JSON decodificado o URL-encoded
+ * - Encabezado HTTP (Bearer ..., auth-token: ..., authorization: ...)
+ * - Token plano de acceso
+ */
+export function parseHevyTokenInput(rawInput: string): {
+  accessToken: string;
+  refreshToken?: string | null;
+  expiresAt?: string | null;
+} {
+  let text = (rawInput || "").trim();
+
+  // Caso 1: String que contiene auth2.0-token=... (formato cookie completa de document.cookie)
+  if (text.includes("auth2.0-token=")) {
+    const match = text.match(/auth2\.0-token=([^;]+)/);
+    if (match) {
+      text = match[1].trim();
+    }
+  }
+
+  // Caso 2: Si está URL-encoded (ej: {%22access_token%22...} o %7B%22...%22%7D)
+  if (text.includes("%22") || text.includes("%7B") || text.includes("%7b")) {
+    try {
+      text = decodeURIComponent(text);
+    } catch {}
+  }
+
+  // Quitar posibles comillas externas
+  text = text.replace(/^["']|["']$/g, "").trim();
+
+  // Caso 3: Es un JSON con tokens ({ "access_token": ... })
+  if (text.startsWith("{") && text.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(text);
+      const accessToken =
+        parsed.access_token || parsed.auth_token || parsed.token || "";
+      const refreshToken = parsed.refresh_token || parsed.refreshToken || null;
+      const expiresAt = parsed.expires_at || parsed.expiresAt || null;
+
+      if (accessToken) {
+        return {
+          accessToken: String(accessToken).trim(),
+          refreshToken: refreshToken ? String(refreshToken).trim() : null,
+          expiresAt: expiresAt ? String(expiresAt).trim() : null,
+        };
+      }
+    } catch {}
+  }
+
+  // Caso 4: Si empieza con prefijos de encabezado HTTP
+  let token = text;
+  if (token.toLowerCase().startsWith("authorization:")) {
+    token = token.slice(14).trim();
+  }
+  if (token.toLowerCase().startsWith("auth-token:")) {
+    token = token.slice(11).trim();
+  }
+  if (token.toLowerCase().startsWith("bearer ")) {
+    token = token.slice(7).trim();
+  }
+  token = token.replace(/^["']|["']$/g, "").trim();
+
+  return { accessToken: token };
+}
+
+/**
+ * Refresca la sesión de Hevy utilizando el refresh_token almacenado en SQLite.
+ * Hevy rota ambos tokens (access_token y refresh_token) y extiende la expiración.
+ */
+export async function refreshHevySession(): Promise<{
+  success: boolean;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: string;
+  error?: string;
+}> {
+  const authRecord = await getHevyAuthRecord();
+  if (!authRecord.refreshToken) {
+    return {
+      success: false,
+      error: "No hay token de refresco (refresh_token) guardado en ByteHevy.",
+    };
+  }
+
+  try {
+    const res = await fetch("https://api.hevyapp.com/auth/refresh_token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": "shelobs_hevy_web",
+        "Hevy-Platform": "web",
+        ...(authRecord.accessToken
+          ? { authorization: `Bearer ${authRecord.accessToken}` }
+          : {}),
+        "x-client-time": String(Math.floor(Date.now() / 1000)),
+      },
+      body: JSON.stringify({
+        refresh_token: authRecord.refreshToken,
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      return {
+        success: false,
+        error: `Error al refrescar sesión en Hevy (${res.status}): ${errText}`,
+      };
+    }
+
+    const data = await res.json();
+    if (!data.access_token) {
+      return {
+        success: false,
+        error: "Respuesta de refresco inválida desde Hevy (falta access_token).",
+      };
+    }
+
+    await saveHevyAuthTokens({
+      userId: data.user_id || authRecord.userId,
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token || authRecord.refreshToken,
+      expiresAt: data.expires_at || null,
+      username: authRecord.username,
+      email: authRecord.email,
+    });
+
+    return {
+      success: true,
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token || authRecord.refreshToken,
+      expiresAt: data.expires_at,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: `Error de red al refrescar sesión de Hevy: ${err.message || err}`,
+    };
+  }
+}
+
+/**
  * Descarga todos los entrenamientos de la cuenta de Hevy usando el token
  * de acceso directamente contra la API interna de Hevy (/workouts_batch).
+ * Si el token expira (401/403) y hay refresh_token disponible, refresca automáticamente y reintenta.
  */
 async function fetchAllWorkoutsViaApi(
-  accessToken: string
+  accessToken: string,
+  allowRefresh = true
 ): Promise<{ success: boolean; csvText?: string; error?: string; status?: number }> {
   try {
     let lastIndex = 0;
     const allWorkouts: any[] = [];
+    let currentToken = accessToken;
 
     while (true) {
       const res = await fetch(
         `https://api.hevyapp.com/workouts_batch/${lastIndex}`,
         {
           headers: {
-            authorization: `Bearer ${accessToken}`,
-            "auth-token": accessToken,
+            authorization: `Bearer ${currentToken}`,
+            "auth-token": currentToken,
             "x-api-key": "shelobs_hevy_web",
             "hevy-platform": "web",
           },
@@ -114,6 +259,13 @@ async function fetchAllWorkoutsViaApi(
       );
 
       if (res.status === 401 || res.status === 403) {
+        if (allowRefresh) {
+          const refreshRes = await refreshHevySession();
+          if (refreshRes.success && refreshRes.accessToken) {
+            // Reintentar recursivamente con el nuevo token rotado
+            return fetchAllWorkoutsViaApi(refreshRes.accessToken, false);
+          }
+        }
         return {
           success: false,
           status: res.status,
@@ -155,11 +307,14 @@ async function fetchAllWorkoutsViaApi(
 }
 
 /**
- * Valida un token de sesión contra la API de Hevy y lo guarda en SQLite.
+ * Valida un token o cookie de sesión contra la API de Hevy y lo guarda en SQLite.
+ * Admite formatos JSON (con access_token y refresh_token), cookie document.cookie o Bearer header.
  */
 export async function verifyAndSaveHevyToken(params: {
-  accessToken: string;
+  accessToken?: string;
+  rawTokenInput?: string;
   refreshToken?: string | null;
+  expiresAt?: string | null;
   userId?: string | null;
   username?: string | null;
   email?: string | null;
@@ -167,63 +322,78 @@ export async function verifyAndSaveHevyToken(params: {
   success: boolean;
   userId?: string;
   username?: string;
+  hasRefreshToken?: boolean;
   error?: string;
 }> {
-  let token = params.accessToken.trim();
-  if (!token) {
-    return { success: false, error: "El token no puede estar vacío." };
+  const inputStr = params.rawTokenInput || params.accessToken || "";
+  const parsed = parseHevyTokenInput(inputStr);
+
+  let token = parsed.accessToken;
+  let refreshToken = params.refreshToken || parsed.refreshToken || null;
+  let expiresAt = params.expiresAt || parsed.expiresAt || null;
+
+  if (!token && !refreshToken) {
+    return {
+      success: false,
+      error: "No se encontró ningún token de acceso o sesión válida en el texto introducido.",
+    };
   }
 
-  // Sanitizar si el usuario pegó el encabezado completo o con comillas
-  if (token.toLowerCase().startsWith("bearer ")) {
-    token = token.slice(7).trim();
-  }
-  if (token.toLowerCase().startsWith("auth-token:")) {
-    token = token.slice(11).trim();
-  }
-  if (token.toLowerCase().startsWith("authorization:")) {
-    token = token.slice(14).trim();
-    if (token.toLowerCase().startsWith("bearer ")) {
-      token = token.slice(7).trim();
-    }
-  }
-  if (token.startsWith("{") && token.endsWith("}")) {
-    try {
-      const parsed = JSON.parse(token);
-      token = parsed.access_token || parsed.auth_token || parsed.token || token;
-    } catch {}
-  }
-  token = token.replace(/^["']|["']$/g, "").trim();
+  let isVerified = false;
+  let username = params.username || null;
+  let userId = params.userId || null;
 
   try {
-    // 1. Probar el token contra el endpoint de workouts_batch para verificar validez
-    const res = await fetch("https://api.hevyapp.com/workouts_batch/0", {
-      headers: {
-        authorization: `Bearer ${token}`,
-        "auth-token": token,
-        "x-api-key": "shelobs_hevy_web",
-        "hevy-platform": "web",
-      },
-    });
+    // 1. Probar el token actual contra workouts_batch
+    if (token) {
+      const res = await fetch("https://api.hevyapp.com/workouts_batch/0", {
+        headers: {
+          authorization: `Bearer ${token}`,
+          "auth-token": token,
+          "x-api-key": "shelobs_hevy_web",
+          "hevy-platform": "web",
+        },
+      });
 
-    if (res.status === 401 || res.status === 403) {
+      if (res.ok) {
+        isVerified = true;
+      }
+    }
+
+    // 2. Si el token falló o expiró, pero tenemos refresh_token, intentar refrescarlo de inmediato
+    if (!isVerified && refreshToken) {
+      const refreshRes = await fetch("https://api.hevyapp.com/auth/refresh_token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "shelobs_hevy_web",
+          "Hevy-Platform": "web",
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+          "x-client-time": String(Math.floor(Date.now() / 1000)),
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (refreshRes.ok) {
+        const refreshData = await refreshRes.json();
+        if (refreshData.access_token) {
+          token = refreshData.access_token;
+          refreshToken = refreshData.refresh_token || refreshToken;
+          expiresAt = refreshData.expires_at || expiresAt;
+          if (refreshData.user_id) userId = refreshData.user_id;
+          isVerified = true;
+        }
+      }
+    }
+
+    if (!isVerified || !token) {
       return {
         success: false,
-        error: "El token no es válido o ha expirado en Hevy.",
+        error: "El token o sesión de Hevy no es válida o ha caducado por completo.",
       };
     }
 
-    if (!res.ok) {
-      return {
-        success: false,
-        error: `Error al verificar con Hevy: ${res.statusText} (${res.status})`,
-      };
-    }
-
-    let username = params.username || null;
-    let userId = params.userId || null;
-
-    // Si falta el username, intentar obtenerlo de user_preferences
+    // 3. Si falta el username, obtenerlo de user_preferences
     if (!username) {
       try {
         const prefRes = await fetch("https://api.hevyapp.com/user_preferences", {
@@ -242,10 +412,11 @@ export async function verifyAndSaveHevyToken(params: {
       } catch {}
     }
 
-    // 2. Guardar en SQLite
+    // 4. Guardar en SQLite con tokens de refresco
     await saveHevyAuthTokens({
       accessToken: token,
-      refreshToken: params.refreshToken,
+      refreshToken: refreshToken,
+      expiresAt: expiresAt,
       userId: userId,
       username: username,
       email: params.email,
@@ -255,6 +426,7 @@ export async function verifyAndSaveHevyToken(params: {
       success: true,
       userId: userId || undefined,
       username: username || undefined,
+      hasRefreshToken: Boolean(refreshToken),
     };
   } catch (err: any) {
     return {
@@ -266,14 +438,14 @@ export async function verifyAndSaveHevyToken(params: {
 
 /**
  * Sincroniza entrenamientos desde Hevy usando el token guardado en SQLite.
- * Utiliza peticiones HTTP puras sin requerir navegadores ni Playwright en el servidor.
+ * Si el token está próximo a expirar o expirado, lo refresca de forma transparente antes de sincronizar.
  */
 export async function syncHevyWorkouts(): Promise<{
   success: boolean;
   result?: ImportResult;
   error?: string;
 }> {
-  const authRecord = await getHevyAuthRecord();
+  let authRecord = await getHevyAuthRecord();
   if (!authRecord.isAuthenticated || !authRecord.accessToken) {
     return {
       success: false,
@@ -281,12 +453,23 @@ export async function syncHevyWorkouts(): Promise<{
     };
   }
 
+  // Refresco proactivo si el token expira pronto (< 2 minutos) o ya expiró
+  if (authRecord.refreshToken && authRecord.expiresAt) {
+    const expiresMs = new Date(authRecord.expiresAt).getTime();
+    if (!isNaN(expiresMs) && Date.now() >= expiresMs - 120_000) {
+      const refreshed = await refreshHevySession();
+      if (refreshed.success && refreshed.accessToken) {
+        authRecord = await getHevyAuthRecord();
+      }
+    }
+  }
+
   if (!fs.existsSync(SESSION_DIR)) {
     fs.mkdirSync(SESSION_DIR, { recursive: true });
   }
 
   // 1. Descargar entrenamientos usando el token guardado
-  const apiRes = await fetchAllWorkoutsViaApi(authRecord.accessToken);
+  const apiRes = await fetchAllWorkoutsViaApi(authRecord.accessToken!);
   if (apiRes.success && apiRes.csvText) {
     // Guardar respaldo de los datos obtenidos en workouts.csv
     const backupCsvPath = path.join(SESSION_DIR, "workouts.csv");

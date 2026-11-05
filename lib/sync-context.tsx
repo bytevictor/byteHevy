@@ -16,6 +16,7 @@ export interface SyncToast {
 
 export interface SyncContextValue {
   hevyConnected: boolean;
+  hevyHasRefreshToken: boolean;
   hevyUsername: string | null;
   hevyUserId: string | null;
   lastHevySync: string | null;
@@ -42,6 +43,7 @@ const SyncContext = createContext<SyncContextValue | undefined>(undefined);
 export function SyncProvider({ children }: { children: React.ReactNode }) {
   // Estados de conexión
   const [hevyConnected, setHevyConnected] = useState(false);
+  const [hevyHasRefreshToken, setHevyHasRefreshToken] = useState(false);
   const [hevyUsername, setHevyUsername] = useState<string | null>(null);
   const [hevyUserId, setHevyUserId] = useState<string | null>(null);
   const [lastHevySync, setLastHevySync] = useState<string | null>(null);
@@ -87,6 +89,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       if (hevyRes && hevyRes.ok) {
         const hevyData = await hevyRes.json();
         setHevyConnected(Boolean(hevyData.is_connected));
+        setHevyHasRefreshToken(Boolean(hevyData.has_refresh_token));
         setHevyUsername(hevyData.username || null);
         setHevyUserId(hevyData.user_id || null);
         setLastHevySync(hevyData.last_sync || null);
@@ -324,6 +327,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     <SyncContext.Provider
       value={{
         hevyConnected,
+        hevyHasRefreshToken,
         hevyUsername,
         hevyUserId,
         lastHevySync,

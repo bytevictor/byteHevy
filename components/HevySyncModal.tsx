@@ -21,6 +21,8 @@ export interface HevySyncModalProps {
 
 interface HevyStatus {
   is_connected: boolean;
+  has_refresh_token?: boolean;
+  expires_at?: string | null;
   last_sync: string | null;
   last_sync_timestamp: number;
   last_sync_workouts_count: number;
@@ -39,7 +41,7 @@ export function HevySyncModal({
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [tokenInput, setTokenInput] = useState("");
-  const [tutorialMethod, setTutorialMethod] = useState<"network" | "console">("network");
+  const [tutorialMethod, setTutorialMethod] = useState<"console" | "network">("console");
   const [copiedCmd, setCopiedCmd] = useState(false);
   const [isUpdatingToken, setIsUpdatingToken] = useState(false);
   const [feedback, setFeedback] = useState<{
@@ -95,14 +97,16 @@ export function HevySyncModal({
       const res = await fetch("/api/hevy/auth/save-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessToken: token }),
+        body: JSON.stringify({ rawTokenInput: token }),
       });
       const data = await res.json();
 
       if (data.success) {
         setFeedback({
           type: "success",
-          text: `¡Cuenta vinculada con éxito${data.username ? ` (@${data.username})` : ""}! Ya puedes sincronizar tus entrenamientos.`,
+          text: data.has_refresh_token
+            ? `¡Cuenta vinculada permanentemente${data.username ? ` (@${data.username})` : ""} con auto-renovación activa! Ya no tendrás que volver a introducir tokens.`
+            : `¡Cuenta vinculada con éxito${data.username ? ` (@${data.username})` : ""}! Ya puedes sincronizar tus entrenamientos.`,
         });
         setTokenInput("");
         setIsUpdatingToken(false);
@@ -189,7 +193,7 @@ export function HevySyncModal({
     }
   };
 
-  const consoleCommand = `copy(localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token') || '')`;
+  const consoleCommand = `copy(decodeURIComponent((document.cookie.match(/auth2\\.0-token=([^;]+)/) || [,''])[1] || (document.cookie.match(/access-token=([^;]+)/) || [,''])[1]))`;
 
   if (!isOpen) return null;
 
@@ -234,10 +238,20 @@ export function HevySyncModal({
                 Comprobando...
               </span>
             ) : status?.is_connected ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <CheckCircleIcon className="w-3.5 h-3.5" />
-                Conectado
-              </span>
+              status.has_refresh_token ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <CheckCircleIcon className="w-3.5 h-3.5" />
+                  Conexión Permanente
+                </span>
+              ) : (
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                  title="Sesión temporal: caduca en ~60 minutos"
+                >
+                  <AlertTriangleIcon className="w-3.5 h-3.5" />
+                  Sesión Temporal (~1h)
+                </span>
+              )
             ) : (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700/60">
                 <AlertTriangleIcon className="w-3.5 h-3.5 text-amber-400" />
@@ -247,7 +261,7 @@ export function HevySyncModal({
           </div>
 
           {status?.is_connected ? (
-            <div className="flex flex-col gap-1.5 pt-1 border-t border-zinc-800 text-xs text-zinc-300">
+            <div className="flex flex-col gap-2 pt-1 border-t border-zinc-800 text-xs text-zinc-300">
               <div className="flex items-center justify-between">
                 <span className="text-zinc-500">Usuario de Hevy:</span>
                 <span className="font-semibold text-zinc-200 font-mono">
@@ -257,15 +271,37 @@ export function HevySyncModal({
                 </span>
               </div>
               <div className="flex items-center justify-between">
+                <span className="text-zinc-500">Auto-renovación de sesión:</span>
+                {status.has_refresh_token ? (
+                  <span className="text-emerald-400 font-semibold flex items-center gap-1 text-[11px]">
+                    <CheckIcon className="w-3 h-3 text-emerald-400" />
+                    Activa (Permanente sin expiración)
+                  </span>
+                ) : (
+                  <span className="text-amber-400 font-semibold flex items-center gap-1 text-[11px]">
+                    Inactiva (Token simple de 1h)
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center justify-between">
                 <span className="text-zinc-500">Última sincronización:</span>
                 <span className="text-zinc-300">
                   {status.last_sync || "Sin sincronizaciones previas"}
                 </span>
               </div>
+
+              {!status.has_refresh_token && (
+                <div className="mt-1 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 leading-relaxed flex items-start gap-2">
+                  <InfoIcon className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                  <span>
+                    Has vinculado con un token simple que caducará en 1 hora. Te recomendamos pulsar en <strong>Actualizar o cambiar token</strong> y usar el comando de consola para guardar la cookie de sesión completa con auto-renovación permanente.
+                  </span>
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-xs text-zinc-400 leading-relaxed">
-              No hay sesión guardada. Sigue el breve tutorial a continuación para extraer tu token de sesión desde tu navegador y pegarlo en el recuadro.
+              No hay sesión guardada. Usa el comando rápido de consola a continuación para capturar tu cookie de sesión de Hevy y mantener la conexión permanentemente activa.
             </p>
           )}
         </div>
@@ -340,7 +376,7 @@ export function HevySyncModal({
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-zinc-200 uppercase tracking-wider flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-                  Cómo obtener tu token de sesión en 1 minuto
+                  Cómo obtener tu sesión en 1 minuto
                 </span>
                 <a
                   href="https://hevy.com/login"
@@ -357,17 +393,6 @@ export function HevySyncModal({
               <div className="flex gap-2 p-1 bg-zinc-900 rounded-xl border border-zinc-800">
                 <button
                   type="button"
-                  onClick={() => setTutorialMethod("network")}
-                  className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    tutorialMethod === "network"
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-zinc-400 hover:text-zinc-200"
-                  }`}
-                >
-                  Opción 1: Pestaña Red (F12)
-                </button>
-                <button
-                  type="button"
                   onClick={() => setTutorialMethod("console")}
                   className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                     tutorialMethod === "console"
@@ -375,57 +400,30 @@ export function HevySyncModal({
                       : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
-                  Opción 2: Consola (1 comando)
+                  Opción 1: Consola (1 clic - Permanente ⭐)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTutorialMethod("network")}
+                  className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    tutorialMethod === "network"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  Opción 2: Pestaña Red / Cookies
                 </button>
               </div>
 
               {/* Pasos según el método */}
-              {tutorialMethod === "network" ? (
+              {tutorialMethod === "console" ? (
                 <div className="flex flex-col gap-2.5 text-xs text-zinc-300 pt-1">
                   <div className="flex items-start gap-2.5">
                     <span className="w-5 h-5 rounded-full bg-zinc-800 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-zinc-700">
                       1
                     </span>
                     <p className="leading-relaxed">
-                      Inicia sesión en <a href="https://hevy.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-semibold">hevy.com</a> en tu navegador.
-                    </p>
-                  </div>
-
-                  <div className="flex items-start gap-2.5">
-                    <span className="w-5 h-5 rounded-full bg-zinc-800 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-zinc-700">
-                      2
-                    </span>
-                    <p className="leading-relaxed">
-                      Pulsa <kbd className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-200 font-mono text-[11px]">F12</kbd> (o clic derecho &gt; <em>Inspeccionar</em>) y ve a la pestaña <strong className="text-zinc-100">Red</strong> (o <em>Network</em>).
-                    </p>
-                  </div>
-
-                  <div className="flex items-start gap-2.5">
-                    <span className="w-5 h-5 rounded-full bg-zinc-800 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-zinc-700">
-                      3
-                    </span>
-                    <p className="leading-relaxed">
-                      Recarga la página (<kbd className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-200 font-mono text-[11px]">F5</kbd>) y en el filtro de búsqueda escribe <code className="text-blue-300 font-mono">workouts</code> o <code className="text-blue-300 font-mono">batch</code>.
-                    </p>
-                  </div>
-
-                  <div className="flex items-start gap-2.5">
-                    <span className="w-5 h-5 rounded-full bg-zinc-800 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-zinc-700">
-                      4
-                    </span>
-                    <p className="leading-relaxed">
-                      Haz clic en la petición, abre la sub-pestaña <strong className="text-zinc-100">Encabezados</strong> (<em>Headers</em>), busca en los encabezados de solicitud <strong className="text-blue-300 font-mono">auth-token</strong> o <strong className="text-blue-300 font-mono">authorization</strong> y copia su valor.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2.5 text-xs text-zinc-300 pt-1">
-                  <div className="flex items-start gap-2.5">
-                    <span className="w-5 h-5 rounded-full bg-zinc-800 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-zinc-700">
-                      1
-                    </span>
-                    <p className="leading-relaxed">
-                      Con tu sesión abierta en <a href="https://hevy.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-semibold">hevy.com</a>, pulsa <kbd className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-200 font-mono text-[11px]">F12</kbd> y entra en la pestaña <strong className="text-zinc-100">Consola</strong> (<em>Console</em>).
+                      Con tu sesión abierta en <a href="https://hevy.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-semibold">hevy.com</a>, pulsa <kbd className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-200 font-mono text-[11px]">F12</kbd> y haz clic en la pestaña <strong className="text-zinc-100">Consola</strong> (<em>Console</em>).
                     </p>
                   </div>
 
@@ -460,10 +458,39 @@ export function HevySyncModal({
                           )}
                         </button>
                       </div>
-                      <p className="text-[11px] text-zinc-400">
-                        ¡El comando copiará automáticamente tu token al portapapeles!
+                      <p className="text-[11px] text-emerald-400/90 leading-relaxed">
+                        ✨ ¡El comando copiará tu cookie de sesión con el <code className="font-mono bg-zinc-900 px-1 py-0.5 rounded text-emerald-300">refresh_token</code> para que la conexión no expire nunca!
                       </p>
                     </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2.5 text-xs text-zinc-300 pt-1">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-zinc-800 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-zinc-700">
+                      1
+                    </span>
+                    <p className="leading-relaxed">
+                      Inicia sesión en <a href="https://hevy.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-semibold">hevy.com</a> en tu navegador y pulsa <kbd className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-200 font-mono text-[11px]">F12</kbd>.
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-zinc-800 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-zinc-700">
+                      2
+                    </span>
+                    <p className="leading-relaxed">
+                      <strong>Para conexión permanente:</strong> Ve a la pestaña <strong className="text-zinc-100">Aplicación</strong> (o <em>Almacenamiento</em>) &gt; <strong className="text-zinc-100">Cookies</strong> &gt; <code className="text-blue-300 font-mono">https://hevy.com</code>, y copia el valor de la cookie <code className="text-blue-300 font-mono">auth2.0-token</code>.
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-zinc-800 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-zinc-700">
+                      3
+                    </span>
+                    <p className="leading-relaxed">
+                      <strong>Alternativa temporal (~1h):</strong> En la pestaña <strong className="text-zinc-100">Red</strong> (<em>Network</em>), recarga (<kbd className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-200 font-mono text-[11px]">F5</kbd>), haz clic en una petición a <code className="text-blue-300 font-mono">api.hevyapp.com</code> y en encabezados de solicitud copia <code className="text-blue-300 font-mono">auth-token</code> o <code className="text-blue-300 font-mono">authorization</code>.
+                    </p>
                   </div>
                 </div>
               )}
@@ -473,14 +500,14 @@ export function HevySyncModal({
             <form onSubmit={handleSaveToken} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-zinc-300">
-                  Pega aquí tu token de sesión de Hevy:
+                  Pega aquí el resultado copiado (cookie auth2.0-token o token Bearer):
                 </label>
                 <div className="relative">
                   <textarea
                     rows={2}
                     value={tokenInput}
                     onChange={(e) => setTokenInput(e.target.value)}
-                    placeholder="Pega el token aquí (ej. 6NTNQDHaO4... o Bearer ...)"
+                    placeholder="Pega aquí el resultado del comando de consola, la cookie o el token..."
                     className="w-full bg-zinc-950 border border-zinc-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none font-mono resize-none transition-colors"
                   />
                 </div>
@@ -495,7 +522,7 @@ export function HevySyncModal({
                   {isSaving ? (
                     <>
                       <RefreshCwIcon className="w-4 h-4 animate-spin" />
-                      <span>Verificando y guardando token...</span>
+                      <span>Verificando y guardando sesión...</span>
                     </>
                   ) : (
                     <>
