@@ -439,9 +439,9 @@ export function HevySyncModal({
                       </p>
 
                       {/* Recuadro estilizado tipo terminal, encuadrado y sin desbordamiento */}
-                      <div className="rounded-xl border border-zinc-800 bg-zinc-950 overflow-hidden shadow-inner flex flex-col">
-                        <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900/90 border-b border-zinc-800/80">
-                          <span className="text-[11px] font-mono text-zinc-400 flex items-center gap-1.5">
+                      <div className="rounded-xl border border-zinc-800 bg-zinc-950 overflow-hidden shadow-inner flex flex-col w-full max-w-full">
+                        <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900/90 border-b border-zinc-800/80 gap-2">
+                          <span className="text-[11px] font-mono text-zinc-400 flex items-center gap-1.5 shrink-0">
                             <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
                             Comando de consola
                           </span>
@@ -452,10 +452,10 @@ export function HevySyncModal({
                               setCopiedCmd(true);
                               setTimeout(() => setCopiedCmd(false), 2000);
                             }}
-                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 ${
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm shrink-0 active:scale-95 ${
                               copiedCmd
                                 ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                                : "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20"
+                                : "bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-500/25"
                             }`}
                           >
                             {copiedCmd ? (
@@ -472,7 +472,7 @@ export function HevySyncModal({
                           </button>
                         </div>
 
-                        <div className="p-3 font-mono text-[11.5px] leading-relaxed text-blue-300 overflow-x-auto whitespace-pre select-all bg-black/40">
+                        <div className="p-3 font-mono text-[11px] sm:text-[11.5px] leading-relaxed text-blue-300 overflow-x-auto whitespace-pre select-all bg-black/40 w-full max-w-full">
                           <code>{consoleCommand}</code>
                         </div>
                       </div>
