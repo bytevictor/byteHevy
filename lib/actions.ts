@@ -6,6 +6,7 @@ import { getExerciseMedia } from "./exercise-media";
 import { ExerciseMedia, MuscleGroup } from "@/types/exercise-media";
 import { WeightRecord, enrichWithMovingAverages, parseWeightCsv, estimateBodyComposition } from "./mock-weight-data";
 import { calculateBmi } from "./biometrics";
+import { computeRobustLinearProjection, WeightDataPoint } from "./weight-projection-engine";
 
 export type { WeightRecord };
 
@@ -1779,6 +1780,18 @@ export interface WeightGoalData {
   remainingKg: number;
   totalChangeKg: number;
   isCompleted: boolean;
+
+  // Estimaciones basadas estrictamente en la tendencia actual (últimos 30 días)
+  currentTrendWeeklyRate: number;      // kg/semana (ej. -0.35 o +0.30)
+  currentTrendDailyRate: number;       // kg/día
+  currentTrendKcal: number;            // kcal/día implícitas (Wishnofsky 7700 kcal/kg)
+  isDiverging: boolean;                // Si la tendencia actual diverge de la meta
+  estimatedDaysToGoal: number | null;  // Días estimados al ritmo actual
+  estimatedDateToGoal: string | null;  // Fecha estimada al ritmo actual
+  trendStatus: "optimal" | "aggressive" | "slow" | "diverging" | "maintenance" | "completed";
+  trendStatusText: string;             // Explicación concisa y accionable
+
+  // Compatibilidad si existe target_date en BD
   daysRemaining?: number;
   requiredWeeklyRate?: number;
 }
@@ -1808,14 +1821,20 @@ export async function getWeightGoal(): Promise<WeightGoalData | null> {
   const row = goalRes.rows[0] as any;
   const targetWeight = Number(row.target_weight);
   
-  // Buscar último pesaje registrado en la base de datos
-  const latestWeightRes = await db.execute({
-    sql: "SELECT weight, date, timestamp FROM weight_records ORDER BY timestamp DESC LIMIT 1",
+  // Buscar historial de pesajes para calcular el peso actual y la tendencia real
+  const weightsRes = await db.execute({
+    sql: "SELECT date, weight, timestamp FROM weight_records ORDER BY timestamp ASC",
   });
 
-  const latestRow = latestWeightRes.rows[0] as any;
-  const currentWeight = latestRow ? Number(latestRow.weight) : targetWeight;
-  const currentDate = latestRow ? String(latestRow.date) : undefined;
+  const allPoints: WeightDataPoint[] = weightsRes.rows.map((r: any) => ({
+    timestamp: Number(r.timestamp),
+    weight: Number(r.weight),
+    dateKey: String(r.date),
+  }));
+
+  const latestPoint = allPoints.length > 0 ? allPoints[allPoints.length - 1] : null;
+  const currentWeight = latestPoint ? latestPoint.weight : targetWeight;
+  const currentDate = latestPoint ? latestPoint.dateKey : undefined;
 
   const startWeight = row.start_weight !== null && row.start_weight !== undefined
     ? Number(row.start_weight)
@@ -1853,7 +1872,119 @@ export async function getWeightGoal(): Promise<WeightGoalData | null> {
 
   const totalChangeKg = Math.round((currentWeight - startWeight) * 10) / 10;
 
-  // Días y ritmo restante si hay fecha objetivo
+  // Cálculo de la tendencia actual (últimos 30 días con fallback a 60 días o historial disponible)
+  let currentTrendWeeklyRate = 0;
+  let currentTrendDailyRate = 0;
+  let currentTrendKcal = 0;
+  let isDiverging = false;
+  let estimatedDaysToGoal: number | null = null;
+  let estimatedDateToGoal: string | null = null;
+  let trendStatus: "optimal" | "aggressive" | "slow" | "diverging" | "maintenance" | "completed" = "maintenance";
+  let trendStatusText = "Sin suficientes registros recientes para calcular la tendencia.";
+
+  if (allPoints.length >= 2 && latestPoint) {
+    const lastTs = latestPoint.timestamp;
+    let samplePoints = allPoints.filter((p) => lastTs - p.timestamp <= 30 * 86400000);
+    if (samplePoints.length < 4) {
+      samplePoints = allPoints.filter((p) => lastTs - p.timestamp <= 60 * 86400000);
+    }
+    if (samplePoints.length < 2) {
+      samplePoints = allPoints.slice(-10);
+    }
+
+    const trend = computeRobustLinearProjection(samplePoints, 30);
+    currentTrendWeeklyRate = Math.round(trend.slopeWeekly * 100) / 100;
+    currentTrendDailyRate = Math.round(trend.slopeDaily * 1000) / 1000;
+    currentTrendKcal = Math.round(currentTrendWeeklyRate * 1100);
+
+    if (isCompleted) {
+      trendStatus = "completed";
+      trendStatusText = "¡Has alcanzado tu objetivo de peso!";
+      estimatedDaysToGoal = 0;
+      estimatedDateToGoal = "Alcanzado";
+      isDiverging = false;
+    } else if (goalType === "deficit") {
+      if (trend.slopeWeekly < -0.05) {
+        isDiverging = false;
+        const absDaily = Math.abs(trend.slopeDaily);
+        estimatedDaysToGoal = absDaily > 0.001 ? Math.round(remainingKg / absDaily) : null;
+        if (estimatedDaysToGoal !== null) {
+          const targetTs = Date.now() + estimatedDaysToGoal * 86400000;
+          estimatedDateToGoal = new Date(targetTs).toLocaleDateString("es-ES", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          });
+          const weeks = Math.round(estimatedDaysToGoal / 7);
+          const pace = Math.abs(currentTrendWeeklyRate);
+          const kcal = Math.abs(currentTrendKcal);
+
+          if (pace > 0.9) {
+            trendStatus = "aggressive";
+            trendStatusText = `Ritmo actual agresivo (-${pace} kg/sem, ~${kcal} kcal/d de déficit). Llegarías a los ${targetWeight} kg en ~${weeks} semanas (${estimatedDateToGoal}). Vigila la fatiga muscular.`;
+          } else if (pace >= 0.3) {
+            trendStatus = "optimal";
+            trendStatusText = `Ritmo óptimo (-${pace} kg/sem, ~${kcal} kcal/d de déficit). A este ritmo alcanzarás los ${targetWeight} kg en ~${weeks} semanas (${estimatedDateToGoal}).`;
+          } else {
+            trendStatus = "slow";
+            trendStatusText = `Ritmo gradual (-${pace} kg/sem). A este ritmo alcanzarás los ${targetWeight} kg en ~${weeks} semanas (${estimatedDateToGoal}).`;
+          }
+        }
+      } else if (trend.slopeWeekly > 0.05) {
+        isDiverging = true;
+        trendStatus = "diverging";
+        trendStatusText = `Divergencia: tu peso tiende a subir (+${currentTrendWeeklyRate} kg/sem, ~+${currentTrendKcal} kcal/d). Para bajar a ${targetWeight} kg necesitas cambiar a déficit calórico.`;
+      } else {
+        isDiverging = true;
+        trendStatus = "maintenance";
+        trendStatusText = `Tendencia estable / en meseta (~0.0 kg/sem). Necesitas reducir tu ingesta o aumentar tu gasto para iniciar la pérdida hacia ${targetWeight} kg.`;
+      }
+    } else if (goalType === "surplus") {
+      if (trend.slopeWeekly > 0.05) {
+        isDiverging = false;
+        estimatedDaysToGoal = trend.slopeDaily > 0.001 ? Math.round(remainingKg / trend.slopeDaily) : null;
+        if (estimatedDaysToGoal !== null) {
+          const targetTs = Date.now() + estimatedDaysToGoal * 86400000;
+          estimatedDateToGoal = new Date(targetTs).toLocaleDateString("es-ES", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          });
+          const weeks = Math.round(estimatedDaysToGoal / 7);
+          const pace = currentTrendWeeklyRate;
+          const kcal = currentTrendKcal;
+
+          if (pace > 0.4) {
+            trendStatus = "aggressive";
+            trendStatusText = `Ritmo de volumen alto (+${pace} kg/sem, ~+${kcal} kcal/d). Llegarías a los ${targetWeight} kg en ~${weeks} semanas (${estimatedDateToGoal}).`;
+          } else if (pace >= 0.1) {
+            trendStatus = "optimal";
+            trendStatusText = `Ritmo óptimo de ganancia muscular (+${pace} kg/sem, ~+${kcal} kcal/d). A este ritmo alcanzarás los ${targetWeight} kg en ~${weeks} semanas (${estimatedDateToGoal}).`;
+          } else {
+            trendStatus = "slow";
+            trendStatusText = `Ganancia muy gradual (+${pace} kg/sem). Llegarías a los ${targetWeight} kg en ~${weeks} semanas (${estimatedDateToGoal}).`;
+          }
+        }
+      } else if (trend.slopeWeekly < -0.05) {
+        isDiverging = true;
+        trendStatus = "diverging";
+        trendStatusText = `Divergencia: tu peso está bajando (${currentTrendWeeklyRate} kg/sem). Para subir hacia ${targetWeight} kg necesitas entrar en superávit calórico.`;
+      } else {
+        isDiverging = true;
+        trendStatus = "maintenance";
+        trendStatusText = `Tendencia estable (~0.0 kg/sem). Aumenta tu ingesta calórica para avanzar hacia los ${targetWeight} kg.`;
+      }
+    } else {
+      // Mantenimiento
+      isDiverging = false;
+      trendStatus = Math.abs(currentTrendWeeklyRate) <= 0.15 ? "optimal" : "slow";
+      trendStatusText = Math.abs(currentTrendWeeklyRate) <= 0.15
+        ? "Tendencia perfectamente estable en mantenimiento (fluctuación < 0.15 kg/sem)."
+        : `Tu peso está variando ${currentTrendWeeklyRate > 0 ? "+" : ""}${currentTrendWeeklyRate} kg/sem. Ajusta tu ingesta para estabilizarte en ${targetWeight} kg.`;
+    }
+  }
+
+  // Días y ritmo restante si hay fecha objetivo en la base de datos (compatibilidad)
   let daysRemaining: number | undefined;
   let requiredWeeklyRate: number | undefined;
 
@@ -1885,6 +2016,14 @@ export async function getWeightGoal(): Promise<WeightGoalData | null> {
     remainingKg,
     totalChangeKg,
     isCompleted,
+    currentTrendWeeklyRate,
+    currentTrendDailyRate,
+    currentTrendKcal,
+    isDiverging,
+    estimatedDaysToGoal,
+    estimatedDateToGoal,
+    trendStatus,
+    trendStatusText,
     daysRemaining,
     requiredWeeklyRate,
   };

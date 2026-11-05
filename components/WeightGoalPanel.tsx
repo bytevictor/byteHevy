@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   ScaleIcon,
@@ -10,16 +10,16 @@ import {
   TrashIcon,
   CheckIcon,
   XIcon,
-  CalendarIcon,
   FlameIcon,
   TrendingDownIcon,
   TrendingUpIcon,
   ActivityIcon,
   SparklesIcon,
   PlusIcon,
-  ClockIcon,
   ExternalLinkIcon,
   AlertTriangleIcon,
+  CheckCircleIcon,
+  ZapIcon,
 } from "./Icons";
 import { WeightGoalData } from "@/lib/actions";
 
@@ -36,19 +36,16 @@ export function WeightGoalPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Form states
+  // Form states (estrictamente peso objetivo y fase/inicio, sin fechas objetivo)
   const [targetWeight, setTargetWeight] = useState<string>("");
   const [startWeight, setStartWeight] = useState<string>("");
   const [startDate, setStartDate] = useState<string>("");
-  const [targetDate, setTargetDate] = useState<string>("");
   const [goalType, setGoalType] = useState<"deficit" | "surplus" | "maintenance">("deficit");
   const [notes, setNotes] = useState<string>("");
 
   const loadGoal = useCallback(async () => {
     setLoading(true);
-    setErrorMsg(null);
     try {
       const res = await fetch("/api/weight/goal", { cache: "no-store" });
       const json = await res.json();
@@ -57,12 +54,9 @@ export function WeightGoalPanel() {
         if (json.latestWeight) {
           setLatestWeight(json.latestWeight);
         }
-      } else {
-        setErrorMsg(json.error || "Error al cargar objetivo de peso");
       }
     } catch (e: any) {
       console.error("Error fetching weight goal:", e);
-      setErrorMsg("No se pudo conectar con el servidor");
     } finally {
       setLoading(false);
     }
@@ -78,7 +72,6 @@ export function WeightGoalPanel() {
       setTargetWeight(String(goal.targetWeight));
       setStartWeight(String(goal.startWeight));
       setStartDate(goal.startDate || "");
-      setTargetDate(goal.targetDate || "");
       setGoalType(goal.goalType);
       setNotes(goal.notes || "");
     } else {
@@ -87,7 +80,6 @@ export function WeightGoalPanel() {
       setTargetWeight("");
       setStartWeight(defaultStart);
       setStartDate(defaultStartDate);
-      setTargetDate("");
       setGoalType("deficit");
       setNotes("");
     }
@@ -95,7 +87,7 @@ export function WeightGoalPanel() {
     setShowDeleteConfirm(false);
   }, [goal, latestWeight]);
 
-  // Handle target weight change with auto phase detection
+  // Auto-detect phase when typing target weight
   const handleTargetWeightChange = (val: string) => {
     setTargetWeight(val);
     const targetNum = parseFloat(val);
@@ -110,44 +102,6 @@ export function WeightGoalPanel() {
       }
     }
   };
-
-  // Live calculation of rate and calories in the form
-  const formCalculations = useMemo(() => {
-    const tWeight = parseFloat(targetWeight);
-    const sWeight = parseFloat(startWeight) || (latestWeight?.weight ?? 0);
-    if (isNaN(tWeight) || isNaN(sWeight) || sWeight <= 0) return null;
-
-    const diffKg = Math.round(Math.abs(tWeight - sWeight) * 10) / 10;
-    let days: number | null = null;
-    let weeks: number | null = null;
-    let weeklyRate: number | null = null;
-    let dailyKcal: number | null = null;
-
-    if (targetDate) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const target = new Date(targetDate);
-      target.setHours(0, 0, 0, 0);
-      const diffTime = target.getTime() - today.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      if (diffDays > 0) {
-        days = diffDays;
-        weeks = diffDays / 7;
-        weeklyRate = Math.round((diffKg / weeks) * 100) / 100;
-        dailyKcal = Math.round(weeklyRate * 1100); // 7700 kcal / 7 days = 1100
-      }
-    }
-
-    return {
-      diffKg,
-      days,
-      weeks: weeks ? Math.round(weeks * 10) / 10 : null,
-      weeklyRate,
-      dailyKcal,
-      isAggressive: (weeklyRate || 0) > 0.9,
-      isOptimal: (weeklyRate || 0) >= 0.3 && (weeklyRate || 0) <= 0.7,
-    };
-  }, [targetWeight, startWeight, targetDate, latestWeight]);
 
   // Save goal handler
   const handleSave = async (e: React.FormEvent) => {
@@ -164,7 +118,6 @@ export function WeightGoalPanel() {
         targetWeight: tWeight,
         startWeight: startWeight ? parseFloat(startWeight) : undefined,
         startDate: startDate || undefined,
-        targetDate: targetDate || undefined,
         goalType,
         notes: notes.trim() || undefined,
       };
@@ -213,7 +166,7 @@ export function WeightGoalPanel() {
 
   if (loading) {
     return (
-      <div className="p-6 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md animate-pulse">
+      <div className="p-5 sm:p-6 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md animate-pulse">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-zinc-800" />
@@ -222,72 +175,54 @@ export function WeightGoalPanel() {
               <div className="h-3 w-64 bg-zinc-850 rounded" />
             </div>
           </div>
-          <div className="h-8 w-24 bg-zinc-800 rounded-xl" />
+          <div className="h-8 w-28 bg-zinc-800 rounded-xl" />
         </div>
-        <div className="h-14 bg-zinc-800/60 rounded-xl" />
+        <div className="h-16 bg-zinc-800/60 rounded-xl" />
       </div>
     );
   }
 
-  // Active goal decision-support metrics
+  // Phase badges & accents (sin brillos extraños en contenedor)
   const phaseConfig = {
     deficit: {
       label: "Déficit Calórico",
       tag: "Definición",
       badgeClass: "text-amber-400 bg-amber-500/10 border-amber-500/30",
-      glowBg: "rgba(245, 158, 11, 0.08)",
       barColor: "bg-gradient-to-r from-amber-500 to-amber-400",
       icon: FlameIcon,
       directionText: "a perder",
-      calPrefix: "-",
     },
     surplus: {
       label: "Superávit Calórico",
       tag: "Volumen Muscular",
       badgeClass: "text-sky-400 bg-sky-500/10 border-sky-500/30",
-      glowBg: "rgba(56, 189, 248, 0.08)",
       barColor: "bg-gradient-to-r from-sky-500 to-sky-400",
       icon: TrendingUpIcon,
       directionText: "a ganar",
-      calPrefix: "+",
     },
     maintenance: {
       label: "Mantenimiento",
       tag: "Recomposición",
       badgeClass: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
-      glowBg: "rgba(52, 211, 153, 0.08)",
       barColor: "bg-gradient-to-r from-emerald-500 to-emerald-400",
       icon: ActivityIcon,
       directionText: "de margen",
-      calPrefix: "±",
     },
   }[goal?.goalType || "deficit"];
 
   const PhaseIcon = phaseConfig.icon;
-  const currentEstKcal =
-    goal?.requiredWeeklyRate !== undefined
-      ? Math.round(goal.requiredWeeklyRate * 1100)
-      : goal?.weeklyRateKg !== undefined
-      ? Math.round(goal.weeklyRateKg * 1100)
-      : null;
+
+  // Form helper comparison
+  const parsedTarget = parseFloat(targetWeight);
+  const parsedStart = parseFloat(startWeight) || (latestWeight?.weight ?? 0);
+  const targetDiffKg = !isNaN(parsedTarget) && parsedStart > 0
+    ? Math.round(Math.abs(parsedTarget - parsedStart) * 10) / 10
+    : null;
 
   return (
-    <div
-      className="p-5 sm:p-6 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md shadow-xl transition-all relative overflow-hidden"
-      style={{
-        boxShadow: goal ? `0 10px 30px -10px ${phaseConfig.glowBg}` : undefined,
-      }}
-    >
-      {/* Background Accent Mesh */}
-      {goal && (
-        <div
-          className="absolute -right-20 -top-20 w-72 h-72 rounded-full blur-3xl pointer-events-none opacity-30 transition-all"
-          style={{ background: phaseConfig.glowBg }}
-        />
-      )}
-
+    <div className="p-5 sm:p-6 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md transition-all">
       {/* Header Row */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10 border-b border-zinc-800/60 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/60 pb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-accent/10 border border-accent/25 flex items-center justify-center text-accent-light shrink-0 shadow-sm">
             <ScaleIcon className="w-5 h-5" />
@@ -306,7 +241,7 @@ export function WeightGoalPanel() {
                 </span>
               )}
               {goal?.isCompleted && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/40 shadow-xs animate-pulse">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/40 shadow-xs">
                   <TrophyIcon className="w-3 h-3" />
                   <span>¡Alcanzado!</span>
                 </span>
@@ -316,10 +251,10 @@ export function WeightGoalPanel() {
               {goal
                 ? `Último registro: ${goal.currentWeight} kg ${
                     goal.currentDate ? `(${goal.currentDate})` : ""
-                  }`
+                  } · Meta fijada en ${goal.targetWeight} kg`
                 : latestWeight
-                ? `Tu último peso registrado es de ${latestWeight.weight} kg (${latestWeight.date}). Establece tu meta corporal.`
-                : "Define tu meta de peso corporal, fecha límite y ritmo para calcular tu balance calórico."}
+                ? `Tu último peso registrado es de ${latestWeight.weight} kg (${latestWeight.date}). Define tu objetivo de peso.`
+                : "Fija tu meta de peso corporal y obtén estimaciones automáticas según tu tendencia actual."}
             </p>
           </div>
         </div>
@@ -331,7 +266,7 @@ export function WeightGoalPanel() {
               <Link
                 href="/peso"
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800/70 hover:bg-zinc-800 text-zinc-300 hover:text-zinc-100 text-xs font-semibold transition-all border border-zinc-700/60 cursor-pointer shadow-xs"
-                title="Ver gráfica y proyecciones completas de peso"
+                title="Ver gráfica, curvas y proyecciones completas en Peso"
               >
                 <ActivityIcon className="w-3.5 h-3.5 text-accent-light" />
                 <span className="hidden sm:inline">Ver Proyección en Pesos</span>
@@ -387,9 +322,9 @@ export function WeightGoalPanel() {
 
       {/* Main Content Area */}
       {isEditing ? (
-        /* ================= FORMULARIO DE CREACIÓN / EDICIÓN ================= */
-        <form onSubmit={handleSave} className="mt-5 space-y-4 relative z-10 animate-fade-in">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+        /* ================= FORMULARIO SIMPLIFICADO DE DEFINICIÓN ================= */
+        <form onSubmit={handleSave} className="mt-5 space-y-4 animate-fade-in">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Peso Objetivo */}
             <div>
               <label className="block text-xs font-semibold text-zinc-300 mb-1.5 flex items-center gap-1.5">
@@ -409,42 +344,10 @@ export function WeightGoalPanel() {
               />
             </div>
 
-            {/* Peso de Partida */}
-            <div>
-              <label className="block text-xs font-semibold text-zinc-300 mb-1.5 flex items-center gap-1.5">
-                <ScaleIcon className="w-3.5 h-3.5 text-zinc-400" />
-                <span>Peso Inicial (kg)</span>
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                min="30"
-                max="250"
-                placeholder={latestWeight?.weight ? String(latestWeight.weight) : "79.7"}
-                value={startWeight}
-                onChange={(e) => setStartWeight(e.target.value)}
-                className="w-full bg-zinc-950/70 border border-zinc-700/80 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none font-mono"
-              />
-            </div>
-
-            {/* Fecha Límite */}
-            <div>
-              <label className="block text-xs font-semibold text-zinc-300 mb-1.5 flex items-center gap-1.5">
-                <CalendarIcon className="w-3.5 h-3.5 text-zinc-400" />
-                <span>Fecha Objetivo (opcional)</span>
-              </label>
-              <input
-                type="date"
-                value={targetDate}
-                onChange={(e) => setTargetDate(e.target.value)}
-                className="w-full bg-zinc-950/70 border border-zinc-700/80 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none font-mono"
-              />
-            </div>
-
             {/* Tipo de Fase */}
             <div>
               <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                Tipo de Fase
+                Fase / Propósito
               </label>
               <div className="grid grid-cols-3 gap-1 bg-zinc-950/70 p-1 rounded-xl border border-zinc-700/80">
                 <button
@@ -485,6 +388,24 @@ export function WeightGoalPanel() {
                 </button>
               </div>
             </div>
+
+            {/* Peso Inicial de Referencia */}
+            <div>
+              <label className="block text-xs font-semibold text-zinc-300 mb-1.5 flex items-center gap-1.5">
+                <ScaleIcon className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Peso de Partida (kg)</span>
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                min="30"
+                max="250"
+                placeholder={latestWeight?.weight ? String(latestWeight.weight) : "79.7"}
+                value={startWeight}
+                onChange={(e) => setStartWeight(e.target.value)}
+                className="w-full bg-zinc-950/70 border border-zinc-700/80 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none font-mono"
+              />
+            </div>
           </div>
 
           {/* Notas / Estrategia */}
@@ -501,57 +422,27 @@ export function WeightGoalPanel() {
             />
           </div>
 
-          {/* Live Decision Support / Wishnofsky Feedback Preview */}
-          {formCalculations && (
-            <div className="p-3.5 rounded-xl border border-zinc-800 bg-zinc-950/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-              <div className="flex items-start sm:items-center gap-2.5">
-                <SparklesIcon className="w-4 h-4 text-accent-light shrink-0 mt-0.5 sm:mt-0" />
-                <span className="text-zinc-300 leading-relaxed">
-                  Meta de variación:{" "}
+          {/* Live Preview Info */}
+          <div className="p-3 rounded-xl border border-zinc-800 bg-zinc-950/60 flex items-center gap-2.5 text-xs text-zinc-300">
+            <SparklesIcon className="w-4 h-4 text-accent-light shrink-0" />
+            <span>
+              {targetDiffKg !== null ? (
+                <>
+                  Variación a alcanzar:{" "}
                   <strong className="text-zinc-100 font-mono">
-                    {formCalculations.diffKg} kg
+                    {targetDiffKg} kg
                   </strong>{" "}
-                  {targetDate && formCalculations.days ? (
-                    <>
-                      en{" "}
-                      <strong className="text-zinc-100 font-mono">
-                        {formCalculations.days} días
-                      </strong>{" "}
-                      ({formCalculations.weeks} semanas). Ritmo requerido:{" "}
-                      <strong className="text-accent-light font-mono">
-                        {formCalculations.weeklyRate} kg/sem
-                      </strong>
-                      {" · "}
-                      Ajuste calórico estimado (Wishnofsky):{" "}
-                      <strong className="text-accent-light font-mono">
-                        {goalType === "deficit" ? "-" : "+"}
-                        {formCalculations.dailyKcal} kcal/día
-                      </strong>
-                      .
-                    </>
-                  ) : (
-                    "· Añade fecha objetivo para calcular el ritmo y déficit/superávit diario necesario."
-                  )}
-                </span>
-              </div>
-
-              {formCalculations.isAggressive && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-lg shrink-0">
-                  <AlertTriangleIcon className="w-3 h-3" />
-                  <span>Ritmo agresivo</span>
-                </span>
+                  ({goalType === "deficit" ? "pérdida" : goalType === "surplus" ? "ganancia" : "recomposición"}).
+                  Las estimaciones de tiempo y balance calórico se calcularán automáticamente según tu tendencia real de pesajes.
+                </>
+              ) : (
+                "Introduce el peso objetivo para sincronizar tus estimaciones con la tendencia actual de pesajes."
               )}
-              {formCalculations.isOptimal && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-lg shrink-0">
-                  <CheckIcon className="w-3 h-3" />
-                  <span>Ritmo óptimo</span>
-                </span>
-              )}
-            </div>
-          )}
+            </span>
+          </div>
 
           {/* Form Actions */}
-          <div className="flex items-center justify-end gap-2.5 pt-2">
+          <div className="flex items-center justify-end gap-2.5 pt-1">
             <button
               type="button"
               onClick={() => setIsEditing(false)}
@@ -571,14 +462,13 @@ export function WeightGoalPanel() {
         </form>
       ) : goal ? (
         /* ================= MODO DE VISUALIZACIÓN ACTIVA ================= */
-        <div className="mt-5 space-y-5 relative z-10">
+        <div className="mt-5 space-y-4">
           {/* Main Weight Progress Bar & Key Weights */}
           <div className="p-4 rounded-xl border border-zinc-800/80 bg-zinc-950/40 space-y-3">
-            {/* Top row with numbers */}
             <div className="flex items-baseline justify-between text-xs text-zinc-400">
               <div className="flex flex-col">
                 <span className="text-[10px] uppercase tracking-wider font-semibold text-zinc-400">
-                  Inicio {goal.startDate ? `(${goal.startDate})` : ""}
+                  Partida {goal.startDate ? `(${goal.startDate})` : ""}
                 </span>
                 <span className="text-base font-bold font-mono text-zinc-300 mt-0.5">
                   {goal.startWeight} kg
@@ -596,7 +486,7 @@ export function WeightGoalPanel() {
 
               <div className="flex flex-col items-end">
                 <span className="text-[10px] uppercase tracking-wider font-semibold text-zinc-400">
-                  Meta {goal.targetDate ? `(${goal.targetDate})` : ""}
+                  Meta Objetivo
                 </span>
                 <span className="text-base font-bold font-mono text-zinc-300 mt-0.5">
                   {goal.targetWeight} kg
@@ -613,7 +503,6 @@ export function WeightGoalPanel() {
                 />
               </div>
 
-              {/* Progress Labels */}
               <div className="flex items-center justify-between text-[11px] font-mono font-medium text-zinc-400 mt-1.5">
                 <span className="text-zinc-400">
                   {goal.totalChangeKg !== 0 ? (
@@ -622,7 +511,7 @@ export function WeightGoalPanel() {
                       {goal.totalChangeKg} kg desde el inicio
                     </>
                   ) : (
-                    "Inicio fijado"
+                    "Punto de partida"
                   )}
                 </span>
                 <span className="font-semibold text-zinc-200">
@@ -641,69 +530,119 @@ export function WeightGoalPanel() {
             </div>
           </div>
 
-          {/* 4 Decision Support Metric Cards */}
+          {/* Diagnostic Callout: Estimación Basada en la Tendencia Actual */}
+          <div
+            className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
+              goal.trendStatus === "diverging"
+                ? "bg-amber-950/20 border-amber-800/40 text-amber-200"
+                : goal.trendStatus === "aggressive"
+                ? "bg-amber-950/20 border-amber-800/40 text-amber-200"
+                : goal.trendStatus === "optimal"
+                ? "bg-emerald-950/20 border-emerald-800/40 text-emerald-200"
+                : "bg-zinc-950/40 border-zinc-800 text-zinc-300"
+            }`}
+          >
+            <div className="flex items-start sm:items-center gap-2.5">
+              {goal.trendStatus === "diverging" ? (
+                <AlertTriangleIcon className="w-4 h-4 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+              ) : goal.trendStatus === "optimal" ? (
+                <CheckCircleIcon className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5 sm:mt-0" />
+              ) : goal.trendStatus === "aggressive" ? (
+                <AlertTriangleIcon className="w-4 h-4 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+              ) : (
+                <ActivityIcon className="w-4 h-4 text-sky-400 shrink-0 mt-0.5 sm:mt-0" />
+              )}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                <span className="font-semibold text-zinc-100">
+                  Diagnóstico según tendencia:
+                </span>
+                <span className="leading-snug">{goal.trendStatusText}</span>
+              </div>
+            </div>
+
+            {goal.estimatedDateToGoal && !goal.isDiverging && !goal.isCompleted && (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-zinc-900/80 border border-zinc-700/60 shrink-0 self-start sm:self-center font-mono">
+                <span className="text-[11px] text-zinc-400 font-sans">Llegada estimada:</span>
+                <strong className="text-accent-light text-xs">
+                  {goal.estimatedDateToGoal}
+                </strong>
+              </div>
+            )}
+          </div>
+
+          {/* 4 Cards de Métricas de Tendencia Real */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {/* Card 1: Ritmo Semanal */}
+            {/* Card 1: Velocidad / Tendencia Actual */}
             <div className="p-3 rounded-xl border border-zinc-800/80 bg-zinc-950/30 flex flex-col justify-between">
               <span className="text-[11px] font-medium text-zinc-400 flex items-center gap-1.5">
                 <ActivityIcon className="w-3.5 h-3.5 text-zinc-400" />
-                <span>Ritmo Semanal</span>
+                <span>Tendencia Real</span>
               </span>
               <div className="mt-1">
-                <span className="text-base font-bold font-mono text-zinc-100">
-                  {goal.requiredWeeklyRate !== undefined
-                    ? `${goal.requiredWeeklyRate} kg`
-                    : goal.weeklyRateKg !== undefined
-                    ? `${goal.weeklyRateKg} kg`
-                    : "Libre"}
+                <span
+                  className={`text-base font-bold font-mono ${
+                    goal.goalType === "deficit"
+                      ? goal.currentTrendWeeklyRate < 0
+                        ? "text-emerald-400"
+                        : "text-amber-400"
+                      : goal.currentTrendWeeklyRate > 0
+                      ? "text-emerald-400"
+                      : "text-zinc-200"
+                  }`}
+                >
+                  {goal.currentTrendWeeklyRate > 0 ? `+${goal.currentTrendWeeklyRate}` : goal.currentTrendWeeklyRate} kg
                 </span>
                 <span className="block text-[10px] text-zinc-400 mt-0.5">
-                  {goal.requiredWeeklyRate !== undefined
-                    ? "Requerido para la fecha"
-                    : "Sin fecha estricta"}
+                  por semana (dW/dt)
                 </span>
               </div>
             </div>
 
-            {/* Card 2: Déficit / Superávit Calórico Estimado */}
+            {/* Card 2: Balance Calórico Implícito (Wishnofsky) */}
             <div className="p-3 rounded-xl border border-zinc-800/80 bg-zinc-950/30 flex flex-col justify-between">
               <span className="text-[11px] font-medium text-zinc-400 flex items-center gap-1.5">
                 <FlameIcon className="w-3.5 h-3.5 text-accent-light" />
-                <span>Ajuste Calórico</span>
+                <span>Balance Calórico</span>
               </span>
               <div className="mt-1">
                 <span className="text-base font-bold font-mono text-accent-light">
-                  {currentEstKcal !== null ? (
-                    <>
-                      {phaseConfig.calPrefix}
-                      {currentEstKcal} <span className="text-xs">kcal/d</span>
-                    </>
-                  ) : (
-                    "Variable"
-                  )}
+                  {goal.currentTrendKcal > 0 ? `+${goal.currentTrendKcal}` : goal.currentTrendKcal}{" "}
+                  <span className="text-xs">kcal/d</span>
                 </span>
                 <span className="block text-[10px] text-zinc-400 mt-0.5">
-                  Wishnofsky (7.700 kcal/kg)
+                  {goal.currentTrendKcal < 0
+                    ? "Déficit real implícito"
+                    : goal.currentTrendKcal > 0
+                    ? "Superávit real implícito"
+                    : "Balance neutro"}
                 </span>
               </div>
             </div>
 
-            {/* Card 3: Tiempo Restante */}
+            {/* Card 3: Tiempo al Ritmo Actual */}
             <div className="p-3 rounded-xl border border-zinc-800/80 bg-zinc-950/30 flex flex-col justify-between">
               <span className="text-[11px] font-medium text-zinc-400 flex items-center gap-1.5">
-                <ClockIcon className="w-3.5 h-3.5 text-zinc-400" />
-                <span>Tiempo Restante</span>
+                <ZapIcon className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Llegada a Meta</span>
               </span>
               <div className="mt-1">
                 <span className="text-base font-bold font-mono text-zinc-100">
-                  {goal.daysRemaining !== undefined
-                    ? goal.daysRemaining > 0
-                      ? `${goal.daysRemaining} días`
-                      : "Fecha vencida"
-                    : "A tu ritmo"}
+                  {goal.isCompleted
+                    ? "¡Completada!"
+                    : goal.isDiverging
+                    ? "Divergente"
+                    : goal.estimatedDaysToGoal !== null
+                    ? `~${Math.round(goal.estimatedDaysToGoal / 7)} sem`
+                    : "En análisis"}
                 </span>
                 <span className="block text-[10px] text-zinc-400 mt-0.5 truncate">
-                  {goal.targetDate ? `Límite: ${goal.targetDate}` : "Sin fecha límite"}
+                  {goal.isCompleted
+                    ? "Meta consolidada"
+                    : goal.isDiverging
+                    ? "Requiere ajuste"
+                    : goal.estimatedDateToGoal
+                    ? goal.estimatedDateToGoal
+                    : "Al ritmo actual"}
                 </span>
               </div>
             </div>
@@ -723,9 +662,7 @@ export function WeightGoalPanel() {
                   {goal.isCompleted ? "0.0 kg" : `${goal.remainingKg} kg`}
                 </span>
                 <span className="block text-[10px] text-zinc-400 mt-0.5">
-                  {goal.isCompleted
-                    ? "Objetivo completado"
-                    : `${goal.progressPct}% superado`}
+                  {goal.isCompleted ? "Objetivo completado" : `${goal.progressPct}% superado`}
                 </span>
               </div>
             </div>
@@ -753,7 +690,7 @@ export function WeightGoalPanel() {
                 Aún no has fijado tu meta de peso
               </h4>
               <p className="text-xs text-zinc-400 mt-0.5">
-                Define hacia qué peso apuntas y si deseas una fecha límite. El sistema calculará tu ritmo semanal y el déficit calórico requerido.
+                Establece tu meta corporal en kg. El sistema comparará tu velocidad actual de pesajes para estimar cuándo llegarás y tu balance calórico diario.
               </p>
             </div>
           </div>
