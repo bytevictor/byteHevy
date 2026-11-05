@@ -60,16 +60,9 @@ export function JournalCalendar({
     return map;
   }, [workouts]);
 
-  // Determine initial month/year from latest workout or default date
-  const initialDate = useMemo(() => {
-    if (workouts.length > 0) {
-      return new Date(workouts[0].startTimestamp * 1000);
-    }
-    return new Date("2026-01-01T00:00:00Z");
-  }, [workouts]);
-
-  const [currentYear, setCurrentYear] = useState(initialDate.getFullYear());
-  const [currentMonth, setCurrentMonth] = useState(initialDate.getMonth()); // 0-11
+  // Iniciar siempre en el mes y año actual del sistema al entrar
+  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth()); // 0-11
 
   const handlePrevMonth = () => {
     if (currentMonth === 0) {
@@ -87,6 +80,12 @@ export function JournalCalendar({
     } else {
       setCurrentMonth((m) => m + 1);
     }
+  };
+
+  const handleGoToCurrentMonth = () => {
+    const today = new Date();
+    setCurrentYear(today.getFullYear());
+    setCurrentMonth(today.getMonth());
   };
 
   const handleGoToLatest = () => {
@@ -226,6 +225,13 @@ export function JournalCalendar({
         {/* Navigation buttons */}
         <div className="flex items-center gap-2 self-start sm:self-center">
           <button
+            onClick={handleGoToCurrentMonth}
+            className="px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 text-xs font-medium transition-colors cursor-pointer"
+            title="Ir al mes actual"
+          >
+            Mes actual
+          </button>
+          <button
             onClick={handleGoToLatest}
             className="px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 text-xs font-medium transition-colors cursor-pointer"
             title="Ir al mes del último entreno registrado"
@@ -325,6 +331,7 @@ export function JournalCalendar({
         {calendarDays.map((day, idx) => {
           const hasWorkouts = day.workouts.length > 0;
           const isSelected = selectedDate === day.dateKey;
+          const isToday = day.dateKey === toLocalDateKey(Math.floor(Date.now() / 1000));
 
           return (
             <button
@@ -351,7 +358,9 @@ export function JournalCalendar({
               <div className="flex items-center justify-between w-full">
                 <span
                   className={`text-xs font-mono font-semibold ${
-                    !day.isCurrentMonth
+                    isToday
+                      ? "text-accent-light px-1.5 py-0.5 rounded-md bg-accent/20 border border-accent/40 font-bold"
+                      : !day.isCurrentMonth
                       ? "text-zinc-600"
                       : hasWorkouts
                       ? isSelected
