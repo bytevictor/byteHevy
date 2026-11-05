@@ -39,6 +39,7 @@ import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
 import { useUserProfile, getBmiCategory } from "@/lib/user-profile-context";
 import { BmiMapModal } from "./BmiMapModal";
 import { XiaomiSyncModal } from "./XiaomiSyncModal";
+import { WeightProjectionModal } from "./WeightProjectionModal";
 import {
   WeightRecord,
   generateMockWeightRecords,
@@ -418,6 +419,7 @@ export function WeightTab() {
   const [yearDropdownOpen, setYearDropdownOpen] = useState<boolean>(false);
   const [projectionHorizon, setProjectionHorizon] = useState<ProjectionHorizon>("none");
   const [projectionDropdownOpen, setProjectionDropdownOpen] = useState<boolean>(false);
+  const [projectionModalOpen, setProjectionModalOpen] = useState<boolean>(false);
   const [groupingMode, setGroupingMode] = useState<WeightGroupingMode>("auto");
   const [syncWithSeason, setSyncWithSeason] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -2474,95 +2476,17 @@ export function WeightTab() {
               </button>
             </div>
 
-            {/* Selector de Proyección de Tendencia (Plazo estimado) */}
+            {/* Botón de Apertura del Módulo de Proyección Estadística Avanzada */}
             {(!currentSegment || currentSegment.isLatest) && (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setProjectionDropdownOpen((prev) => !prev)}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                    projectionHorizon !== "none"
-                      ? "bg-purple-500/15 text-purple-300 border-purple-500/40 shadow-xs shadow-purple-500/10 font-bold"
-                      : "bg-zinc-950/90 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:bg-zinc-900"
-                  }`}
-                  title="Proyectar peso y grasa hacia el futuro según la tendencia del momento"
-                >
-                  <SparklesIcon
-                    className={`w-3.5 h-3.5 ${
-                      projectionHorizon !== "none" ? "text-purple-400 animate-pulse" : "text-zinc-500"
-                    }`}
-                  />
-                  <span>
-                    {projectionHorizon === "none"
-                      ? "Proyección"
-                      : projectionHorizon === "2W"
-                      ? "Proy: +2 Sem"
-                      : projectionHorizon === "1M"
-                      ? "Proy: +1 Mes"
-                      : projectionHorizon === "2M"
-                      ? "Proy: +2 Meses"
-                      : projectionHorizon === "3M"
-                      ? "Proy: +3 Meses"
-                      : "Proy: +6 Meses"}
-                  </span>
-                  <ChevronDownIcon className="w-3 h-3 text-zinc-500" />
-                </button>
-
-                {/* Dropdown Menu de Selección de Plazo */}
-                {projectionDropdownOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setProjectionDropdownOpen(false)}
-                    />
-                    <div className="absolute right-0 sm:left-0 mt-1.5 z-50 min-w-[240px] bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-1 animate-in fade-in zoom-in-95 duration-150">
-                      <div className="px-2.5 py-1.5 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider border-b border-zinc-800/80 flex items-center justify-between">
-                        <span>Plazo de Proyección</span>
-                        <span className="text-purple-400 font-mono">Tendencia</span>
-                      </div>
-                      <div className="py-1 space-y-0.5">
-                        {(
-                          [
-                            { id: "none", label: "Desactivada", desc: "Ver únicamente mediciones reales registradas" },
-                            { id: "2W", label: "+2 Semanas (14 días)", desc: "Estimación a corto plazo según el ritmo actual" },
-                            { id: "1M", label: "+1 Mes (30 días)", desc: "Objetivo mensual de evolución corporal" },
-                            { id: "2M", label: "+2 Meses (60 días)", desc: "Proyección bimestral de tendencia" },
-                            { id: "3M", label: "+3 Meses (90 días)", desc: "Proyección trimestral (fin de temporada)" },
-                            { id: "6M", label: "+6 Meses (180 días)", desc: "Horizonte semestral a largo plazo" },
-                          ] as { id: ProjectionHorizon; label: string; desc: string }[]
-                        ).map((opt) => {
-                          const isSelected = opt.id === projectionHorizon;
-                          return (
-                            <button
-                              key={opt.id}
-                              type="button"
-                              onClick={() => handleProjectionChange(opt.id)}
-                              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                                isSelected
-                                  ? "bg-purple-950/60 text-purple-200 font-bold border border-purple-500/30"
-                                  : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
-                              }`}
-                            >
-                              <div className="flex flex-col">
-                                <span className="font-semibold flex items-center gap-1.5">
-                                  {opt.id !== "none" && isSelected && (
-                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
-                                  )}
-                                  <span>{opt.label}</span>
-                                </span>
-                                <span className="text-[10px] text-zinc-500 font-normal leading-tight mt-0.5">
-                                  {opt.desc}
-                                </span>
-                              </div>
-                              {isSelected && <CheckIcon className="w-3.5 h-3.5 text-purple-400 shrink-0 ml-2" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={() => setProjectionModalOpen(true)}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer bg-gradient-to-r from-purple-950/60 via-indigo-950/40 to-purple-950/60 text-purple-200 border-purple-500/40 hover:bg-purple-900/60 hover:border-purple-400 hover:text-white shadow-xs shadow-purple-500/10 font-bold active:scale-[0.98]"
+                title="Abrir Módulo de Proyección Estadística, Cinemática y Termodinámica"
+              >
+                <SparklesIcon className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+                <span>Proyección</span>
+              </button>
             )}
 
             {/* Control de Agrupación (Fórmula anti-amontonamiento) */}
@@ -4756,6 +4680,14 @@ export function WeightTab() {
           loadRecords();
           fetchXiaomiStatus();
         }}
+      />
+
+      {/* 11. MODAL: Módulo Avanzado de Proyección & Cinemática */}
+      <WeightProjectionModal
+        isOpen={projectionModalOpen}
+        onClose={() => setProjectionModalOpen(false)}
+        rawRecords={records}
+        activeSeasonName={activeSeason?.name}
       />
     </div>
   );
