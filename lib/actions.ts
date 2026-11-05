@@ -1760,6 +1760,226 @@ export async function deleteGoal(id: string) {
   return { success: true };
 }
 
+export interface WeightGoalData {
+  id: string;
+  targetWeight: number;
+  startWeight: number;
+  startDate?: string;
+  targetDate?: string;
+  weeklyRateKg?: number;
+  goalType: "deficit" | "surplus" | "maintenance";
+  notes?: string;
+  createdAt: number;
+  updatedAt: number;
+
+  // Métricas dinámicas calculadas contra el pesaje más reciente
+  currentWeight: number;
+  currentDate?: string;
+  progressPct: number;
+  remainingKg: number;
+  totalChangeKg: number;
+  isCompleted: boolean;
+  daysRemaining?: number;
+  requiredWeeklyRate?: number;
+}
+
+export interface SaveWeightGoalInput {
+  targetWeight: number;
+  startWeight?: number;
+  startDate?: string;
+  targetDate?: string;
+  weeklyRateKg?: number;
+  goalType?: "deficit" | "surplus" | "maintenance";
+  notes?: string;
+}
+
+export async function getWeightGoal(): Promise<WeightGoalData | null> {
+  const db = getDb();
+  await ensureSchema(db);
+
+  const goalRes = await db.execute({
+    sql: "SELECT * FROM weight_goals WHERE id = 'primary' LIMIT 1",
+  });
+
+  if (goalRes.rows.length === 0) {
+    return null;
+  }
+
+  const row = goalRes.rows[0] as any;
+  const targetWeight = Number(row.target_weight);
+  
+  // Buscar último pesaje registrado en la base de datos
+  const latestWeightRes = await db.execute({
+    sql: "SELECT weight, date, timestamp FROM weight_records ORDER BY timestamp DESC LIMIT 1",
+  });
+
+  const latestRow = latestWeightRes.rows[0] as any;
+  const currentWeight = latestRow ? Number(latestRow.weight) : targetWeight;
+  const currentDate = latestRow ? String(latestRow.date) : undefined;
+
+  const startWeight = row.start_weight !== null && row.start_weight !== undefined
+    ? Number(row.start_weight)
+    : currentWeight;
+
+  const goalType: "deficit" | "surplus" | "maintenance" =
+    row.goal_type === "surplus" || row.goal_type === "maintenance"
+      ? row.goal_type
+      : "deficit";
+
+  // Cálculo de progreso
+  let progressPct = 0;
+  let remainingKg = 0;
+  let isCompleted = false;
+
+  if (goalType === "deficit") {
+    const totalToLose = Math.max(0.1, startWeight - targetWeight);
+    const lostSoFar = startWeight - currentWeight;
+    progressPct = Math.max(0, Math.min(100, Math.round((lostSoFar / totalToLose) * 100)));
+    remainingKg = Math.round((currentWeight - targetWeight) * 10) / 10;
+    isCompleted = currentWeight <= targetWeight;
+  } else if (goalType === "surplus") {
+    const totalToGain = Math.max(0.1, targetWeight - startWeight);
+    const gainedSoFar = currentWeight - startWeight;
+    progressPct = Math.max(0, Math.min(100, Math.round((gainedSoFar / totalToGain) * 100)));
+    remainingKg = Math.round((targetWeight - currentWeight) * 10) / 10;
+    isCompleted = currentWeight >= targetWeight;
+  } else {
+    // Mantenimiento
+    const diff = Math.abs(currentWeight - targetWeight);
+    progressPct = diff <= 1.0 ? 100 : Math.max(0, Math.min(100, Math.round((1 - (diff - 1.0) / 4) * 100)));
+    remainingKg = Math.round((currentWeight - targetWeight) * 10) / 10;
+    isCompleted = diff <= 1.0;
+  }
+
+  const totalChangeKg = Math.round((currentWeight - startWeight) * 10) / 10;
+
+  // Días y ritmo restante si hay fecha objetivo
+  let daysRemaining: number | undefined;
+  let requiredWeeklyRate: number | undefined;
+
+  if (row.target_date) {
+    const targetMs = new Date(row.target_date).getTime();
+    const nowMs = Date.now();
+    const diffDays = Math.ceil((targetMs - nowMs) / 86400000);
+    daysRemaining = diffDays;
+    if (diffDays > 0 && Math.abs(remainingKg) > 0) {
+      const weeks = diffDays / 7;
+      requiredWeeklyRate = Math.round((Math.abs(remainingKg) / weeks) * 100) / 100;
+    }
+  }
+
+  return {
+    id: String(row.id || "primary"),
+    targetWeight,
+    startWeight,
+    startDate: row.start_date ? String(row.start_date) : undefined,
+    targetDate: row.target_date ? String(row.target_date) : undefined,
+    weeklyRateKg: row.weekly_rate_kg !== null ? Number(row.weekly_rate_kg) : undefined,
+    goalType,
+    notes: row.notes ? String(row.notes) : undefined,
+    createdAt: Number(row.created_at || 0),
+    updatedAt: Number(row.updated_at || 0),
+    currentWeight,
+    currentDate,
+    progressPct,
+    remainingKg,
+    totalChangeKg,
+    isCompleted,
+    daysRemaining,
+    requiredWeeklyRate,
+  };
+}
+
+export async function saveWeightGoal(input: SaveWeightGoalInput): Promise<WeightGoalData> {
+  const db = getDb();
+  await ensureSchema(db);
+
+  // Si no se proporcionó peso de partida, buscar el último peso registrado
+  let startWeight = input.startWeight;
+  let startDate = input.startDate;
+  if (startWeight === undefined || isNaN(startWeight)) {
+    const latestWeightRes = await db.execute({
+      sql: "SELECT weight, date FROM weight_records ORDER BY timestamp DESC LIMIT 1",
+    });
+    if (latestWeightRes.rows.length > 0) {
+      startWeight = Number((latestWeightRes.rows[0] as any).weight);
+      if (!startDate) {
+        startDate = String((latestWeightRes.rows[0] as any).date);
+      }
+    } else {
+      startWeight = input.targetWeight;
+    }
+  }
+
+  if (!startDate) {
+    startDate = new Date().toISOString().split("T")[0];
+  }
+
+  // Inferir tipo de meta si no se especificó
+  let goalType = input.goalType;
+  if (!goalType) {
+    if (input.targetWeight < startWeight) {
+      goalType = "deficit";
+    } else if (input.targetWeight > startWeight) {
+      goalType = "surplus";
+    } else {
+      goalType = "maintenance";
+    }
+  }
+
+  // Comprobar si ya existe
+  const existing = await db.execute({
+    sql: "SELECT id FROM weight_goals WHERE id = 'primary' LIMIT 1",
+  });
+
+  if (existing.rows.length > 0) {
+    await db.execute({
+      sql: `UPDATE weight_goals 
+            SET target_weight = ?, start_weight = ?, start_date = ?, target_date = ?, 
+                weekly_rate_kg = ?, goal_type = ?, notes = ?, updated_at = strftime('%s', 'now')
+            WHERE id = 'primary'`,
+      args: [
+        input.targetWeight,
+        startWeight,
+        startDate,
+        input.targetDate || null,
+        input.weeklyRateKg ?? null,
+        goalType,
+        input.notes?.trim() || null,
+      ],
+    });
+  } else {
+    await db.execute({
+      sql: `INSERT INTO weight_goals (id, target_weight, start_weight, start_date, target_date, weekly_rate_kg, goal_type, notes)
+            VALUES ('primary', ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        input.targetWeight,
+        startWeight,
+        startDate,
+        input.targetDate || null,
+        input.weeklyRateKg ?? null,
+        goalType,
+        input.notes?.trim() || null,
+      ],
+    });
+  }
+
+  const result = await getWeightGoal();
+  if (!result) {
+    throw new Error("Error recuperando el objetivo de peso recién guardado");
+  }
+  return result;
+}
+
+export async function deleteWeightGoal(): Promise<boolean> {
+  const db = getDb();
+  await ensureSchema(db);
+  await db.execute({
+    sql: "DELETE FROM weight_goals WHERE id = 'primary'",
+  });
+  return true;
+}
+
 export interface JournalExercise {
   id: string;
   name: string;

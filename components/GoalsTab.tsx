@@ -5,6 +5,7 @@ import { GoalItem, ExerciseSummary } from "@/lib/actions";
 import { getExerciseMedia } from "@/lib/exercise-media";
 import { TargetIcon, PlusIcon, TrashIcon, CheckIcon, XIcon, TrophyIcon, EditIcon, CalendarIcon, CrownIcon } from "./Icons";
 import { GoalsSkeleton } from "./skeletons/GoalsSkeleton";
+import { WeightGoalPanel } from "./WeightGoalPanel";
 import { useSeason } from "@/lib/season-context";
 import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
 
@@ -208,7 +209,10 @@ export function GoalsTab() {
 
   return (
     <div className="py-6 max-w-5xl mx-auto flex flex-col gap-6">
-      {/* Header Banner */}
+      {/* Panel de Objetivo de Peso Corporal */}
+      <WeightGoalPanel />
+
+      {/* Header Banner - Objetivos de Ejercicios */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2.5">

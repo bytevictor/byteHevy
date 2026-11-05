@@ -180,6 +180,18 @@ export async function ensureSchema(db: Client) {
       FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE CASCADE
     );`,
     `CREATE INDEX IF NOT EXISTS idx_goals_exercise ON goals(exercise_id);`,
+    `CREATE TABLE IF NOT EXISTS weight_goals (
+      id TEXT PRIMARY KEY DEFAULT 'primary',
+      target_weight REAL NOT NULL,
+      start_weight REAL,
+      start_date TEXT,
+      target_date TEXT,
+      weekly_rate_kg REAL,
+      goal_type TEXT DEFAULT 'deficit',
+      notes TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now')),
+      updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+    );`,
     `CREATE TABLE IF NOT EXISTS seasons (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
