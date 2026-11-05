@@ -473,7 +473,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
               className={`h-[38px] px-3 rounded-xl border flex items-center gap-1.5 text-xs font-semibold shrink-0 transition-all cursor-pointer shadow-sm active:scale-[0.98] ${
                 hevyConnected
                   ? "bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300"
-                  : "bg-zinc-900 border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                  : "bg-zinc-900 border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
               } disabled:opacity-50`}
             >
               <ByteHevyLogo className="w-4 h-4" />

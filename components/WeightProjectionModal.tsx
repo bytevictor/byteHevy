@@ -633,7 +633,7 @@ export function WeightProjectionModal({
             {/* Botón Cerrar */}
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer shrink-0 ml-1"
+              className="w-8 h-8 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer shrink-0 ml-1"
               title="Cerrar modal"
             >
               <XIcon className="w-4 h-4" />

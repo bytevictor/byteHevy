@@ -131,7 +131,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             <span className="flex-1 leading-snug">{syncToast.text}</span>
             <button
               onClick={clearToast}
-              className="text-zinc-400 hover:text-white cursor-pointer ml-1"
+              className="text-zinc-400 hover:text-zinc-100 cursor-pointer ml-1"
             >
               <XIcon className="w-3.5 h-3.5" />
             </button>

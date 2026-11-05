@@ -469,7 +469,7 @@ export function BmiMapModal({ isOpen, onClose, weight: propWeight }: BmiMapModal
               <button
                 type="button"
                 onClick={() => setSimulatedPoint(null)}
-                className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-[11px] font-medium transition-colors cursor-pointer self-start"
+                className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-zinc-100 text-[11px] font-medium transition-colors cursor-pointer self-start"
               >
                 Restablecer a mi peso actual
               </button>

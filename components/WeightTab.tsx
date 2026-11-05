@@ -1950,7 +1950,7 @@ export function WeightTab() {
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-sm ${
               xiaomiConnected
                 ? "bg-orange-500/10 border-orange-500/30 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300"
-                : "bg-zinc-900 border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                : "bg-zinc-900 border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
             } disabled:opacity-50`}
             title={
               xiaomiConnected
@@ -2116,7 +2116,7 @@ export function WeightTab() {
               <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
                 <span className="flex items-center gap-1.5">
                   <UserIcon className="w-3.5 h-3.5 text-accent-light group-hover:scale-110 transition-transform" />
-                  <span className="text-zinc-300 font-semibold group-hover:text-white transition-colors">BMI / IMC</span>
+                  <span className="text-zinc-300 font-semibold group-hover:text-zinc-100 transition-colors">BMI / IMC</span>
                 </span>
                 <span
                   className={`px-2 py-0.5 rounded text-xs font-semibold border ${bmiCat.bgColor} ${bmiCat.color} ${bmiCat.borderColor}`}
@@ -2410,8 +2410,8 @@ export function WeightTab() {
                                 }}
                                 className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
                                   isSelected
-                                    ? "bg-zinc-800 text-white font-bold"
-                                    : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                                    ? "bg-zinc-800 text-zinc-100 font-bold"
+                                    : "text-zinc-300 hover:bg-zinc-800/60 hover:text-zinc-100"
                                 }`}
                               >
                                 <div className="flex flex-col">
@@ -3618,7 +3618,7 @@ export function WeightTab() {
               className={`px-2.5 py-1.5 rounded-xl border text-xs font-medium cursor-pointer transition-colors flex items-center gap-1.5 ${
                 tableGroupByDay
                   ? "bg-accent/15 border-accent/30 text-accent-light hover:bg-accent/25"
-                  : "bg-zinc-800 border-zinc-700 text-zinc-300 hover:text-white"
+                  : "bg-zinc-800 border-zinc-700 text-zinc-300 hover:text-zinc-100"
               }`}
               title={
                 tableGroupByDay
@@ -3648,7 +3648,7 @@ export function WeightTab() {
             {/* Ordenar */}
             <button
               onClick={() => setSortAsc(!sortAsc)}
-              className="p-1.5 rounded-xl bg-zinc-800/80 border border-zinc-700/80 text-zinc-300 hover:text-white text-xs font-medium cursor-pointer"
+              className="p-1.5 rounded-xl bg-zinc-800/80 border border-zinc-700/80 text-zinc-300 hover:text-zinc-100 text-xs font-medium cursor-pointer"
               title={sortAsc ? "Más antiguo primero" : "Más reciente primero"}
             >
               {sortAsc ? "▲ Asc" : "▼ Desc"}
@@ -4144,7 +4144,7 @@ export function WeightTab() {
                     <button
                       type="button"
                       onClick={() => setDeleteConfirmOpen(false)}
-                      className="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 hover:text-white text-xs cursor-pointer"
+                      className="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 hover:text-zinc-100 text-xs cursor-pointer"
                     >
                       Cancelar
                     </button>
@@ -4608,7 +4608,7 @@ export function WeightTab() {
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         onClick={() => handleOpenEdit(m)}
-                        className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white cursor-pointer transition-colors"
+                        className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-zinc-100 cursor-pointer transition-colors"
                         title="Modificar esta toma"
                       >
                         <EditIcon className="w-3.5 h-3.5" />
