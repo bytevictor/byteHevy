@@ -700,9 +700,12 @@ export function buildFullProjectionReport(
   const sorted = [...rawPoints].sort((a, b) => a.timestamp - b.timestamp);
   const latestTs = sorted[sorted.length - 1].timestamp;
 
-  // Filtrar ventana de calibración
-  const calibrationCutoff = latestTs - calibrationWindowDays * 86400000;
-  let calibrationPoints = sorted.filter((p) => p.timestamp >= calibrationCutoff);
+  // Filtrar ventana de calibración (soporta ventanas amplias: 1 año, 2 años y Todo el historial)
+  const isAllHistory = calibrationWindowDays >= 9999;
+  const calibrationCutoff = isAllHistory ? 0 : latestTs - calibrationWindowDays * 86400000;
+  let calibrationPoints = isAllHistory
+    ? sorted
+    : sorted.filter((p) => p.timestamp >= calibrationCutoff);
 
   // Si en la ventana seleccionada hay menos de 2 pesajes, tomar el mínimo necesario (últimos 3-5 pesajes)
   if (calibrationPoints.length < 2) {
@@ -722,9 +725,15 @@ export function buildFullProjectionReport(
   });
 
   const latestWeight = calibrationPoints[calibrationPoints.length - 1].weight;
+  const timeSpanDays = Math.max(1, Math.round((latestTs - calibrationPoints[0].timestamp) / 86400000));
+  const effectiveHalfLife = isAllHistory
+    ? Math.max(90, Math.round(timeSpanDays * 0.45))
+    : calibrationWindowDays >= 365
+    ? Math.max(90, Math.round(calibrationWindowDays * 0.5))
+    : Math.max(45, Math.round(calibrationWindowDays * 0.6));
 
-  // 1. Regresión Lineal Robusta
-  const linear = computeRobustLinearProjection(calibrationPoints, days);
+  // 1. Regresión Lineal Robusta (WLS ponderada según el tamaño de la ventana)
+  const linear = computeRobustLinearProjection(calibrationPoints, days, effectiveHalfLife);
 
   // 2. Modelo Asintótico de Adaptación Metabólica
   const metabolic = computeMetabolicPlateau(calibrationPoints, linear, days);
@@ -739,15 +748,15 @@ export function buildFullProjectionReport(
   const effectiveTargetWeight = targetWeight ?? (linear.slopeDaily < 0 ? latestWeight - 3 : latestWeight + 3);
   const inverseTarget = computeInverseTarget(latestWeight, effectiveTargetWeight, linear, monteCarlo);
 
-  // 6. Generar series continuas para gráficos SVG
+  // 6. Generar series continuas para gráficos SVG (alta resolución para hover preciso)
   const timelinePoints: FullProjectionReport["timelinePoints"] = [];
-  const steps = 25;
+  const steps = Math.max(60, Math.min(180, Math.round(days * 2)));
   for (let i = 0; i <= steps; i++) {
     const fraction = i / steps;
     const curDays = fraction * days;
     const curTs = latestTs + curDays * 86400000;
 
-    const lin = computeRobustLinearProjection(calibrationPoints, curDays);
+    const lin = computeRobustLinearProjection(calibrationPoints, curDays, effectiveHalfLife);
     const met = computeMetabolicPlateau(calibrationPoints, linear, curDays);
 
     // Buscar el punto Monte Carlo más cercano

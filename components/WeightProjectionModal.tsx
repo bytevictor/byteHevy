@@ -112,20 +112,26 @@ export function WeightProjectionModal({
   const [hoveredPoint, setHoveredPoint] = useState<{
     x: number;
     y: number;
+    screenX: number;
+    isHistorical: boolean;
     dateLabel: string;
-    linearVal: number;
-    lower95: number;
-    upper95: number;
-    lower68: number;
-    upper68: number;
-    metabolicVal: number;
-    monteCarloP50: number;
-    monteCarloP10: number;
-    monteCarloP90: number;
+    weight: number;
+    diffFromLatest: number;
+    daysAgoOrAhead: number;
+    linearVal?: number;
+    lower95?: number;
+    upper95?: number;
+    lower68?: number;
+    upper68?: number;
+    metabolicVal?: number;
+    monteCarloP50?: number;
+    monteCarloP10?: number;
+    monteCarloP90?: number;
   } | null>(null);
 
   const [mounted, setMounted] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const chartContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -175,13 +181,16 @@ export function WeightProjectionModal({
     );
   }, [points, selectedHorizonId, targetWeightNum, calibrationWindowDays]);
 
-  // Histórico de calibración reciente para el gráfico
+  // Histórico de calibración reciente para el gráfico (soporta 1 año, 2 años y Todo el historial)
   const calibrationPoints = useMemo(() => {
     if (!report || points.length === 0) return [];
-    const cutoff = report.latestTimestamp - report.calibrationWindowDays * 86400000;
+    if (calibrationWindowDays >= 9999) {
+      return points;
+    }
+    const cutoff = report.latestTimestamp - calibrationWindowDays * 86400000;
     const filtered = points.filter((p) => p.timestamp >= cutoff);
     return filtered.length >= 2 ? filtered : points.slice(-Math.min(5, points.length));
-  }, [report, points]);
+  }, [report, points, calibrationWindowDays]);
 
   // Escalas matemáticas para el SVG
   const svgDimensions = { width: 960, height: 400, padding: { top: 35, right: 75, bottom: 45, left: 65 } };
@@ -260,6 +269,131 @@ export function WeightProjectionModal({
     return buildSplinePath(pts);
   }, [scales, calibrationPoints]);
 
+  // Manejador interactivo de movimiento del cursor sobre el gráfico SVG
+  const handleSvgMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!svgRef.current || !scales || !report || calibrationPoints.length === 0) return;
+    const svg = svgRef.current;
+
+    // 1. Calcular con precisión geométrica el factor de escala y offset de letterboxing del SVG
+    const rect = svg.getBoundingClientRect();
+    const viewBoxWidth = svgDimensions.width; // 960
+    const viewBoxHeight = svgDimensions.height; // 400
+    const viewBoxAspect = viewBoxWidth / viewBoxHeight; // 2.4
+    const elemAspect = rect.width / (rect.height || 1);
+
+    let scale = 1;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (elemAspect > viewBoxAspect) {
+      // El elemento es más ancho que 2.4: hay bandas de letterboxing a izquierda y derecha
+      scale = rect.height / viewBoxHeight;
+      const renderedWidth = viewBoxWidth * scale;
+      offsetX = (rect.width - renderedWidth) / 2;
+    } else {
+      // El elemento es más alto que 2.4: hay bandas de letterboxing arriba y abajo
+      scale = rect.width / viewBoxWidth;
+      const renderedHeight = viewBoxHeight * scale;
+      offsetY = (rect.height - renderedHeight) / 2;
+    }
+
+    // Coordenada exacta del ratón dentro del viewBox del SVG (0..960)
+    const clientX = e.clientX - rect.left - offsetX;
+    const clientY = e.clientY - rect.top - offsetY;
+    const svgX = clientX / scale;
+    const svgY = clientY / scale;
+
+    // Comprobar si el cursor está dentro del área de datos del gráfico
+    const plotLeft = svgDimensions.padding.left;
+    const plotRight = svgDimensions.width - svgDimensions.padding.right;
+    if (svgX < plotLeft - 10 || svgX > plotRight + 10) {
+      setHoveredPoint(null);
+      return;
+    }
+
+    const t0X = scales.getX(report.latestTimestamp);
+
+    // CASO 1: Puntos históricos anteriores o iguales a hoy (T0)
+    if (svgX <= t0X) {
+      let closestPt = calibrationPoints[0];
+      let minDiff = Math.abs(scales.getX(closestPt.timestamp) - svgX);
+      for (let i = 1; i < calibrationPoints.length; i++) {
+        const diff = Math.abs(scales.getX(calibrationPoints[i].timestamp) - svgX);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestPt = calibrationPoints[i];
+        }
+      }
+
+      const ptX = scales.getX(closestPt.timestamp);
+      const ptY = scales.getY(closestPt.weight);
+      const screenX = offsetX + ptX * scale;
+      const diffFromLatest = Math.round((closestPt.weight - report.latestWeight) * 10) / 10;
+      const daysAgo = Math.max(0, Math.round((report.latestTimestamp - closestPt.timestamp) / 86400000));
+
+      setHoveredPoint({
+        x: ptX,
+        y: ptY,
+        screenX,
+        isHistorical: true,
+        dateLabel: new Date(closestPt.timestamp).toLocaleDateString("es-ES", {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+        }),
+        weight: closestPt.weight,
+        diffFromLatest,
+        daysAgoOrAhead: daysAgo,
+      });
+      return;
+    }
+
+    // CASO 2: Curva de proyección futura (a la derecha de T0)
+    if (report.timelinePoints && report.timelinePoints.length > 0) {
+      let closestProj = report.timelinePoints[0];
+      let minDiff = Math.abs(scales.getX(closestProj.timestamp) - svgX);
+      for (let i = 1; i < report.timelinePoints.length; i++) {
+        const diff = Math.abs(scales.getX(report.timelinePoints[i].timestamp) - svgX);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestProj = report.timelinePoints[i];
+        }
+      }
+
+      const projX = scales.getX(closestProj.timestamp);
+      const activeVal =
+        activeMode === "metabolic"
+          ? closestProj.metabolicExpected
+          : activeMode === "montecarlo"
+          ? closestProj.monteCarloP50
+          : closestProj.linearExpected;
+      const projY = scales.getY(activeVal);
+      const screenX = offsetX + projX * scale;
+      const diffFromLatest = Math.round((activeVal - report.latestWeight) * 10) / 10;
+      const daysAhead = Math.max(0, Math.round((closestProj.timestamp - report.latestTimestamp) / 86400000));
+
+      setHoveredPoint({
+        x: projX,
+        y: projY,
+        screenX,
+        isHistorical: false,
+        dateLabel: closestProj.dateLabel,
+        weight: activeVal,
+        diffFromLatest,
+        daysAgoOrAhead: daysAhead,
+        linearVal: closestProj.linearExpected,
+        lower95: closestProj.linearLower95,
+        upper95: closestProj.linearUpper95,
+        lower68: closestProj.linearLower68,
+        upper68: closestProj.linearUpper68,
+        metabolicVal: closestProj.metabolicExpected,
+        monteCarloP50: closestProj.monteCarloP50,
+        monteCarloP10: closestProj.monteCarloP10,
+        monteCarloP90: closestProj.monteCarloP90,
+      });
+    }
+  };
+
   if (!isOpen || !mounted) return null;
 
   return createPortal(
@@ -316,6 +450,10 @@ export function WeightProjectionModal({
                 <option value={45} className="bg-zinc-900">Últimos 45 días</option>
                 <option value={60} className="bg-zinc-900">Últimos 60 días</option>
                 <option value={90} className="bg-zinc-900">Últimos 90 días</option>
+                <option value={180} className="bg-zinc-900">Últimos 6 meses</option>
+                <option value={365} className="bg-zinc-900">1 año completo</option>
+                <option value={730} className="bg-zinc-900">2 años</option>
+                <option value={99999} className="bg-zinc-900">Todo el historial</option>
               </select>
             </div>
 
@@ -594,42 +732,13 @@ export function WeightProjectionModal({
                 </div>
 
                 {/* Contenedor SVG con crosshair */}
-                <div className="relative w-full overflow-hidden">
+                <div ref={chartContainerRef} className="relative w-full overflow-hidden">
                   {scales && (
                     <svg
                       ref={svgRef}
                       viewBox={`0 0 ${svgDimensions.width} ${svgDimensions.height}`}
                       className="w-full h-auto max-h-[480px] overflow-visible"
-                      onMouseMove={(e) => {
-                        if (!svgRef.current) return;
-                        const rect = svgRef.current.getBoundingClientRect();
-                        const clientX = e.clientX - rect.left;
-                        const svgX = (clientX / rect.width) * svgDimensions.width;
-
-                        // Buscar el punto de la línea temporal más próximo
-                        const matchingPoint = report.timelinePoints.reduce((prev, curr) => {
-                          const prevX = scales.getX(prev.timestamp);
-                          const currX = scales.getX(curr.timestamp);
-                          return Math.abs(currX - svgX) < Math.abs(prevX - svgX) ? curr : prev;
-                        }, report.timelinePoints[0]);
-
-                        if (matchingPoint) {
-                          setHoveredPoint({
-                            x: scales.getX(matchingPoint.timestamp),
-                            y: scales.getY(matchingPoint.linearExpected),
-                            dateLabel: matchingPoint.dateLabel,
-                            linearVal: matchingPoint.linearExpected,
-                            lower95: matchingPoint.linearLower95,
-                            upper95: matchingPoint.linearUpper95,
-                            lower68: matchingPoint.linearLower68,
-                            upper68: matchingPoint.linearUpper68,
-                            metabolicVal: matchingPoint.metabolicExpected,
-                            monteCarloP50: matchingPoint.monteCarloP50,
-                            monteCarloP10: matchingPoint.monteCarloP10,
-                            monteCarloP90: matchingPoint.monteCarloP90,
-                          });
-                        }
-                      }}
+                      onMouseMove={handleSvgMouseMove}
                       onMouseLeave={() => setHoveredPoint(null)}
                     >
                       <defs>
@@ -881,16 +990,28 @@ export function WeightProjectionModal({
                         const cx = scales.getX(pt.timestamp);
                         const cy = scales.getY(pt.weight);
                         const isLatest = idx === calibrationPoints.length - 1;
+                        const isSelected = hoveredPoint?.isHistorical && Math.abs(hoveredPoint.x - cx) < 2;
                         return (
-                          <g key={idx}>
+                          <g key={idx} pointerEvents="none">
+                            {/* Halo estático suave cuando está seleccionado (sin keyframes que alteren el render) */}
+                            {isSelected && (
+                              <circle
+                                cx={cx}
+                                cy={cy}
+                                r={10}
+                                fill="var(--accent, #f59e0b)"
+                                opacity={0.28}
+                              />
+                            )}
+                            {/* Círculo visible del pesaje */}
                             <circle
                               cx={cx}
                               cy={cy}
-                              r={isLatest ? 6 : 4}
-                              fill={isLatest ? "var(--accent-light, #fbbf24)" : "var(--accent, #f59e0b)"}
-                              stroke="#ffffff"
-                              strokeWidth={isLatest ? 2 : 1.5}
-                              className="transition-transform hover:scale-150 cursor-pointer drop-shadow-sm"
+                              r={isSelected ? 6 : isLatest ? 5.5 : 4}
+                              fill={isSelected ? "#ffffff" : isLatest ? "var(--accent-light, #fbbf24)" : "var(--accent, #f59e0b)"}
+                              stroke={isSelected ? "var(--accent, #f59e0b)" : "#ffffff"}
+                              strokeWidth={isSelected ? 2.5 : isLatest ? 2 : 1.5}
+                              className="drop-shadow-sm"
                             />
                           </g>
                         );
@@ -898,79 +1019,155 @@ export function WeightProjectionModal({
 
                       {/* Baliza terminal en la fecha objetivo adaptada al Theme */}
                       <g
+                        pointerEvents="none"
                         transform={`translate(${scales.getX(report.targetTimestamp)}, ${scales.getY(
                           activeMode === "metabolic"
                             ? report.metabolic.projectedWeight
                             : report.linear.projectedWeight
                         )})`}
                       >
-                        <circle r={9} fill="var(--accent, #f59e0b)" opacity={0.35} className="animate-ping" />
-                        <circle r={5.5} fill="var(--accent-light, #fbbf24)" stroke="#ffffff" strokeWidth={2} />
+                        <circle r={8} fill="var(--accent, #f59e0b)" opacity={0.25} />
+                        <circle r={5} fill="var(--accent-light, #fbbf24)" stroke="#ffffff" strokeWidth={2} />
                       </g>
 
                       {/* =============================================================
-                          CROSSHAIR INTERACTIVO EN HOVER
+                          CROSSHAIR INTERACTIVO EN HOVER (CALIBRACIÓN & PROYECCIÓN)
                          ============================================================= */}
                       {hoveredPoint && (
-                        <g>
+                        <g pointerEvents="none">
                           <line
                             x1={hoveredPoint.x}
                             y1={svgDimensions.padding.top}
                             x2={hoveredPoint.x}
                             y2={svgDimensions.height - svgDimensions.padding.bottom}
-                            stroke="var(--accent-light, #fbbf24)"
-                            strokeWidth={1}
+                            stroke={hoveredPoint.isHistorical ? "var(--accent, #f59e0b)" : "var(--accent-light, #fbbf24)"}
+                            strokeWidth={1.5}
                             strokeDasharray="3 3"
                           />
                           <circle
                             cx={hoveredPoint.x}
                             cy={hoveredPoint.y}
-                            r={5.5}
-                            fill="var(--accent-light, #fbbf24)"
+                            r={6}
+                            fill={hoveredPoint.isHistorical ? "var(--accent, #f59e0b)" : "var(--accent-light, #fbbf24)"}
                             stroke="#ffffff"
                             strokeWidth={2}
+                            className="drop-shadow-md"
                           />
                         </g>
                       )}
                     </svg>
                   )}
 
-                  {/* Tooltip flotante con detalles estadísticos (Tipografía legible) */}
+                  {/* Tooltip flotante con detalles estadísticos o pesaje histórico */}
                   {hoveredPoint && (
                     <div
                       style={{
                         position: "absolute",
-                        left: `${(hoveredPoint.x / svgDimensions.width) * 100}%`,
+                        left: `${hoveredPoint.screenX}px`,
                         top: "14px",
-                        transform: "translateX(-50%)",
+                        transform:
+                          hoveredPoint.screenX < 150
+                            ? "translateX(-10%)"
+                            : hoveredPoint.screenX > (chartContainerRef.current?.getBoundingClientRect().width ?? svgDimensions.width) - 150
+                            ? "translateX(-90%)"
+                            : "translateX(-50%)",
                       }}
-                      className="pointer-events-none z-30 p-3 rounded-2xl bg-zinc-950/95 border border-accent/50 shadow-2xl text-xs sm:text-sm font-mono flex flex-col gap-1.5 min-w-[240px] backdrop-blur-md"
+                      className="pointer-events-none z-30 p-3.5 rounded-2xl bg-zinc-950/95 border border-accent/50 shadow-2xl text-xs sm:text-sm font-mono flex flex-col gap-1.5 min-w-[260px] backdrop-blur-md animate-in fade-in duration-75"
                     >
-                      <div className="flex items-center justify-between border-b border-zinc-800 pb-1.5 font-bold text-zinc-100">
-                        <span>{hoveredPoint.dateLabel}</span>
-                        <span className="text-accent-light text-sm font-extrabold">
-                          {activeMode === "metabolic"
-                            ? `${hoveredPoint.metabolicVal} kg`
-                            : `${hoveredPoint.linearVal} kg`}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-zinc-400 text-xs">
-                        <span>Intervalo 95% (2σ):</span>
-                        <span className="text-zinc-200 font-semibold">
-                          [{hoveredPoint.lower95} — {hoveredPoint.upper95}] kg
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-zinc-400 text-xs">
-                        <span>Intervalo 68% (1σ):</span>
-                        <span className="text-zinc-200 font-semibold">
-                          [{hoveredPoint.lower68} — {hoveredPoint.upper68}] kg
-                        </span>
-                      </div>
-                      {activeMode === "montecarlo" && (
-                        <div className="flex items-center justify-between text-accent-light text-xs pt-1 border-t border-zinc-900 font-bold">
-                          <span>Monte Carlo P50:</span>
-                          <span>{hoveredPoint.monteCarloP50} kg</span>
-                        </div>
+                      {hoveredPoint.isHistorical ? (
+                        <>
+                          <div className="flex items-center justify-between border-b border-zinc-800 pb-1.5 font-bold text-zinc-100">
+                            <span className="flex items-center gap-1.5 capitalize">
+                              <CalendarIcon className="w-3.5 h-3.5 text-accent-light" />
+                              {hoveredPoint.dateLabel}
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-accent/20 border border-accent/40 text-accent-light">
+                              {hoveredPoint.daysAgoOrAhead === 0 ? "Hoy (T0)" : `Hace ${hoveredPoint.daysAgoOrAhead}d`}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-zinc-400 text-xs">Pesaje Registrado:</span>
+                            <span className="text-zinc-100 text-base font-extrabold font-mono">
+                              {hoveredPoint.weight.toFixed(1)} kg
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-zinc-400">Diferencia vs hoy:</span>
+                            <span
+                              className={`font-bold font-mono ${
+                                hoveredPoint.diffFromLatest > 0
+                                  ? "text-amber-400"
+                                  : hoveredPoint.diffFromLatest < 0
+                                  ? "text-emerald-400"
+                                  : "text-zinc-300"
+                              }`}
+                            >
+                              {hoveredPoint.diffFromLatest === 0
+                                ? "Peso actual de referencia"
+                                : `${hoveredPoint.diffFromLatest > 0 ? "+" : ""}${hoveredPoint.diffFromLatest.toFixed(1)} kg`}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between border-b border-zinc-800 pb-1.5 font-bold text-zinc-100">
+                            <div className="flex items-center gap-1.5">
+                              <CalendarIcon className="w-3.5 h-3.5 text-accent-light" />
+                              <span>{hoveredPoint.dateLabel}</span>
+                              <span className="text-[11px] font-normal text-zinc-400">
+                                (+{hoveredPoint.daysAgoOrAhead}d)
+                              </span>
+                            </div>
+                            <span className="text-accent-light text-base font-extrabold font-mono">
+                              {hoveredPoint.weight.toFixed(1)} kg
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-zinc-400 text-xs">
+                            <span>Intervalo 95% (2σ):</span>
+                            <span className="text-zinc-200 font-semibold font-mono">
+                              [{hoveredPoint.lower95} — {hoveredPoint.upper95}] kg
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-zinc-400 text-xs">
+                            <span>Intervalo 68% (1σ):</span>
+                            <span className="text-zinc-200 font-semibold font-mono">
+                              [{hoveredPoint.lower68} — {hoveredPoint.upper68}] kg
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-xs pt-1 border-t border-zinc-900">
+                            <span className="text-zinc-400">Variación esperada:</span>
+                            <span
+                              className={`font-bold font-mono ${
+                                hoveredPoint.diffFromLatest < 0
+                                  ? "text-emerald-400"
+                                  : hoveredPoint.diffFromLatest > 0
+                                  ? "text-amber-400"
+                                  : "text-zinc-300"
+                              }`}
+                            >
+                              {hoveredPoint.diffFromLatest > 0 ? `+${hoveredPoint.diffFromLatest}` : hoveredPoint.diffFromLatest} kg
+                            </span>
+                          </div>
+
+                          {activeMode === "montecarlo" && (
+                            <div className="flex items-center justify-between text-accent-light text-xs pt-0.5 font-bold">
+                              <span>Monte Carlo P50:</span>
+                              <span>{hoveredPoint.monteCarloP50} kg</span>
+                            </div>
+                          )}
+
+                          {activeMode === "metabolic" && (
+                            <div className="flex items-center justify-between text-emerald-400 text-xs pt-0.5 font-bold">
+                              <span>Plateau Asintótico:</span>
+                              <span>{hoveredPoint.metabolicVal} kg</span>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
