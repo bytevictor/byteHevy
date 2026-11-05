@@ -255,6 +255,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
   --color-accent: var(--accent);
   --color-accent-light: var(--accent-light);
   --color-accent-lighter: var(--accent-lighter);

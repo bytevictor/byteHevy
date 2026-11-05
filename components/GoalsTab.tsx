@@ -213,7 +213,7 @@ export function GoalsTab() {
       <WeightGoalPanel />
 
       {/* Header Banner - Objetivos de Ejercicios */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border border-zinc-800 bg-zinc-900 shadow-sm">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2.5">
             <TargetIcon className="w-5 h-5 text-accent-light" />
@@ -234,9 +234,9 @@ export function GoalsTab() {
       </div>
 
 
-      {/* Global Progress Strip */}
+      {/* Global Progress Strip (Sin transparencias de fondo que sangren) */}
       {goals.length > 0 && (
-        <div className="grid grid-cols-3 gap-3 p-4 rounded-2xl border border-zinc-800/70 bg-zinc-900/30">
+        <div className="grid grid-cols-3 gap-3 p-4 rounded-2xl border border-zinc-800 bg-zinc-900 shadow-sm">
           <div className="flex flex-col">
             <span className="text-[11px] font-medium text-zinc-400">Objetivos Fijados</span>
             <span className="text-lg font-bold font-mono text-zinc-100 mt-0.5">{totalGoals}</span>
@@ -259,8 +259,8 @@ export function GoalsTab() {
       {loading ? (
         <GoalsSkeleton />
       ) : goals.length === 0 ? (
-        <div className="py-16 text-center border border-dashed border-zinc-800 rounded-2xl bg-zinc-950/40 p-8 flex flex-col items-center justify-center">
-          <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-3 text-accent-light">
+        <div className="py-16 text-center border border-dashed border-zinc-800 rounded-2xl bg-zinc-900 p-8 flex flex-col items-center justify-center shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center mb-3 text-accent-light">
             <TargetIcon className="w-6 h-6" />
           </div>
           <h3 className="text-base font-semibold text-zinc-200 mb-1">No hay objetivos definidos</h3>
@@ -288,9 +288,9 @@ export function GoalsTab() {
                 key={goal.id}
                 className={`p-5 rounded-2xl border transition-all duration-200 flex flex-col justify-between gap-4 relative group ${
                   isCompleted
-                    ? "border-emerald-500/40 bg-zinc-900/60 shadow-lg shadow-emerald-500/5"
-                    : "border-zinc-800/80 bg-zinc-900/40 hover:border-zinc-700/80"
-                } backdrop-blur-sm`}
+                    ? "border-emerald-500/40 bg-zinc-900 shadow-lg shadow-emerald-500/5"
+                    : "border-zinc-800 bg-zinc-900 hover:border-zinc-700 shadow-sm"
+                }`}
               >
                 {/* Header: Media Thumbnail + Exercise Name + Actions */}
                 <div className="flex items-start justify-between gap-3">
@@ -402,7 +402,7 @@ export function GoalsTab() {
                       </div>
 
                       {/* Card 2: Récord Histórico */}
-                      <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex flex-col justify-between">
+                      <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between">
                         <div className="flex flex-col gap-0.5 min-w-0">
                           <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider flex items-center gap-1">
                             <CrownIcon className="w-3 h-3 text-amber-400 shrink-0" />
@@ -516,7 +516,7 @@ export function GoalsTab() {
                       )}
                     </div>
 
-                    <div className="px-2 py-0.5 rounded-md bg-zinc-950/80 border border-zinc-800 shrink-0 text-center">
+                    <div className="px-2 py-0.5 rounded-md bg-zinc-950 border border-zinc-800 shrink-0 text-center">
                       <span
                         className={`font-mono tabular-nums font-bold text-xs ${
                           isCompleted ? "text-emerald-400" : "text-accent-light"
@@ -567,7 +567,7 @@ export function GoalsTab() {
 
                 {/* Notes (if provided) */}
                 {goal.notes && (
-                  <div className="pt-2 border-t border-zinc-800/60 text-xs italic text-zinc-400 bg-zinc-950/30 px-3 py-2 rounded-lg">
+                  <div className="pt-2 border-t border-zinc-800/60 text-xs italic text-zinc-400 bg-zinc-950 px-3 py-2 rounded-lg">
                     "{goal.notes}"
                   </div>
                 )}
@@ -582,7 +582,7 @@ export function GoalsTab() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
           <div className="relative w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             {/* Modal Header */}
-            <div className="p-5 border-b border-zinc-800 flex items-start justify-between bg-zinc-950/60">
+            <div className="p-5 border-b border-zinc-800 flex items-start justify-between bg-zinc-950">
               <div className="flex flex-col">
                 <span className="text-xs text-accent-light font-semibold mb-1">
                   {editingGoalId ? "Editar Meta" : "Nueva Meta Ideal"}
@@ -620,7 +620,7 @@ export function GoalsTab() {
                 </select>
 
                 {selectedExercise && (
-                  <div className="mt-2 p-2.5 rounded-lg bg-zinc-950/60 border border-zinc-800/80 flex items-center justify-between text-xs">
+                  <div className="mt-2 p-2.5 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-between text-xs">
                     <span className="text-zinc-400">Récord histórico:</span>
                     <span className="font-mono font-bold text-zinc-200">
                       {selectedExercise.bestLabel || selectedExercise.latestTopSetLabel || "Sin datos aún"}

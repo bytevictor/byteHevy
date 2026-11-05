@@ -156,7 +156,7 @@ export function WeightGoalPanel() {
 
   if (loading) {
     return (
-      <div className="p-5 sm:p-6 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md animate-pulse">
+      <div className="p-5 sm:p-6 rounded-2xl border border-zinc-800 bg-zinc-900 shadow-sm animate-pulse">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-zinc-800" />
@@ -210,7 +210,7 @@ export function WeightGoalPanel() {
     : null;
 
   return (
-    <div className="p-5 sm:p-6 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md transition-all">
+    <div className="p-5 sm:p-6 rounded-2xl border border-zinc-800 bg-zinc-900 shadow-sm transition-all">
       {/* Header Row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/60 pb-4">
         <div className="flex items-center gap-3">
@@ -359,7 +359,7 @@ export function WeightGoalPanel() {
                 placeholder="Ej. 75.0"
                 value={targetWeight}
                 onChange={(e) => setTargetWeight(e.target.value)}
-                className="w-full bg-zinc-950/70 border border-zinc-700/80 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none font-mono"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none font-mono"
               />
             </div>
 
@@ -382,7 +382,7 @@ export function WeightGoalPanel() {
                 placeholder={latestWeight?.weight ? String(latestWeight.weight) : "79.7"}
                 value={startWeight}
                 onChange={(e) => setStartWeight(e.target.value)}
-                className="w-full bg-zinc-950/70 border border-zinc-700/80 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none font-mono"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none font-mono"
               />
             </div>
           </div>
@@ -397,12 +397,12 @@ export function WeightGoalPanel() {
               placeholder="Ej. Déficit moderado de 400 kcal, 10.000 pasos diarios y 160g de proteína"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full bg-zinc-950/70 border border-zinc-700/80 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+              className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
             />
           </div>
 
           {/* Live Preview Info */}
-          <div className="p-3 rounded-xl border border-zinc-800 bg-zinc-950/60 flex items-center gap-2.5 text-xs text-zinc-300">
+          <div className="p-3 rounded-xl border border-zinc-800 bg-zinc-950 flex items-center gap-2.5 text-xs text-zinc-300">
             <SparklesIcon className="w-4 h-4 text-accent-light shrink-0" />
             <span>
               {targetDiffKg !== null ? (
@@ -443,7 +443,7 @@ export function WeightGoalPanel() {
         /* ================= MODO DE VISUALIZACIÓN ACTIVA ================= */
         <div className="mt-5 space-y-4">
           {/* Main Weight Progress Bar & Key Weights */}
-          <div className="p-4 rounded-xl border border-zinc-800/80 bg-zinc-950/40 space-y-3">
+          <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-950 space-y-3">
             <div className="flex items-baseline justify-between text-xs text-zinc-400">
               <div className="flex flex-col">
                 <span className="text-[10px] uppercase tracking-wider font-semibold text-zinc-400">
@@ -518,7 +518,7 @@ export function WeightGoalPanel() {
                 ? "bg-amber-950/20 border-amber-800/40 text-amber-200"
                 : goal.trendStatus === "optimal"
                 ? "bg-emerald-950/20 border-emerald-800/40 text-emerald-200"
-                : "bg-zinc-950/40 border-zinc-800 text-zinc-300"
+                : "bg-zinc-950 border-zinc-800 text-zinc-300"
             }`}
           >
             <div className="flex items-start sm:items-center gap-2.5">
@@ -540,7 +540,7 @@ export function WeightGoalPanel() {
             </div>
 
             {goal.estimatedDateToGoal && !goal.isDiverging && !goal.isCompleted && (
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-zinc-900/80 border border-zinc-700/60 shrink-0 self-start sm:self-center font-mono">
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-zinc-900 border border-zinc-700 shrink-0 self-start sm:self-center font-mono">
                 <span className="text-[11px] text-zinc-400 font-sans">Llegada estimada:</span>
                 <strong className="text-accent-light text-xs">
                   {goal.estimatedDateToGoal}
@@ -552,7 +552,7 @@ export function WeightGoalPanel() {
           {/* 4 Cards de Métricas de Tendencia Real */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {/* Card 1: Velocidad / Tendencia Actual */}
-            <div className="p-3 rounded-xl border border-zinc-800/80 bg-zinc-950/30 flex flex-col justify-between">
+            <div className="p-3 rounded-xl border border-zinc-800 bg-zinc-950 flex flex-col justify-between">
               <span className="text-[11px] font-medium text-zinc-400 flex items-center gap-1.5">
                 <ActivityIcon className="w-3.5 h-3.5 text-zinc-400" />
                 <span>Tendencia Real</span>
@@ -578,7 +578,7 @@ export function WeightGoalPanel() {
             </div>
 
             {/* Card 2: Balance Calórico Implícito (Wishnofsky) */}
-            <div className="p-3 rounded-xl border border-zinc-800/80 bg-zinc-950/30 flex flex-col justify-between">
+            <div className="p-3 rounded-xl border border-zinc-800 bg-zinc-950 flex flex-col justify-between">
               <span className="text-[11px] font-medium text-zinc-400 flex items-center gap-1.5">
                 <FlameIcon className="w-3.5 h-3.5 text-accent-light" />
                 <span>Balance Calórico</span>
@@ -599,7 +599,7 @@ export function WeightGoalPanel() {
             </div>
 
             {/* Card 3: Tiempo al Ritmo Actual */}
-            <div className="p-3 rounded-xl border border-zinc-800/80 bg-zinc-950/30 flex flex-col justify-between">
+            <div className="p-3 rounded-xl border border-zinc-800 bg-zinc-950 flex flex-col justify-between">
               <span className="text-[11px] font-medium text-zinc-400 flex items-center gap-1.5">
                 <ZapIcon className="w-3.5 h-3.5 text-zinc-400" />
                 <span>Llegada a Meta</span>
@@ -627,7 +627,7 @@ export function WeightGoalPanel() {
             </div>
 
             {/* Card 4: Distancia Restante */}
-            <div className="p-3 rounded-xl border border-zinc-800/80 bg-zinc-950/30 flex flex-col justify-between">
+            <div className="p-3 rounded-xl border border-zinc-800 bg-zinc-950 flex flex-col justify-between">
               <span className="text-[11px] font-medium text-zinc-400 flex items-center gap-1.5">
                 <TargetIcon className="w-3.5 h-3.5 text-zinc-400" />
                 <span>Distancia a Meta</span>
@@ -649,7 +649,7 @@ export function WeightGoalPanel() {
 
           {/* Strategy Notes if provided */}
           {goal.notes && (
-            <div className="px-3.5 py-2.5 rounded-xl border border-zinc-800/60 bg-zinc-950/30 flex items-center gap-2 text-xs text-zinc-400">
+            <div className="px-3.5 py-2.5 rounded-xl border border-zinc-800 bg-zinc-950 flex items-center gap-2 text-xs text-zinc-400">
               <span className="text-zinc-500 font-semibold uppercase text-[10px] tracking-wider shrink-0">
                 Estrategia:
               </span>
@@ -659,7 +659,7 @@ export function WeightGoalPanel() {
         </div>
       ) : (
         /* ================= ESTADO INICIAL SIN OBJETIVO ================= */
-        <div className="mt-4 p-5 rounded-xl border border-dashed border-zinc-800 bg-zinc-950/30 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="mt-4 p-5 rounded-xl border border-dashed border-zinc-800 bg-zinc-950 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 shrink-0">
               <TargetIcon className="w-4 h-4" />

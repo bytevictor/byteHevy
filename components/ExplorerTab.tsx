@@ -448,7 +448,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 placeholder="Buscar ejercicio..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-zinc-900/60 border border-zinc-800/80 rounded-xl pl-10 pr-9 py-2.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-9 py-2.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all"
               />
               {searchQuery && (
                 <button
@@ -502,7 +502,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 onClick={() => setCategoryFilter(cat.id)}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${categoryFilter === cat.id
                     ? "bg-zinc-800 text-zinc-100 border border-zinc-700 shadow-sm"
-                    : "bg-zinc-900/50 text-zinc-400 hover:text-zinc-200 border border-zinc-850 hover:bg-zinc-800/40"
+                    : "bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:bg-zinc-850"
                   }`}
               >
                 {cat.label}
@@ -533,7 +533,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
               </div>
               <button
                 onClick={() => setShowAllSeasonExercises((prev) => !prev)}
-                className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 transition-colors cursor-pointer shrink-0"
+                className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 transition-colors cursor-pointer shrink-0"
               >
                 {showAllSeasonExercises
                   ? `Mostrando todos (${exercises.length})`
@@ -574,8 +574,8 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 key={ex.id}
                 onClick={() => setSelectedId(ex.id)}
                 className={`group flex items-center gap-3 text-left p-2.5 rounded-xl border transition-all duration-150 cursor-pointer ${isSelected
-                    ? "bg-zinc-850/90 border-accent/50 shadow-lg ring-1 ring-accent/20"
-                    : "bg-zinc-900/40 border-zinc-800/70 hover:bg-zinc-850/50 hover:border-zinc-755"
+                    ? "bg-zinc-850 border-accent/60 shadow-lg ring-1 ring-accent/30"
+                    : "bg-zinc-900 border-zinc-800 hover:bg-zinc-850 hover:border-zinc-700"
                   }`}
               >
                 {/* 3D Visual Thumbnail */}
@@ -663,7 +663,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
             {/* Above-the-fold Viewport Stage: Exercise Profile + Progression Chart fill the screen with clean bottom margin */}
             <div className="flex flex-col gap-3.5 lg:gap-4 lg:min-h-[calc(100vh-7.25rem)]">
               {/* HERO STAGE: Anatomical Visualizer & Exercise Profile */}
-              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 sm:p-5 shadow-xl flex flex-col lg:flex-row items-stretch lg:items-center gap-4 sm:gap-5 backdrop-blur-md">
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-5 shadow-xl flex flex-col lg:flex-row items-stretch lg:items-center gap-4 sm:gap-5">
                 {/* 3D Animation Showcase (Prominent and Impressive) */}
                 <div className="w-full lg:w-[350px] xl:w-[390px] shrink-0 flex items-center justify-center my-auto">
                   <ExerciseAnimationView
@@ -1019,7 +1019,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
               </div>
 
               {/* Progression Chart Card: Stretches vertically to fill remaining above-the-fold space */}
-              <div className="flex-1 flex flex-col justify-between p-4 sm:p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-sm shadow-xl min-h-[320px]">
+              <div className="flex-1 flex flex-col justify-between p-4 sm:p-5 rounded-2xl border border-zinc-800 bg-zinc-900 shadow-xl min-h-[320px]">
                 <div className="flex items-center justify-between mb-2.5 shrink-0">
                   <div>
                     <h3 className="text-sm font-semibold tracking-tight text-zinc-100 flex items-center gap-2">
@@ -1101,7 +1101,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
               </div>
 
               {detailData.sessions.length === 0 ? (
-                <div className="p-8 rounded-xl border border-zinc-800/70 bg-zinc-900/20 text-center text-xs text-zinc-500">
+                <div className="p-8 rounded-xl border border-zinc-800 bg-zinc-900 text-center text-xs text-zinc-500">
                   No hay sesiones registradas en este periodo
                 </div>
               ) : (
@@ -1110,7 +1110,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                     <div
                       key={sess.workoutId}
                       onClick={() => handleOpenWorkout(sess.workoutId)}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-zinc-800/70 bg-zinc-900/30 hover:bg-zinc-850/50 hover:border-zinc-700/80 transition-all cursor-pointer group"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-850 hover:border-zinc-700 transition-all cursor-pointer group"
                     >
                       {/* Left: Date & Title */}
                       <div className="flex items-center gap-3">
@@ -1248,10 +1248,10 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2.5">
                   Desglose de Series Realizadas
                 </h4>
-                <div className="rounded-xl border border-zinc-800 overflow-hidden bg-zinc-950/60">
+                <div className="rounded-xl border border-zinc-800 overflow-hidden bg-zinc-950">
                   <table className="w-full text-left text-xs font-mono tabular-nums">
                     <thead>
-                      <tr className="border-b border-zinc-800 bg-zinc-900/80 text-[11px] text-zinc-400 uppercase tracking-wider">
+                      <tr className="border-b border-zinc-800 bg-zinc-900 text-[11px] text-zinc-400 uppercase tracking-wider">
                         <th className="py-2.5 px-3">Serie</th>
                         <th className="py-2.5 px-3">Tipo</th>
                         <th className="py-2.5 px-3">Carga / Reps</th>
