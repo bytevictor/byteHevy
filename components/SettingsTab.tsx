@@ -530,43 +530,43 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
   return (
     <div className="py-6 max-w-4xl mx-auto flex flex-col gap-6">
       {/* Selector de Sub-pestañas Protagonista */}
-      <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 backdrop-blur-md overflow-x-auto shadow-md">
+      <div className="w-full flex items-center gap-1.5 p-1.5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 backdrop-blur-md overflow-x-auto shadow-md">
         <button
           onClick={() => handleSubTabChange("datos")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+          className={`flex-1 min-w-[140px] sm:min-w-0 flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
             activeSubTab === "datos"
               ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
               : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
           }`}
         >
-          <UploadCloudIcon className="w-4 h-4 text-accent-light" />
+          <UploadCloudIcon className="w-4 h-4 text-accent-light shrink-0" />
           <span>Datos & Conexiones</span>
         </button>
 
         <button
           onClick={() => handleSubTabChange("perfil")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+          className={`flex-1 min-w-[140px] sm:min-w-0 flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
             activeSubTab === "perfil"
               ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
               : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
           }`}
         >
-          <UserIcon className="w-4 h-4 text-emerald-400" />
+          <UserIcon className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>Perfil Biométrico</span>
         </button>
 
         <button
           onClick={() => handleSubTabChange("temporadas")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+          className={`flex-1 min-w-[140px] sm:min-w-0 flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
             activeSubTab === "temporadas"
               ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
               : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
           }`}
         >
-          <CalendarIcon className="w-4 h-4 text-amber-400" />
+          <CalendarIcon className="w-4 h-4 text-amber-400 shrink-0" />
           <span>Temporadas</span>
           {seasons.length > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-zinc-800/90 text-zinc-300 border border-zinc-700/60">
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-zinc-800/90 text-zinc-300 border border-zinc-700/60 shrink-0">
               {seasons.length}
             </span>
           )}
@@ -574,28 +574,28 @@ export function SettingsTab({ onSyncComplete }: SettingsTabProps) {
 
         <button
           onClick={() => handleSubTabChange("multimedia")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+          className={`flex-1 min-w-[140px] sm:min-w-0 flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
             activeSubTab === "multimedia"
               ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
               : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
           }`}
         >
-          <FilmIcon className="w-4 h-4 text-blue-400" />
+          <FilmIcon className="w-4 h-4 text-blue-400 shrink-0" />
           <span>Multimedia 3D</span>
           {mediaStatus && mediaStatus.missingCount > 0 && (
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" title={`${mediaStatus.missingCount} pendientes`} />
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" title={`${mediaStatus.missingCount} pendientes`} />
           )}
         </button>
 
         <button
           onClick={() => handleSubTabChange("apariencia")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+          className={`flex-1 min-w-[140px] sm:min-w-0 flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
             activeSubTab === "apariencia"
               ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/60"
               : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
           }`}
         >
-          <SparklesIcon className="w-4 h-4 text-purple-400" />
+          <SparklesIcon className="w-4 h-4 text-purple-400 shrink-0" />
           <span>Apariencia</span>
         </button>
       </div>
