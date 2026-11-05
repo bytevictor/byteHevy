@@ -701,11 +701,12 @@ export function buildFullProjectionReport(
   const latestTs = sorted[sorted.length - 1].timestamp;
 
   // Filtrar ventana de calibración
-  let calibrationCutoff = latestTs - calibrationWindowDays * 86400000;
+  const calibrationCutoff = latestTs - calibrationWindowDays * 86400000;
   let calibrationPoints = sorted.filter((p) => p.timestamp >= calibrationCutoff);
 
-  if (calibrationPoints.length < 4) {
-    calibrationPoints = sorted.slice(-15);
+  // Si en la ventana seleccionada hay menos de 2 pesajes, tomar el mínimo necesario (últimos 3-5 pesajes)
+  if (calibrationPoints.length < 2) {
+    calibrationPoints = sorted.slice(-Math.min(5, sorted.length));
   }
 
   const horizonConfig =
