@@ -179,7 +179,7 @@ export function ExerciseAnimationView({
           </div>
         )}
 
-        {/* Botón interactivo para Reasignar Imagen / Multimedia */}
+        {/* Botón discreto para Reasignar Imagen / Multimedia (solo visible al pasar el cursor) */}
         {onReassignMedia && (
           <button
             type="button"
@@ -187,11 +187,11 @@ export function ExerciseAnimationView({
               e.stopPropagation();
               onReassignMedia();
             }}
-            className="absolute bottom-2.5 right-2.5 z-20 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-950/85 hover:bg-zinc-900 text-zinc-200 hover:text-white border border-zinc-700/80 hover:border-accent/60 backdrop-blur-md shadow-lg text-[11px] font-semibold transition-all cursor-pointer group/btn active:scale-95"
-            title="Reasignar o cambiar la imagen de este ejercicio en el buscador de multimedia"
+            className="absolute bottom-2.5 right-3 z-20 opacity-0 group-hover/canvas:opacity-100 pointer-events-none group-hover/canvas:pointer-events-auto transition-opacity duration-200 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-zinc-900/80 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-100 border border-zinc-700/60 hover:border-zinc-500 backdrop-blur-sm shadow-sm text-[10px] font-mono cursor-pointer active:scale-95"
+            title="Reasignar o cambiar la animación 3D de este ejercicio en el buscador de multimedia"
           >
-            <FilmIcon className="w-3.5 h-3.5 text-accent-light group-hover/btn:scale-110 transition-transform" />
-            <span>Reasignar imagen</span>
+            <FilmIcon className="w-3 h-3 text-zinc-400" />
+            <span>Cambiar carátula</span>
           </button>
         )}
       </div>
