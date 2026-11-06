@@ -24,7 +24,7 @@ import {
   RefreshCwIcon,
 } from "./Icons";
 import { useSeason } from "@/lib/season-context";
-import { getSeasonColor, getLightSeasonColor, hexToRgba } from "@/lib/season-colors";
+import { getSeasonColor, getLightSeasonColor, getSeasonTailwindTheme, hexToRgba } from "@/lib/season-colors";
 import { useSync } from "@/lib/sync-context";
 
 // Estilos de medallas olímpicas (Oro, Plata y Bronce) para el Top 3 de ejercicios
@@ -56,6 +56,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
   const { hevyConnected, isHevySyncing, triggerHevySync } = useSync();
   const seasonColor = activeSeason ? getSeasonColor(activeSeason) : null;
   const lightSeasonColor = seasonColor ? getLightSeasonColor(seasonColor) : null;
+  const seasonTheme = activeSeason ? getSeasonTailwindTheme(activeSeason.color) : null;
   const [exercises, setExercises] = useState<ExerciseSummary[]>(initialExercises);
   const [loadingList, setLoadingList] = useState(!initialExercises || initialExercises.length === 0);
   const [selectedId, setSelectedId] = useState<string | null>(initialExercises[0]?.id || null);
