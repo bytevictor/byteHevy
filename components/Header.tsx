@@ -328,7 +328,7 @@ export function Header({
           </div>
 
           {/* Tabs Navigator */}
-          <nav className="navbar-tabs-container h-11 flex items-center bg-[var(--surface)] border border-[var(--border-color)] p-1 sm:p-1.5 rounded-full shadow-lg backdrop-blur-md">
+          <nav className="navbar-tabs-container h-11 flex items-center bg-[var(--surface-subtle)]/80 border border-[var(--border-subtle)]/80 p-1 rounded-full shadow-sm backdrop-blur-xl">
             {tabs.map((t) => {
               const Icon = t.icon;
               const isActive = currentTab === t.id;
@@ -340,13 +340,20 @@ export function Header({
                     if (setActiveTab) setActiveTab(t.id);
                   }}
                   title={t.label}
-                  className={`navbar-tab-item h-full flex items-center gap-2 sm:gap-2.5 px-3.5 sm:px-4.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
+                  className={`navbar-tab-item h-full flex items-center gap-2 sm:gap-2.5 px-3.5 sm:px-4.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-150 cursor-pointer select-none ${
                     isActive
-                      ? "navbar-tab-active bg-[var(--surface-hover)] text-[var(--text-primary)] shadow-sm border border-[var(--border-subtle)] font-bold"
-                      : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+                      ? "navbar-tab-active bg-[var(--surface-card)] text-[var(--text-primary)] font-semibold shadow-xs"
+                      : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]/50"
                   }`}
                 >
-                  <Icon className={`navbar-tab-icon w-4 h-4 shrink-0 ${isActive ? "text-accent-light" : "text-[var(--text-muted)]"}`} />
+                  {isActive && (
+                    <span className="navbar-tab-indicator w-1.5 h-1.5 rounded-full bg-[var(--accent)] shadow-[0_0_6px_var(--accent)] shrink-0" />
+                  )}
+                  <Icon
+                    className={`navbar-tab-icon w-4 h-4 shrink-0 transition-colors ${
+                      isActive ? "text-[var(--accent)]" : "text-[var(--text-muted)]"
+                    }`}
+                  />
                   <span className="navbar-tab-label whitespace-nowrap">{t.label}</span>
                 </Link>
               );
