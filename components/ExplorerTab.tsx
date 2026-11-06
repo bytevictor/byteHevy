@@ -702,40 +702,18 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                   </div>
 
                   {/* PR & 1RM Hero Cards */}
-                  {activeSeason && seasonColor ? (
+                  {activeSeason && seasonTheme ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {/* Season PR Card (Contenido en vertical) */}
-                      <div
-                        className="p-3.5 rounded-xl border flex flex-col justify-between shadow-xs"
-                        style={{
-                          background: `linear-gradient(to bottom right, ${hexToRgba(seasonColor, 0.10)}, rgb(24 24 27) 50%, rgb(24 24 27) 100%)`,
-                          borderColor: hexToRgba(seasonColor, 0.25),
-                        }}
-                      >
-                        <div
-                          className="flex items-center justify-between pb-2 border-b"
-                          style={{ borderColor: hexToRgba(seasonColor, 0.20) }}
-                        >
-                          <span
-                            className="text-[10px] uppercase tracking-wider font-bold flex items-center gap-1.5"
-                            style={{ color: seasonColor }}
-                          >
-                            <FlameIcon className="w-3.5 h-3.5 shrink-0" style={{ color: seasonColor }} />
+                      <div className={`p-3.5 rounded-xl flex flex-col justify-between shadow-xs ${seasonTheme.container}`}>
+                        <div className={`flex items-center justify-between pb-2 border-b ${seasonTheme.headerBorder}`}>
+                          <span className={`text-[10px] uppercase tracking-wider font-bold flex items-center gap-1.5 whitespace-nowrap ${seasonTheme.headerText}`}>
+                            <FlameIcon className={`w-3.5 h-3.5 shrink-0 ${seasonTheme.icon}`} />
                             <span>PR Season</span>
                           </span>
-                          <span
-                            className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded truncate max-w-[130px] flex items-center gap-1 font-semibold border"
-                            style={{
-                              backgroundColor: hexToRgba(seasonColor, 0.10),
-                              borderColor: hexToRgba(seasonColor, 0.22),
-                              color: seasonColor,
-                            }}
-                          >
-                            <span
-                              className="w-1.5 h-1.5 rounded-full shrink-0"
-                              style={{ backgroundColor: seasonColor }}
-                            />
-                            <span>{activeSeason.name}</span>
+                          <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded truncate max-w-[130px] flex items-center gap-1 font-semibold shrink-0 border ${seasonTheme.badge}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${seasonTheme.badgeDot}`} />
+                            <span className="truncate">{activeSeason.name}</span>
                           </span>
                         </div>
 
@@ -744,13 +722,10 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                             {/* Row 1: Mayor Peso Season */}
                             <div className="py-2 flex flex-col">
                               <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold flex items-center gap-1.5">
-                                <span
-                                  className="w-1.5 h-1.5 rounded-full shrink-0"
-                                  style={{ backgroundColor: hexToRgba(seasonColor, 0.8) }}
-                                />
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${seasonTheme.row1Dot}`} />
                                 <span>Mayor Peso</span>
                               </span>
-                              <div className="text-base sm:text-lg font-mono tabular-nums font-bold text-zinc-100 mt-0.5">
+                              <div className={`text-base sm:text-lg font-mono tabular-nums font-bold mt-0.5 ${seasonTheme.row1Value}`}>
                                 {detailData.exercise.seasonBest?.label || "Sin registros"}
                               </div>
                               <span className="text-[10px] font-mono text-zinc-400 mt-0.5">
@@ -760,20 +735,11 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
 
                             {/* Row 2: Top Set 1RM Season */}
                             <div className="pt-2 flex flex-col">
-                              <span
-                                className="text-[10px] uppercase tracking-wider font-semibold flex items-center gap-1.5"
-                                style={{ color: seasonColor }}
-                              >
-                                <span
-                                  className="w-1.5 h-1.5 rounded-full shrink-0"
-                                  style={{ backgroundColor: seasonColor }}
-                                />
+                              <span className={`text-[10px] uppercase tracking-wider font-semibold flex items-center gap-1.5 ${seasonTheme.row2Label}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${seasonTheme.row2Dot}`} />
                                 <span>Top Set 1RM</span>
                               </span>
-                              <div
-                                className="text-base sm:text-lg font-mono tabular-nums font-bold mt-0.5"
-                                style={{ color: lightSeasonColor || seasonColor }}
-                              >
+                              <div className={`text-base sm:text-lg font-mono tabular-nums font-bold mt-0.5 ${seasonTheme.row2Value}`}>
                                 {detailData.exercise.seasonMax1RM?.label ||
                                   (detailData.exercise.estimated1RM
                                     ? `${detailData.exercise.estimated1RM} kg 1RM`
@@ -803,10 +769,7 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                                 ? "Récord Duración"
                                 : "Récord Distancia"}
                             </span>
-                            <div
-                              className="text-base sm:text-lg font-mono tabular-nums font-bold mt-0.5"
-                              style={{ color: lightSeasonColor || seasonColor }}
-                            >
+                            <div className={`text-base sm:text-lg font-mono tabular-nums font-bold mt-0.5 ${seasonTheme.nonWeightValue}`}>
                               {detailData.exercise.seasonBest?.label || "Sin registros"}
                             </div>
                             <span className="text-[10px] font-mono text-zinc-400 mt-0.5">
