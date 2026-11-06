@@ -588,12 +588,23 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                         : "border-zinc-300 group-hover:border-zinc-200"
                       }`}
                   >
-                    <img
-                      src={gifUrl}
-                      alt={ex.name}
-                      className="w-full h-full object-contain"
-                      loading="lazy"
-                    />
+                    {gifUrl?.toLowerCase().endsWith(".mp4") || gifUrl?.toLowerCase().endsWith(".webm") ? (
+                      <video
+                        src={gifUrl}
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <img
+                        src={gifUrl}
+                        alt={ex.name}
+                        className="w-full h-full object-contain"
+                        loading="lazy"
+                      />
+                    )}
                   </div>
                   {idx < 3 && !searchQuery && categoryFilter === "all" && (
                     <span

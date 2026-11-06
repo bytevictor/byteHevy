@@ -16,11 +16,11 @@ function ensureMediaDir() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { exerciseName, gifUrl, title, category } = body;
+    const { exerciseName, gifUrl, videoUrl, posterUrl, title, category } = body;
 
-    if (!exerciseName || !gifUrl) {
+    if (!exerciseName || (!gifUrl && !videoUrl)) {
       return NextResponse.json(
-        { success: false, error: "exerciseName y gifUrl son requeridos" },
+        { success: false, error: "exerciseName y gifUrl o videoUrl son requeridos" },
         { status: 400 }
       );
     }
@@ -81,6 +81,26 @@ export async function POST(request: Request) {
       savedLocally = true;
     }
 
+    // Detectar si es vídeo o si tiene un MP4 complementario
+    const isVideo =
+      Boolean(videoUrl) ||
+      gifUrl?.toLowerCase().endsWith(".mp4") ||
+      gifUrl?.toLowerCase().endsWith(".webm") ||
+      gifUrl?.toLowerCase().endsWith(".mov");
+
+    let finalVideoUrl = videoUrl || (isVideo ? gifUrl : undefined);
+
+    if (finalGifUrl?.startsWith("/media/exercises/")) {
+      const ext = path.extname(finalGifUrl).toLowerCase();
+      const base = path.basename(finalGifUrl, ext);
+      if (ext === ".gif" && !finalVideoUrl) {
+        const companionMp4 = `/media/exercises/${base}.mp4`;
+        if (fs.existsSync(path.join(process.cwd(), "public", companionMp4))) {
+          finalVideoUrl = companionMp4;
+        }
+      }
+    }
+
     // 3. Crear el objeto ExerciseMedia
     const primaryMuscle = mapCategoryToMuscleGroup(category || "");
     const equipment = detectEquipmentFromTitle(title || exerciseName);
@@ -93,8 +113,9 @@ export async function POST(request: Request) {
       secondaryMuscles: [],
       equipment,
       gifUrl: finalGifUrl,
+      videoUrl: finalVideoUrl,
       cdnUrl: gifUrl.startsWith("http") ? gifUrl : undefined,
-      posterUrl: finalGifUrl,
+      posterUrl: posterUrl || finalGifUrl,
       difficulty: "intermediate",
     };
 

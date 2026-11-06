@@ -94,11 +94,15 @@ export function ExerciseAnimationView({
           </div>
         )}
 
-        {/* Video Player (Primary Choice) */}
-        {media.videoUrl && !hasError ? (
+        {/* Video Player (Primary Choice: videoUrl or gifUrl being a video file) */}
+        {(media.videoUrl ||
+          media.gifUrl?.toLowerCase().endsWith(".mp4") ||
+          media.gifUrl?.toLowerCase().endsWith(".webm") ||
+          media.gifUrl?.toLowerCase().endsWith(".mov")) &&
+        !hasError ? (
           <video
             ref={videoRef}
-            src={media.videoUrl}
+            src={media.videoUrl || media.gifUrl}
             poster={media.posterUrl}
             loop
             muted
