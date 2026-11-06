@@ -98,19 +98,17 @@ export function Header({
           onClick={() => {
             if (setActiveTab) setActiveTab("explorer");
           }}
-          className="flex items-center gap-3 shrink-0 text-left cursor-pointer group rounded-xl p-1 -m-1 transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="header-brand-link h-11 flex items-center gap-3 shrink-0 text-left cursor-pointer group transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-lg"
           title="Ir al Explorador de Entrenamientos"
           aria-label="byteHevy - Ir a la pestaña Explorador"
         >
-          <div className="header-logo-box w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-surface-hover border border-border-color flex items-center justify-center shadow-md group-hover:border-accent/50 group-hover:shadow-accent/10 transition-all">
-            <ByteHevyLogo className="w-6 h-6 sm:w-7 sm:h-7 transition-transform group-hover:scale-105" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xl sm:text-[22px] font-extrabold tracking-tight leading-none">
+          <ByteHevyLogo className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 transition-transform duration-200 group-hover:scale-105" />
+          <div className="flex flex-col justify-center">
+            <span className="text-2xl sm:text-[26px] font-extrabold tracking-tight leading-none">
               <span className="text-foreground group-hover:text-accent transition-colors">byte</span>
               <span className="text-accent-light">Hevy</span>
             </span>
-            <span className="text-[11px] sm:text-xs text-zinc-500 font-normal mt-0.5 tracking-normal group-hover:text-zinc-400 transition-colors">
+            <span className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-1 tracking-normal group-hover:text-zinc-400 transition-colors">
               Visualizador de Entrenamientos
             </span>
           </div>
@@ -142,7 +140,7 @@ export function Header({
                         } as React.CSSProperties)
                       : undefined
                   }
-                  className={`season-selector-btn h-11 flex items-center gap-2.5 sm:gap-3 px-3.5 sm:px-4.5 rounded-full text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer border shadow-md ${
+                  className={`season-selector-btn h-11 flex items-center gap-2.5 sm:gap-3 px-3 sm:px-3.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer border shadow-md ${
                     activeSeason
                       ? "season-has-active text-[var(--text-primary)] hover:brightness-110"
                       : "bg-[var(--surface)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]"
@@ -150,7 +148,7 @@ export function Header({
                   title="Cambiar season de entrenamiento"
                 >
                   <div
-                    className="season-icon-badge w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-inner border"
+                    className="season-icon-badge w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border"
                     style={
                       activeColor
                         ? {
@@ -172,8 +170,8 @@ export function Header({
                     )}
                   </div>
 
-                  <div className="flex flex-col text-left leading-tight">
-                    <span className="season-selector-tag text-[9px] uppercase tracking-wider font-extrabold text-[var(--text-muted)] flex items-center gap-1">
+                  <div className="flex flex-col text-left justify-center leading-tight">
+                    <span className="season-selector-tag text-[9.5px] uppercase tracking-wider font-extrabold text-[var(--text-muted)] flex items-center gap-1.5">
                       {activeColor && isOngoing && (
                         <span
                           className="w-1.5 h-1.5 rounded-full animate-pulse"
@@ -182,7 +180,7 @@ export function Header({
                       )}
                       {isOngoing ? "SEASON ACTIVA" : "SEASON"}
                     </span>
-                    <span className="season-selector-name font-bold text-xs sm:text-sm text-[var(--text-primary)] truncate max-w-[110px] sm:max-w-[160px] md:max-w-[200px]">
+                    <span className="season-selector-name font-bold text-xs sm:text-sm text-[var(--text-primary)] truncate max-w-[110px] sm:max-w-[150px] md:max-w-[180px]">
                       {activeSeason ? activeSeason.name : "Histórico Completo"}
                     </span>
                   </div>
@@ -328,7 +326,7 @@ export function Header({
           </div>
 
           {/* Tabs Navigator */}
-          <nav className="navbar-tabs-container h-11 flex items-center bg-[var(--surface-subtle)]/80 border border-[var(--border-subtle)]/80 p-1 rounded-full shadow-sm backdrop-blur-xl">
+          <nav className="navbar-tabs-container flex items-center gap-1.5 p-0 bg-transparent border-0 shadow-none">
             {tabs.map((t) => {
               const Icon = t.icon;
               const isActive = currentTab === t.id;
@@ -340,17 +338,14 @@ export function Header({
                     if (setActiveTab) setActiveTab(t.id);
                   }}
                   title={t.label}
-                  className={`navbar-tab-item h-full flex items-center gap-2 sm:gap-2.5 px-3.5 sm:px-4.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-150 cursor-pointer select-none ${
+                  className={`navbar-tab-item h-11 flex items-center gap-2 px-3 sm:px-3.5 rounded-xl text-sm font-semibold transition-all duration-150 cursor-pointer select-none border ${
                     isActive
-                      ? "navbar-tab-active bg-[var(--surface-card)] text-[var(--text-primary)] font-semibold shadow-xs"
-                      : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]/50"
+                      ? "navbar-tab-active bg-[var(--surface-card)] text-[var(--text-primary)] border-[var(--border-color)] shadow-sm font-bold"
+                      : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
                   }`}
                 >
-                  {isActive && (
-                    <span className="navbar-tab-indicator w-1.5 h-1.5 rounded-full bg-[var(--accent)] shadow-[0_0_6px_var(--accent)] shrink-0" />
-                  )}
                   <Icon
-                    className={`navbar-tab-icon w-4 h-4 shrink-0 transition-colors ${
+                    className={`navbar-tab-icon w-5 h-5 shrink-0 transition-colors ${
                       isActive ? "text-[var(--accent)]" : "text-[var(--text-muted)]"
                     }`}
                   />
@@ -362,21 +357,40 @@ export function Header({
         </div>
 
         {/* Right: Stats Overview & Settings Button */}
-        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
           {loadingStats ? (
-            <div className="header-stats-badge hidden lg:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[var(--surface-subtle)] border border-[var(--border-subtle)] text-xs shadow-sm animate-pulse">
-              <span className="w-1.5 h-1.5 rounded-full bg-zinc-700" />
-              <div className="h-3 w-5 rounded bg-zinc-800" />
-              <div className="h-3 w-14 rounded bg-zinc-800/60" />
+            <div className="header-stats-badge hidden lg:flex flex-col justify-center gap-1.5 px-3.5 h-11 rounded-xl bg-[var(--surface)] border border-[var(--border-color)] shadow-sm animate-pulse shrink-0">
+              <div className="flex items-center gap-2 leading-none">
+                <span className="w-1.5 h-1.5 rounded-full bg-zinc-700 shrink-0" />
+                <div className="h-2.5 w-14 rounded bg-zinc-800" />
+              </div>
+              <div className="flex items-center gap-2 leading-none">
+                <span className="w-1.5 h-1.5 rounded-full bg-zinc-700 shrink-0" />
+                <div className="h-2.5 w-12 rounded bg-zinc-800/60" />
+              </div>
             </div>
           ) : stats && stats.workoutsCount > 0 ? (
-            <div className="header-stats-badge hidden lg:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[var(--surface-subtle)] border border-[var(--border-subtle)] text-xs text-[var(--text-muted)] shadow-sm animate-in fade-in duration-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="font-medium text-[var(--text-primary)]">{stats.exercisesCount}</span>
-              <span>{stats.exercisesCount === 1 ? "ejercicio" : "ejercicios"}</span>
-              <span className="text-[var(--text-faint)]">•</span>
-              <span className="font-medium text-[var(--text-primary)]">{stats.workoutsCount}</span>
-              <span>{stats.workoutsCount === 1 ? "sesión" : "sesiones"}</span>
+            <div className="header-stats-badge hidden lg:flex flex-col justify-center gap-1 px-3.5 h-11 rounded-xl bg-[var(--surface)] border border-[var(--border-color)] text-xs shadow-sm animate-in fade-in duration-200 shrink-0">
+              {/* Sesiones encima con su bolita */}
+              <div className="flex items-center gap-2 leading-none">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_6px_rgba(52,211,153,0.7)] animate-pulse" />
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-[var(--text-primary)] text-xs tabular-nums">{stats.workoutsCount}</span>
+                  <span className="text-[10px] uppercase font-semibold tracking-wider text-[var(--text-muted)]">
+                    {stats.workoutsCount === 1 ? "sesión" : "sesiones"}
+                  </span>
+                </div>
+              </div>
+              {/* Ejercicios debajo con su bolita */}
+              <div className="flex items-center gap-2 leading-none">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/80 shrink-0 shadow-[0_0_4px_rgba(52,211,153,0.4)]" />
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-[var(--text-primary)] text-xs tabular-nums">{stats.exercisesCount}</span>
+                  <span className="text-[10px] uppercase font-semibold tracking-wider text-[var(--text-muted)]">
+                    {stats.exercisesCount === 1 ? "ejercicio" : "ejercicios"}
+                  </span>
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -385,7 +399,7 @@ export function Header({
             type="button"
             onClick={triggerGlobalSync}
             disabled={isGlobalSyncing}
-            className="header-action-btn header-sync-btn w-11 h-11 rounded-full flex items-center justify-center border shadow-md bg-[var(--surface)] border-[var(--border-color)] hover:bg-[var(--surface-hover)] transition-all duration-200 cursor-pointer active:scale-[0.98] group relative shrink-0"
+            className="header-action-btn header-sync-btn w-11 h-11 rounded-xl flex items-center justify-center border shadow-md bg-[var(--surface)] border-[var(--border-color)] hover:bg-[var(--surface-hover)] transition-all duration-200 cursor-pointer active:scale-[0.98] group relative shrink-0"
             title={`Sincronización Cloud Global\n• Hevy: ${
               hevyConnected
                 ? `Conectado (@${hevyUsername || "usuario"})`
@@ -398,7 +412,7 @@ export function Header({
             aria-label="Sincronización Cloud Global"
           >
             <RefreshCwIcon
-              className={`w-4.5 h-4.5 shrink-0 transition-transform ${
+              className={`w-5 h-5 shrink-0 transition-transform ${
                 isGlobalSyncing
                   ? "animate-spin text-blue-400"
                   : "text-[var(--text-muted)] group-hover:text-[var(--text-primary)]"
@@ -407,7 +421,7 @@ export function Header({
 
             {/* Bolita Hevy: Esquina superior izquierda */}
             <span
-              className={`absolute top-0.5 left-0.5 w-2 h-2 rounded-full ring-2 ring-zinc-950 z-10 transition-all duration-300 pointer-events-none ${
+              className={`absolute top-1 left-1 w-2 h-2 rounded-full ring-2 ring-zinc-950 z-10 transition-all duration-300 pointer-events-none ${
                 hevyConnected
                   ? "bg-white shadow-[0_0_6px_rgba(255,255,255,0.95),0_0_10px_rgba(255,255,255,0.4)]"
                   : "bg-rose-500 animate-blink-red"
@@ -417,7 +431,7 @@ export function Header({
 
             {/* Bolita Xiaomi: Esquina superior derecha */}
             <span
-              className={`absolute top-0.5 right-0.5 w-2 h-2 rounded-full ring-2 ring-zinc-950 z-10 transition-all duration-300 pointer-events-none ${
+              className={`absolute top-1 right-1 w-2 h-2 rounded-full ring-2 ring-zinc-950 z-10 transition-all duration-300 pointer-events-none ${
                 xiaomiConnected
                   ? "bg-[#FF6900] shadow-[0_0_6px_rgba(255,105,0,0.95),0_0_10px_rgba(255,105,0,0.4)]"
                   : "bg-rose-500 animate-blink-red"
@@ -434,14 +448,14 @@ export function Header({
             }}
             title="Configuración"
             aria-label="Configuración"
-            className={`header-action-btn header-settings-btn w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer border shadow-md ${
+            className={`header-action-btn header-settings-btn w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 cursor-pointer border shadow-md ${
               currentTab === "settings"
                 ? "header-action-active bg-[var(--surface-hover)] text-[var(--text-primary)] border-[var(--border-color)] shadow-md font-bold"
                 : "bg-[var(--surface)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
             }`}
           >
             <SettingsIcon
-              className={`w-4.5 h-4.5 transition-colors ${
+              className={`w-5 h-5 transition-colors ${
                 currentTab === "settings" ? "text-accent-light" : "text-[var(--text-muted)]"
               }`}
             />
