@@ -39,3 +39,28 @@ export function hexToRgba(hex: string, alpha: number): string {
 export function getSeasonColor(season?: { color?: string | null } | null): string {
   return season?.color && season.color.trim() !== "" ? season.color.trim() : DEFAULT_SEASON_COLOR;
 }
+
+/**
+ * Genera un tono pastel suave (equivalente a shade 300 de Tailwind)
+ * óptimo para números y valores destacados sobre fondos oscuros.
+ */
+export function getLightSeasonColor(hex: string, factor = 0.38): string {
+  if (!hex || typeof hex !== "string") return "#fcd34d";
+  const sanitized = hex.replace("#", "").trim();
+  let r = 245;
+  let g = 158;
+  let b = 11;
+  if (sanitized.length === 6) {
+    r = parseInt(sanitized.substring(0, 2), 16) || 0;
+    g = parseInt(sanitized.substring(2, 4), 16) || 0;
+    b = parseInt(sanitized.substring(4, 6), 16) || 0;
+  } else if (sanitized.length === 3) {
+    r = parseInt(sanitized[0] + sanitized[0], 16) || 0;
+    g = parseInt(sanitized[1] + sanitized[1], 16) || 0;
+    b = parseInt(sanitized[2] + sanitized[2], 16) || 0;
+  }
+  const lr = Math.min(255, Math.round(r + (255 - r) * factor));
+  const lg = Math.min(255, Math.round(g + (255 - g) * factor));
+  const lb = Math.min(255, Math.round(b + (255 - b) * factor));
+  return `rgb(${lr}, ${lg}, ${lb})`;
+}
