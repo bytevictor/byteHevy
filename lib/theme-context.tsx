@@ -288,6 +288,7 @@ export interface ComprehensivePreset {
   theme: BaseTheme;
   accent: AccentColor;
   customAccentHex?: string;
+  secondInk?: string;
   radius: RadiusStyle;
   cardStyle: CardStyle;
   atmosphere: Atmosphere;
@@ -335,6 +336,7 @@ export const COMPREHENSIVE_PRESETS: ComprehensivePreset[] = [
     theme: "paper",
     accent: "pink",
     customAccentHex: "#ff48b0",
+    secondInk: "#00857c",
     radius: "sharp",
     cardStyle: "brutalist",
     atmosphere: "grain",
@@ -358,6 +360,7 @@ export const COMPREHENSIVE_PRESETS: ComprehensivePreset[] = [
     theme: "teenage",
     accent: "orange",
     customAccentHex: "#ff5500",
+    secondInk: "#ff5500",
     radius: "soft",
     cardStyle: "teenage",
     atmosphere: "grid",
@@ -381,6 +384,7 @@ export const COMPREHENSIVE_PRESETS: ComprehensivePreset[] = [
     theme: "vaporwave",
     accent: "pink",
     customAccentHex: "#ff71ce",
+    secondInk: "#01cdfe",
     radius: "round",
     cardStyle: "vaporwave",
     atmosphere: "aurora",
@@ -404,6 +408,7 @@ export const COMPREHENSIVE_PRESETS: ComprehensivePreset[] = [
     theme: "luxury",
     accent: "gold",
     customAccentHex: "#d4af37",
+    secondInk: "#d4af37",
     radius: "soft",
     cardStyle: "luxury",
     atmosphere: "grain",
@@ -884,7 +889,7 @@ export const BASE_THEMES: BaseThemeOption[] = [
     borderSubtleHex: "#2a2d36",
     foreground: "#f3f4f6",
     textMutedHex: "#9ca3af",
-    textFaintHex: "#ff5500",
+    textFaintHex: "#717682",
     headerBg: "rgba(28, 30, 34, 0.92)",
   },
   {
@@ -1242,6 +1247,8 @@ interface ThemeContextType {
   setCustomAccent: (hex: string) => void;
   selectedInkPairId: string | null;
   setInkPair: (pair: InkPairOption) => void;
+  secondInk: string;
+  setSecondInk: (hex: string) => void;
   atmosphere: Atmosphere;
   setAtmosphere: (atmosphere: Atmosphere) => void;
   radius: RadiusStyle;
@@ -1267,6 +1274,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [accent, setAccentState] = useState<AccentColor>("blue");
   const [customAccentHex, setCustomAccentHexState] = useState<string | null>(null);
   const [selectedInkPairId, setSelectedInkPairId] = useState<string | null>(null);
+  const [secondInk, setSecondInkState] = useState<string>("#ff5500");
   const [atmosphere, setAtmosphereState] = useState<Atmosphere>("clean");
   const [radius, setRadiusState] = useState<RadiusStyle>("round");
   const [cardStyle, setCardStyleState] = useState<CardStyle>("default");
@@ -1292,11 +1300,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const targetRadius = savedRadius && RADIUS_OPTIONS.some((r) => r.id === savedRadius) ? savedRadius : "round";
       const targetCardStyle = savedCardStyle && CARD_STYLE_OPTIONS.some((c) => c.id === savedCardStyle) ? savedCardStyle : "default";
       const targetFontStyle = savedFontStyle && FONT_STYLE_OPTIONS.some((f) => f.id === savedFontStyle) ? savedFontStyle : "sans";
+      const initialSecond = savedSecondInk || (targetTheme === "teenage" ? "#ff5500" : "#00857c");
 
       setThemeState(targetTheme);
       setAccentState(targetAccent);
       setCustomAccentHexState(savedCustom);
       setSelectedInkPairId(savedInkPair);
+      setSecondInkState(initialSecond);
       setAtmosphereState(targetAtmo);
       setRadiusState(targetRadius);
       setCardStyleState(targetCardStyle);
@@ -1304,8 +1314,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setActivePresetIdState(savedPreset);
 
       applyThemeToDOM(targetTheme, targetAccent, targetAtmo, targetRadius, targetCardStyle, targetFontStyle, savedCustom);
-      if (savedSecondInk && typeof document !== "undefined") {
-        document.documentElement.style.setProperty("--second", savedSecondInk);
+      if (typeof document !== "undefined") {
+        document.documentElement.style.setProperty("--second", initialSecond);
       }
     } catch {}
   }, []);
@@ -1346,10 +1356,23 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
+  const setSecondInk = (hex: string) => {
+    setSecondInkState(hex);
+    setSelectedInkPairId(null);
+    if (typeof document !== "undefined") {
+      document.documentElement.style.setProperty("--second", hex);
+    }
+    try {
+      localStorage.setItem("bytehevy_second_ink", hex);
+      localStorage.removeItem("bytehevy_ink_pair");
+    } catch {}
+  };
+
   const setInkPair = (pair: InkPairOption) => {
     setSelectedInkPairId(pair.id);
     setCustomAccentHexState(pair.primary);
     setAccentState("custom");
+    setSecondInkState(pair.secondary);
     setActivePresetIdState(null);
     applyThemeToDOM(theme, "custom", atmosphere, radius, cardStyle, fontStyle, pair.primary);
     if (typeof document !== "undefined") {
@@ -1414,6 +1437,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setFontStyleState(preset.fontStyle);
     setActivePresetIdState(preset.id);
 
+    if (preset.secondInk) {
+      setSecondInkState(preset.secondInk);
+      if (typeof document !== "undefined") {
+        document.documentElement.style.setProperty("--second", preset.secondInk);
+      }
+      try {
+        localStorage.setItem("bytehevy_second_ink", preset.secondInk);
+      } catch {}
+    }
+
     applyThemeToDOM(
       preset.theme,
       preset.accent,
@@ -1457,6 +1490,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const resetToDefault = () => {
     const defaultPreset = COMPREHENSIVE_PRESETS.find((p) => p.id === "classic-hevy") || COMPREHENSIVE_PRESETS[0];
     applyComprehensivePreset(defaultPreset);
+    setSecondInkState("#00857c");
+    if (typeof document !== "undefined") {
+      document.documentElement.style.setProperty("--second", "#00857c");
+    }
     try {
       localStorage.removeItem("bytehevy_theme");
       localStorage.removeItem("bytehevy_accent");
@@ -1490,6 +1527,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setCustomAccent,
         selectedInkPairId,
         setInkPair,
+        secondInk,
+        setSecondInk,
         atmosphere,
         setAtmosphere,
         radius,

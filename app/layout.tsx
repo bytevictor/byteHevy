@@ -88,7 +88,11 @@ export default function RootLayout({
                   root.style.setProperty('--accent-lighter', colors[activeKey][2]);
                   if (colors[activeKey][3]) root.style.setProperty('--second', colors[activeKey][3]);
                 }
-                if (second) root.style.setProperty('--second', second);
+                if (second) {
+                  root.style.setProperty('--second', second);
+                } else if (t === 'teenage') {
+                  root.style.setProperty('--second', '#ff5500');
+                }
 
                 var themeDefs = {
                   zinc: {
@@ -193,6 +197,110 @@ export default function RootLayout({
                     textMuted: '#a78bfa',
                     textFaint: '#7c3aed',
                     headerBg: 'rgba(11, 9, 20, 0.85)',
+                    shadow: '#000000'
+                  },
+                  abyss: {
+                    bg: '#030712',
+                    fg: '#f1f5f9',
+                    card: '#081026',
+                    subtle: '#02040b',
+                    hover: '#132454',
+                    border: '#1f387d',
+                    borderSubtle: '#111e42',
+                    textMuted: '#94a3b8',
+                    textFaint: '#60a5fa',
+                    headerBg: 'rgba(3, 7, 18, 0.88)',
+                    shadow: '#000000'
+                  },
+                  forest: {
+                    bg: '#040a06',
+                    fg: '#f0fdf4',
+                    card: '#0a140e',
+                    subtle: '#020603',
+                    hover: '#152a1d',
+                    border: '#1e3d2a',
+                    borderSubtle: '#112418',
+                    textMuted: '#86efac',
+                    textFaint: '#22c55e',
+                    headerBg: 'rgba(4, 10, 6, 0.88)',
+                    shadow: '#000000'
+                  },
+                  espresso: {
+                    bg: '#0c0908',
+                    fg: '#faf5f0',
+                    card: '#171210',
+                    subtle: '#080605',
+                    hover: '#2a221f',
+                    border: '#423631',
+                    borderSubtle: '#261f1c',
+                    textMuted: '#cbb5a1',
+                    textFaint: '#927e6d',
+                    headerBg: 'rgba(12, 9, 8, 0.88)',
+                    shadow: '#000000'
+                  },
+                  crimson: {
+                    bg: '#0b0507',
+                    fg: '#fff1f2',
+                    card: '#170b10',
+                    subtle: '#070304',
+                    hover: '#2d1621',
+                    border: '#4a2337',
+                    borderSubtle: '#2b141f',
+                    textMuted: '#fda4af',
+                    textFaint: '#e11d48',
+                    headerBg: 'rgba(11, 5, 7, 0.88)',
+                    shadow: '#000000'
+                  },
+                  solar: {
+                    bg: '#0d0a07',
+                    fg: '#fef3c7',
+                    card: '#17130e',
+                    subtle: '#080604',
+                    hover: '#2b231a',
+                    border: '#453729',
+                    borderSubtle: '#282018',
+                    textMuted: '#fcd34d',
+                    textFaint: '#d97706',
+                    headerBg: 'rgba(13, 10, 7, 0.88)',
+                    shadow: '#000000'
+                  },
+                  teenage: {
+                    bg: '#1c1e22',
+                    fg: '#f3f4f6',
+                    card: '#262930',
+                    subtle: '#16181b',
+                    hover: '#323640',
+                    border: '#3e434f',
+                    borderSubtle: '#2a2d36',
+                    textMuted: '#9ca3af',
+                    textFaint: '#717682',
+                    headerBg: 'rgba(28, 30, 34, 0.92)',
+                    shadow: '#101215'
+                  },
+                  vaporwave: {
+                    bg: '#120c1f',
+                    fg: '#fff5fa',
+                    card: '#1c1330',
+                    subtle: '#0c0817',
+                    hover: '#2a1c47',
+                    border: '#7b3fe4',
+                    borderSubtle: '#3e2468',
+                    textMuted: '#c4a3e8',
+                    textFaint: '#ff71ce',
+                    headerBg: 'rgba(18, 12, 31, 0.90)',
+                    shadow: '#080410'
+                  },
+                  luxury: {
+                    bg: '#0e0d0c',
+                    fg: '#faf6f0',
+                    card: '#171513',
+                    subtle: '#090807',
+                    hover: '#24201d',
+                    border: '#36302a',
+                    borderSubtle: '#221e1a',
+                    textMuted: '#b5a899',
+                    textFaint: '#d4af37',
+                    headerBg: 'rgba(14, 13, 12, 0.92)',
                     shadow: '#000000'
                   }
                 };

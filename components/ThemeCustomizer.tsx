@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   useTheme,
   BASE_THEMES,
@@ -42,6 +42,8 @@ export function ThemeCustomizer() {
     setCustomAccent,
     selectedInkPairId,
     setInkPair,
+    secondInk,
+    setSecondInk,
     atmosphere,
     setAtmosphere,
     radius,
@@ -59,8 +61,21 @@ export function ThemeCustomizer() {
 
   // Filter for base themes
   const [themeFilter, setThemeFilter] = useState<"all" | "clasico" | "editorial" | "elemental" | "especial">("all");
-  // Custom color input state
+  // Custom color input states
   const [customHexInput, setCustomHexInput] = useState<string>(customAccentHex || "#ff48b0");
+  const [secondHexInput, setSecondHexInput] = useState<string>(secondInk || "#00857c");
+
+  useEffect(() => {
+    if (secondInk) {
+      setSecondHexInput(secondInk);
+    }
+  }, [secondInk]);
+
+  useEffect(() => {
+    if (customAccentHex) {
+      setCustomHexInput(customAccentHex);
+    }
+  }, [customAccentHex]);
 
   const filteredThemes = themeFilter === "all"
     ? BASE_THEMES
@@ -222,8 +237,12 @@ export function ThemeCustomizer() {
                 <div className="flex items-center justify-between text-[10px] font-mono">
                   <span className="text-zinc-400">Press Militar</span>
                   <span
-                    className="font-bold flex items-center gap-1"
-                    style={{ color: accentHex }}
+                    className="font-bold flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] border font-mono"
+                    style={{
+                      backgroundColor: `color-mix(in srgb, ${secondInk} 20%, transparent)`,
+                      borderColor: `color-mix(in srgb, ${secondInk} 45%, transparent)`,
+                      color: secondInk,
+                    }}
                   >
                     <TrophyIcon className="w-3 h-3" />
                     <span>PR</span>
@@ -349,7 +368,7 @@ export function ThemeCustomizer() {
                     <span
                       className="text-[8px] font-mono px-1 py-0.2 rounded font-bold"
                       style={{
-                        backgroundColor: preset.preview.accentHex,
+                        backgroundColor: preset.secondInk || preset.preview.accentHex,
                         color: "#09090b",
                       }}
                     >
@@ -718,11 +737,12 @@ export function ThemeCustomizer() {
             </p>
           </div>
 
-          {/* Selector libre de tinta (Custom Brand Ink como en Oktavo) */}
-          <form onSubmit={handleCustomColorSubmit} className="flex items-center gap-2 self-start sm:self-center">
+          {/* Selectores libres de tinta dual (Primaria y Secundaria) */}
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+            {/* Tinta Primaria */}
             <label
               className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-zinc-700 bg-zinc-950 hover:border-zinc-500 cursor-pointer transition-colors shadow-xs"
-              title="Escoger cualquier color con el selector nativo"
+              title="Escoger color primario con el selector nativo"
             >
               <input
                 type="color"
@@ -736,11 +756,33 @@ export function ThemeCustomizer() {
               <span className="text-xs font-mono font-bold text-zinc-200 uppercase">
                 {customHexInput}
               </span>
+              <span className="text-[10px] text-zinc-400 font-mono">
+                Primaria
+              </span>
             </label>
-            <span className="text-[11px] text-zinc-400 font-mono hidden sm:inline">
-              Tinta Libre
-            </span>
-          </form>
+
+            {/* Tinta Secundaria */}
+            <label
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-zinc-700 bg-zinc-950 hover:border-zinc-500 cursor-pointer transition-colors shadow-xs"
+              title="Escoger color secundario con el selector nativo (utilizado en badges de Teenage Engineering, telemetría y acentos complementarios)"
+            >
+              <input
+                type="color"
+                value={secondHexInput}
+                onChange={(e) => {
+                  setSecondHexInput(e.target.value);
+                  setSecondInk(e.target.value);
+                }}
+                className="w-5 h-5 rounded-md border-0 p-0 bg-transparent cursor-pointer"
+              />
+              <span className="text-xs font-mono font-bold text-zinc-200 uppercase">
+                {secondHexInput}
+              </span>
+              <span className="text-[10px] text-zinc-400 font-mono">
+                Secundaria
+              </span>
+            </label>
+          </div>
         </div>
 
         {/* Pares de Tintas Duotono (Inspiración Imprenta Risograph de Oktavo) */}
