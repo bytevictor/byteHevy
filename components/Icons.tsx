@@ -13,7 +13,6 @@ export function ByteHevyLogo({ className = "w-5 h-5", accentColor }: { className
       <rect x="10.5" y="12.5" width="7" height="3" rx="1" fill="#e4e4e7" />
       <rect x="17.5" y="6" width="3.5" height="16" rx="1.5" fill={accentColor || "var(--accent, #f59e0b)"} />
       <rect x="22.5" y="9" width="3.5" height="10" rx="1.5" fill="#71717a" />
-      <circle cx="14" cy="14" r="1.5" fill="#ffffff" />
     </svg>
   );
 }
