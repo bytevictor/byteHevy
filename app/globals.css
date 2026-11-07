@@ -1707,3 +1707,17 @@ body[data-theme="paper"][data-atmosphere="dots"]::before {
 .animate-blink-red {
   animation: strong-blink-red 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* Prevenir anidamiento de bordes en controles segmentados y botones con borde solo en hover */
+.inline-flex > button.border-transparent:not(:hover),
+.flex > button.border-transparent:not(:hover),
+button.border-transparent:not(:hover) {
+  border-color: transparent !important;
+}
+
+[data-card-style="brutalist"] .inline-flex > button:not(:hover),
+[data-card-style="teenage"] .inline-flex > button:not(:hover),
+[data-card-style="luxury"] .inline-flex > button:not(:hover) {
+  box-shadow: none !important;
+}
+

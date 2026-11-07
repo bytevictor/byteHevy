@@ -273,20 +273,20 @@ export function JournalHeatmap({
           <div className="flex items-center p-1 rounded-xl bg-zinc-950 border border-zinc-800 text-xs">
             <button
               onClick={() => setMode("sets")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer border ${
                 mode === "sets"
-                  ? "bg-accent/20 text-accent-light border border-accent/30 shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  ? "bg-accent/20 text-accent-light border-transparent hover:border-accent/40 shadow-xs"
+                  : "border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-700/60"
               }`}
             >
               <span>🔢 Series Realizadas</span>
             </button>
             <button
               onClick={() => setMode("sessions")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer border ${
                 mode === "sessions"
-                  ? "bg-accent/20 text-accent-light border border-accent/30 shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  ? "bg-accent/20 text-accent-light border-transparent hover:border-accent/40 shadow-xs"
+                  : "border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-700/60"
               }`}
             >
               <span>🏋️ Sesiones</span>

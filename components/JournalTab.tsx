@@ -158,10 +158,10 @@ export function JournalTab() {
           <div className="flex items-center p-1 rounded-xl bg-zinc-950/80 border border-zinc-800 text-xs font-semibold self-start sm:self-center">
             <button
               onClick={() => setViewMode("calendar")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer border ${
                 viewMode === "calendar"
-                  ? "bg-accent/15 border border-accent/30 text-accent-light shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  ? "bg-accent/15 border-transparent hover:border-accent/40 text-accent-light shadow-xs"
+                  : "border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-700/60"
               }`}
             >
               <CalendarIcon className="w-3.5 h-3.5" />
@@ -170,10 +170,10 @@ export function JournalTab() {
 
             <button
               onClick={() => setViewMode("heatmap")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer border ${
                 viewMode === "heatmap"
-                  ? "bg-accent/15 border border-accent/30 text-accent-light shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  ? "bg-accent/15 border-transparent hover:border-accent/40 text-accent-light shadow-xs"
+                  : "border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-700/60"
               }`}
             >
               <FlameIcon className="w-3.5 h-3.5" />
@@ -182,10 +182,10 @@ export function JournalTab() {
 
             <button
               onClick={() => setViewMode("feed")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer border ${
                 viewMode === "feed"
-                  ? "bg-accent/15 border border-accent/30 text-accent-light shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  ? "bg-accent/15 border-transparent hover:border-accent/40 text-accent-light shadow-xs"
+                  : "border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-700/60"
               }`}
             >
               <GridIcon className="w-3.5 h-3.5" />

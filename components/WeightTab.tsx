@@ -2165,14 +2165,14 @@ export function WeightTab() {
             <button
               type="button"
               onClick={handleToggleWeight}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap border ${
                 isTrendMode
                   ? showWeight
-                    ? "bg-blue-500/10 text-blue-300/70 border border-blue-500/25 shadow-xs"
-                    : "text-zinc-600 hover:text-zinc-400 border border-transparent"
+                    ? "bg-blue-500/10 text-blue-300/70 border-transparent hover:border-blue-500/30 shadow-xs"
+                    : "text-zinc-400 hover:text-zinc-200 border-transparent hover:border-zinc-700/60"
                   : showWeight
-                  ? "bg-blue-500/15 text-blue-200 border border-blue-500/40 shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-300 border border-transparent"
+                  ? "bg-blue-500/15 text-blue-200 border-transparent hover:border-blue-500/40 shadow-xs"
+                  : "text-zinc-300 hover:text-zinc-100 border-transparent hover:border-zinc-700/60"
               }`}
               title={
                 isTrendMode
@@ -2189,10 +2189,10 @@ export function WeightTab() {
                   isTrendMode
                     ? showWeight
                       ? "bg-blue-400/60 shadow-[0_0_6px_rgba(59,130,246,0.35)]"
-                      : "bg-zinc-700"
+                      : "bg-zinc-500"
                     : showWeight
                     ? "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]"
-                    : "bg-zinc-600"
+                    : "bg-zinc-500"
                 }`}
               />
               <span>Peso</span>
@@ -2201,14 +2201,14 @@ export function WeightTab() {
             <button
               type="button"
               onClick={handleToggleFat}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap border ${
                 isTrendMode
                   ? showFat
-                    ? "bg-yellow-500/10 text-yellow-300/70 border border-yellow-500/25 shadow-xs"
-                    : "text-zinc-600 hover:text-zinc-400 border border-transparent"
+                    ? "bg-yellow-500/10 text-yellow-300/70 border-transparent hover:border-yellow-500/30 shadow-xs"
+                    : "text-zinc-400 hover:text-zinc-200 border-transparent hover:border-zinc-700/60"
                   : showFat
-                  ? "bg-yellow-500/15 text-yellow-200 border border-yellow-500/40 shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-300 border border-transparent"
+                  ? "bg-yellow-500/15 text-yellow-200 border-transparent hover:border-yellow-500/40 shadow-xs"
+                  : "text-zinc-300 hover:text-zinc-100 border-transparent hover:border-zinc-700/60"
               }`}
               title={
                 isTrendMode
@@ -2225,10 +2225,10 @@ export function WeightTab() {
                   isTrendMode
                     ? showFat
                       ? "bg-yellow-400/60 shadow-[0_0_6px_rgba(250,204,21,0.35)]"
-                      : "bg-zinc-700"
+                      : "bg-zinc-500"
                     : showFat
                     ? "bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]"
-                    : "bg-zinc-600"
+                    : "bg-zinc-500"
                 }`}
               />
               <span>% Grasa</span>
@@ -2239,10 +2239,10 @@ export function WeightTab() {
             <button
               type="button"
               onClick={handleToggleTrend}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap border ${
                 isTrendMode
-                  ? "bg-sky-500/20 text-sky-200 border border-sky-500/40 shadow-xs"
-                  : "text-zinc-400 hover:text-zinc-200 border border-transparent"
+                  ? "bg-sky-500/20 text-sky-200 border-transparent hover:border-sky-500/40 shadow-xs"
+                  : "text-zinc-400 hover:text-zinc-200 border-transparent hover:border-zinc-700/60"
               }`}
               title="Modo Tendencia: convierte la nube de tomas en una trayectoria suavizada con canal de dispersión"
             >
@@ -2258,10 +2258,10 @@ export function WeightTab() {
               <button
                 type="button"
                 onClick={() => handleCurveChange("linear")}
-                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
+                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer border ${
                   curveType === "linear"
-                    ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
-                    : "text-zinc-500 hover:text-zinc-200"
+                    ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border-transparent hover:border-zinc-700/80"
+                    : "border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-700/60"
                 }`}
                 title="Líneas rectas directas entre puntos"
                 aria-label="Rectas"
@@ -2272,10 +2272,10 @@ export function WeightTab() {
               <button
                 type="button"
                 onClick={() => handleCurveChange("smooth")}
-                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
+                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer border ${
                   curveType === "smooth"
-                    ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
-                    : "text-zinc-500 hover:text-zinc-200"
+                    ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border-transparent hover:border-zinc-700/80"
+                    : "border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-700/60"
                 }`}
                 title="Curvas naturales (spline cúbico)"
                 aria-label="Curvas"
@@ -2286,10 +2286,10 @@ export function WeightTab() {
               <button
                 type="button"
                 onClick={() => handleCurveChange("flow")}
-                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
+                className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center cursor-pointer border ${
                   curveType === "flow"
-                    ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
-                    : "text-zinc-500 hover:text-zinc-200"
+                    ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border-transparent hover:border-zinc-700/80"
+                    : "border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-700/60"
                 }`}
                 title="Completamente suavizadas (línea continua fluida)"
                 aria-label="Fluida"
@@ -2304,8 +2304,8 @@ export function WeightTab() {
                 onClick={() => handleSyncSeasonChange(!syncWithSeason)}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-colors cursor-pointer ${
                   syncWithSeason
-                    ? "bg-zinc-800 text-zinc-100 border-zinc-700"
-                    : "bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-zinc-200"
+                    ? "bg-zinc-800 text-zinc-100 border-transparent hover:border-zinc-700"
+                    : "bg-zinc-900 text-zinc-400 border-transparent hover:border-zinc-700/60 hover:text-zinc-200"
                 }`}
                 title="Filtrar por la temporada activa"
               >
@@ -2330,10 +2330,10 @@ export function WeightTab() {
                       handleTimeRangeChange(r);
                       if (syncWithSeason) handleSyncSeasonChange(false);
                     }}
-                    className={`px-2 py-1 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${
+                    className={`px-2 py-1 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer border ${
                       isSelected
-                        ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
-                        : "text-zinc-400 hover:text-zinc-200"
+                        ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border-transparent hover:border-zinc-700/80"
+                        : "border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-700/60"
                     }`}
                   >
                     {r}
@@ -2367,12 +2367,12 @@ export function WeightTab() {
                   <button
                     type="button"
                     onClick={() => setYearDropdownOpen((prev) => !prev)}
-                    className={`px-2 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 cursor-pointer ${
+                    className={`px-2 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 cursor-pointer border ${
                       timeRange === "year" && !syncWithSeason
                         ? activeYearSegment?.isHistorical
-                          ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold"
-                          : "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
-                        : "text-zinc-400 hover:text-zinc-200"
+                          ? "bg-amber-500/15 text-amber-300 border-transparent hover:border-amber-500/30 font-bold"
+                          : "bg-zinc-800 text-zinc-100 font-bold shadow-xs border-transparent hover:border-zinc-700/80"
+                        : "border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-700/60"
                     }`}
                     title={
                       activeYearSegment?.subLabel
@@ -2466,10 +2466,10 @@ export function WeightTab() {
                   handleTimeRangeChange("all");
                   if (syncWithSeason) handleSyncSeasonChange(false);
                 }}
-                className={`px-2 py-1 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${
+                className={`px-2 py-1 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer border ${
                   timeRange === "all" && !syncWithSeason
-                    ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
-                    : "text-zinc-400 hover:text-zinc-200"
+                    ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border-transparent hover:border-zinc-700/80"
+                    : "border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-700/60"
                 }`}
               >
                 Todo
@@ -2506,10 +2506,10 @@ export function WeightTab() {
                   key={m.id}
                   type="button"
                   onClick={() => handleGroupingModeChange(m.id)}
-                  className={`px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                  className={`px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer border ${
                     groupingMode === m.id
-                      ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border border-zinc-700/60"
-                      : "text-zinc-400 hover:text-zinc-200"
+                      ? "bg-zinc-800 text-zinc-100 font-bold shadow-xs border-transparent hover:border-zinc-700/80"
+                      : "border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-700/60"
                   }`}
                   title={m.title}
                 >
