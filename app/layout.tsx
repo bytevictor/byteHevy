@@ -36,14 +36,14 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               try {
-                var t = localStorage.getItem('bytehevy_theme');
+                var t = localStorage.getItem('bytehevy_theme') || 'teenage';
                 var a = localStorage.getItem('bytehevy_accent') || 'blue';
-                var custom = localStorage.getItem('bytehevy_custom_accent');
+                var custom = localStorage.getItem('bytehevy_custom_accent') || '#3b82f6';
                 var second = localStorage.getItem('bytehevy_second_ink');
-                var atmo = localStorage.getItem('bytehevy_atmosphere');
-                var radius = localStorage.getItem('bytehevy_radius');
-                var cardStyle = localStorage.getItem('bytehevy_card_style');
-                var fontStyle = localStorage.getItem('bytehevy_font_style');
+                var atmo = localStorage.getItem('bytehevy_atmosphere') || 'grid';
+                var radius = localStorage.getItem('bytehevy_radius') || 'round';
+                var cardStyle = localStorage.getItem('bytehevy_card_style') || 'teenage';
+                var fontStyle = localStorage.getItem('bytehevy_font_style') || 'mono';
                 var root = document.documentElement;
 
                 if (t === 'paper' || t === 'light') {
@@ -52,12 +52,12 @@ export default function RootLayout({
                   root.classList.add('dark');
                 }
 
-                if (t) root.setAttribute('data-theme', t);
+                root.setAttribute('data-theme', t);
                 root.setAttribute('data-accent', a);
-                if (atmo) root.setAttribute('data-atmosphere', atmo);
-                if (radius) root.setAttribute('data-radius', radius);
-                if (cardStyle) root.setAttribute('data-card-style', cardStyle);
-                if (fontStyle) root.setAttribute('data-font-style', fontStyle);
+                root.setAttribute('data-atmosphere', atmo);
+                root.setAttribute('data-radius', radius);
+                root.setAttribute('data-card-style', cardStyle);
+                root.setAttribute('data-font-style', fontStyle);
 
                 var colors = {
                   amber: ['#f59e0b', '#fbbf24', '#fcd34d', '#00857c'],
@@ -91,7 +91,7 @@ export default function RootLayout({
                 if (second) {
                   root.style.setProperty('--second', second);
                 } else if (t === 'teenage') {
-                  root.style.setProperty('--second', '#ff5500');
+                  root.style.setProperty('--second', a === 'blue' || custom === '#3b82f6' ? '#3b82f6' : '#ff5500');
                 }
 
                 var themeDefs = {
@@ -305,7 +305,7 @@ export default function RootLayout({
                   }
                 };
 
-                var themeKey = t && themeDefs[t] ? t : 'zinc';
+                var themeKey = t && themeDefs[t] ? t : 'teenage';
                 var cur = themeDefs[themeKey];
                 root.style.setProperty('--background', cur.bg);
                 root.style.setProperty('--foreground', cur.fg);

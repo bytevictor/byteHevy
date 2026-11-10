@@ -307,6 +307,30 @@ export interface ComprehensivePreset {
 
 export const COMPREHENSIVE_PRESETS: ComprehensivePreset[] = [
   {
+    id: "bytehevy-recommended",
+    name: "ByteHevy Recomendado",
+    tagline: "Teenage Hardware & Cobalto",
+    description: "Chasis de aluminio anodizado CNC, pulsadores mecánicos táctiles 3D, acento Cobalto de alta precisión, esquinas suaves de 16px (Round), rejilla Blueprint y tipografía monospace quirúrgica.",
+    category: "cyber",
+    theme: "teenage",
+    accent: "blue",
+    customAccentHex: "#3b82f6",
+    secondInk: "#3b82f6",
+    radius: "round",
+    cardStyle: "teenage",
+    atmosphere: "grid",
+    fontStyle: "mono",
+    preview: {
+      bgHex: "#1c1e22",
+      cardHex: "#262930",
+      borderHex: "#3e434f",
+      accentHex: "#3b82f6",
+      badge: "Recomendado",
+      borderWidth: "1.5px",
+      hasOffsetShadow: true,
+    },
+  },
+  {
     id: "classic-hevy",
     name: "ByteHevy Clásico",
     tagline: "El Estilo Original de la App",
@@ -1270,16 +1294,16 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<BaseTheme>("zinc");
+  const [theme, setThemeState] = useState<BaseTheme>("teenage");
   const [accent, setAccentState] = useState<AccentColor>("blue");
-  const [customAccentHex, setCustomAccentHexState] = useState<string | null>(null);
+  const [customAccentHex, setCustomAccentHexState] = useState<string | null>("#3b82f6");
   const [selectedInkPairId, setSelectedInkPairId] = useState<string | null>(null);
-  const [secondInk, setSecondInkState] = useState<string>("#ff5500");
-  const [atmosphere, setAtmosphereState] = useState<Atmosphere>("clean");
+  const [secondInk, setSecondInkState] = useState<string>("#3b82f6");
+  const [atmosphere, setAtmosphereState] = useState<Atmosphere>("grid");
   const [radius, setRadiusState] = useState<RadiusStyle>("round");
-  const [cardStyle, setCardStyleState] = useState<CardStyle>("default");
-  const [fontStyle, setFontStyleState] = useState<FontStyle>("sans");
-  const [activePresetId, setActivePresetIdState] = useState<string | null>("classic-hevy");
+  const [cardStyle, setCardStyleState] = useState<CardStyle>("teenage");
+  const [fontStyle, setFontStyleState] = useState<FontStyle>("mono");
+  const [activePresetId, setActivePresetIdState] = useState<string | null>("bytehevy-recommended");
 
   useEffect(() => {
     try {
@@ -1294,26 +1318,28 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const savedFontStyle = localStorage.getItem("bytehevy_font_style") as FontStyle | null;
       const savedPreset = localStorage.getItem("bytehevy_preset");
 
-      const targetTheme = savedTheme && BASE_THEMES.some((t) => t.id === savedTheme) ? savedTheme : "zinc";
+      const targetTheme = savedTheme && BASE_THEMES.some((t) => t.id === savedTheme) ? savedTheme : "teenage";
       const targetAccent = savedAccent && (savedAccent === "custom" || ACCENT_COLORS.some((a) => a.id === savedAccent)) ? savedAccent : "blue";
-      const targetAtmo = savedAtmo && ATMOSPHERE_OPTIONS.some((o) => o.id === savedAtmo) ? savedAtmo : "clean";
+      const targetCustom = savedCustom !== null ? savedCustom : (savedTheme ? null : "#3b82f6");
+      const targetAtmo = savedAtmo && ATMOSPHERE_OPTIONS.some((o) => o.id === savedAtmo) ? savedAtmo : "grid";
       const targetRadius = savedRadius && RADIUS_OPTIONS.some((r) => r.id === savedRadius) ? savedRadius : "round";
-      const targetCardStyle = savedCardStyle && CARD_STYLE_OPTIONS.some((c) => c.id === savedCardStyle) ? savedCardStyle : "default";
-      const targetFontStyle = savedFontStyle && FONT_STYLE_OPTIONS.some((f) => f.id === savedFontStyle) ? savedFontStyle : "sans";
-      const initialSecond = savedSecondInk || (targetTheme === "teenage" ? "#ff5500" : "#00857c");
+      const targetCardStyle = savedCardStyle && CARD_STYLE_OPTIONS.some((c) => c.id === savedCardStyle) ? savedCardStyle : "teenage";
+      const targetFontStyle = savedFontStyle && FONT_STYLE_OPTIONS.some((f) => f.id === savedFontStyle) ? savedFontStyle : "mono";
+      const initialSecond = savedSecondInk || (targetTheme === "teenage" ? (savedTheme ? "#ff5500" : "#3b82f6") : "#00857c");
+      const targetPreset = savedPreset !== null ? savedPreset : (savedTheme ? null : "bytehevy-recommended");
 
       setThemeState(targetTheme);
       setAccentState(targetAccent);
-      setCustomAccentHexState(savedCustom);
+      setCustomAccentHexState(targetCustom);
       setSelectedInkPairId(savedInkPair);
       setSecondInkState(initialSecond);
       setAtmosphereState(targetAtmo);
       setRadiusState(targetRadius);
       setCardStyleState(targetCardStyle);
       setFontStyleState(targetFontStyle);
-      setActivePresetIdState(savedPreset);
+      setActivePresetIdState(targetPreset);
 
-      applyThemeToDOM(targetTheme, targetAccent, targetAtmo, targetRadius, targetCardStyle, targetFontStyle, savedCustom);
+      applyThemeToDOM(targetTheme, targetAccent, targetAtmo, targetRadius, targetCardStyle, targetFontStyle, targetCustom);
       if (typeof document !== "undefined") {
         document.documentElement.style.setProperty("--second", initialSecond);
       }
@@ -1488,11 +1514,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetToDefault = () => {
-    const defaultPreset = COMPREHENSIVE_PRESETS.find((p) => p.id === "classic-hevy") || COMPREHENSIVE_PRESETS[0];
+    const defaultPreset = COMPREHENSIVE_PRESETS.find((p) => p.id === "bytehevy-recommended") || COMPREHENSIVE_PRESETS[0];
     applyComprehensivePreset(defaultPreset);
-    setSecondInkState("#00857c");
+    setSecondInkState("#3b82f6");
     if (typeof document !== "undefined") {
-      document.documentElement.style.setProperty("--second", "#00857c");
+      document.documentElement.style.setProperty("--second", "#3b82f6");
     }
     try {
       localStorage.removeItem("bytehevy_theme");
