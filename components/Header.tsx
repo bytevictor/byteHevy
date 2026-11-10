@@ -60,6 +60,30 @@ export function Header({
   const [michiBouncing, setMichiBouncing] = useState(false);
   const [headerGlow, setHeaderGlow] = useState(false);
   const glowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const logoClickCountRef = useRef(0);
+  const logoClickTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleBrandClick = () => {
+    logoClickCountRef.current += 1;
+
+    if (logoClickTimerRef.current) {
+      clearTimeout(logoClickTimerRef.current);
+    }
+
+    // Al hacer 3 clics seguidos en el logo, spawnea el michi
+    if (logoClickCountRef.current >= 3) {
+      logoClickCountRef.current = 0;
+      setMichiVisible((prev) => !prev);
+      setMichiBouncing(true);
+      setTimeout(() => setMichiBouncing(false), 600);
+    } else {
+      logoClickTimerRef.current = setTimeout(() => {
+        logoClickCountRef.current = 0;
+      }, 1200);
+    }
+
+    if (setActiveTab) setActiveTab("explorer");
+  };
 
   const handleMichiClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -122,17 +146,11 @@ export function Header({
       }`}
     >
       <div className="max-w-[1330px] mx-auto px-4 sm:px-6 h-[76px] flex items-center justify-between gap-3 sm:gap-4">
-        {/* Left: Brand with Michi Easter Egg */}
-        <div
-          className="relative flex items-center"
-          onMouseEnter={() => setMichiVisible(true)}
-          onMouseLeave={() => setMichiVisible(false)}
-        >
+        {/* Left: Brand with Michi Easter Egg (Spawns on 3 clicks) */}
+        <div className="relative flex items-center">
           <Link
             href="/"
-            onClick={() => {
-              if (setActiveTab) setActiveTab("explorer");
-            }}
+            onClick={handleBrandClick}
             className="header-brand-link h-11 flex items-center gap-3 shrink-0 text-left cursor-pointer group transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-lg"
             title="Ir al Explorador de Entrenamientos"
             aria-label="byteHevy - Ir a la pestaña Explorador"

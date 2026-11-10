@@ -6,16 +6,22 @@ export function playMichiMeow(): void {
   if (typeof window === "undefined") return;
 
   try {
-    const audio = new Audio("/meow.wav");
-    audio.volume = 0.7;
+    const audio = new Audio("/meow.mp3");
+    audio.volume = 0.95;
     const playPromise = audio.play();
     if (playPromise !== undefined) {
       playPromise.catch(() => {
-        playSynthMeow();
+        const audioWav = new Audio("/meow.wav");
+        audioWav.volume = 0.95;
+        audioWav.play().catch(() => {});
       });
     }
   } catch {
-    playSynthMeow();
+    try {
+      const audioWav = new Audio("/meow.wav");
+      audioWav.volume = 0.95;
+      audioWav.play().catch(() => {});
+    } catch {}
   }
 }
 
@@ -192,3 +198,4 @@ export function triggerMichiConfetti(originX?: number, originY?: number): void {
 
   requestAnimationFrame(frame);
 }
+
