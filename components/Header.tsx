@@ -62,6 +62,24 @@ export function Header({
   const glowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const logoClickCountRef = useRef(0);
   const logoClickTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const michiHideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isHoveringMichiRef = useRef(false);
+
+  const clearMichiTimer = () => {
+    if (michiHideTimeoutRef.current) {
+      clearTimeout(michiHideTimeoutRef.current);
+      michiHideTimeoutRef.current = null;
+    }
+  };
+
+  const scheduleMichiAutoHide = (delayMs = 4000) => {
+    clearMichiTimer();
+    michiHideTimeoutRef.current = setTimeout(() => {
+      if (!isHoveringMichiRef.current) {
+        setMichiVisible(false);
+      }
+    }, delayMs);
+  };
 
   const handleBrandClick = () => {
     logoClickCountRef.current += 1;
@@ -73,9 +91,10 @@ export function Header({
     // Al hacer 3 clics seguidos en el logo, spawnea el michi
     if (logoClickCountRef.current >= 3) {
       logoClickCountRef.current = 0;
-      setMichiVisible((prev) => !prev);
+      setMichiVisible(true);
       setMichiBouncing(true);
       setTimeout(() => setMichiBouncing(false), 600);
+      scheduleMichiAutoHide(8000);
     } else {
       logoClickTimerRef.current = setTimeout(() => {
         logoClickCountRef.current = 0;
@@ -83,6 +102,16 @@ export function Header({
     }
 
     if (setActiveTab) setActiveTab("explorer");
+  };
+
+  const handleMichiMouseEnter = () => {
+    isHoveringMichiRef.current = true;
+    clearMichiTimer();
+  };
+
+  const handleMichiMouseLeave = () => {
+    isHoveringMichiRef.current = false;
+    scheduleMichiAutoHide(3500);
   };
 
   const handleMichiClick = (e: React.MouseEvent) => {
@@ -102,7 +131,18 @@ export function Header({
     requestAnimationFrame(() => setHeaderGlow(true));
     if (glowTimeoutRef.current) clearTimeout(glowTimeoutRef.current);
     glowTimeoutRef.current = setTimeout(() => setHeaderGlow(false), 2400);
+
+    // Ocultar tras unos segundos si no se vuelve a interactuar
+    scheduleMichiAutoHide(4000);
   };
+
+  useEffect(() => {
+    return () => {
+      clearMichiTimer();
+      if (glowTimeoutRef.current) clearTimeout(glowTimeoutRef.current);
+      if (logoClickTimerRef.current) clearTimeout(logoClickTimerRef.current);
+    };
+  }, []);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -170,6 +210,8 @@ export function Header({
           {/* Michi Spotter Easter Egg */}
           <div
             onClick={handleMichiClick}
+            onMouseEnter={handleMichiMouseEnter}
+            onMouseLeave={handleMichiMouseLeave}
             className={`absolute -top-4 sm:-top-5 left-14 sm:left-16 z-50 transition-all duration-300 ease-out select-none cursor-pointer ${
               michiVisible
                 ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
