@@ -20,6 +20,7 @@ import {
 import { useSeason } from "@/lib/season-context";
 import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
 import { useSync } from "@/lib/sync-context";
+import { playMichiMeow, triggerMichiConfetti } from "@/lib/michi";
 
 export type TabId = "explorer" | "weight" | "goals" | "journal" | "settings" | "sync";
 
@@ -53,6 +54,31 @@ export function Header({
   } = useSync();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Michi Easter Egg State
+  const [michiVisible, setMichiVisible] = useState(false);
+  const [michiBouncing, setMichiBouncing] = useState(false);
+  const [headerGlow, setHeaderGlow] = useState(false);
+  const glowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleMichiClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    playMichiMeow();
+
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    triggerMichiConfetti(rect.left + rect.width / 2, rect.top + rect.height / 2);
+
+    setMichiBouncing(false);
+    requestAnimationFrame(() => setMichiBouncing(true));
+    setTimeout(() => setMichiBouncing(false), 600);
+
+    setHeaderGlow(false);
+    requestAnimationFrame(() => setHeaderGlow(true));
+    if (glowTimeoutRef.current) clearTimeout(glowTimeoutRef.current);
+    glowTimeoutRef.current = setTimeout(() => setHeaderGlow(false), 2400);
+  };
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -90,29 +116,59 @@ export function Header({
     : "explorer";
 
   return (
-    <header className="header-bar sticky top-0 z-40 border-b border-[var(--border-subtle)] bg-[var(--header-bg)] backdrop-blur-xl transition-colors">
+    <header
+      className={`header-bar sticky top-0 z-40 border-b border-[var(--border-subtle)] bg-[var(--header-bg)] backdrop-blur-xl transition-all duration-300 ${
+        headerGlow ? "michi-header-glow" : ""
+      }`}
+    >
       <div className="max-w-[1330px] mx-auto px-4 sm:px-6 h-[76px] flex items-center justify-between gap-3 sm:gap-4">
-        {/* Left: Brand */}
-        <Link
-          href="/"
-          onClick={() => {
-            if (setActiveTab) setActiveTab("explorer");
-          }}
-          className="header-brand-link h-11 flex items-center gap-3 shrink-0 text-left cursor-pointer group transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-lg"
-          title="Ir al Explorador de Entrenamientos"
-          aria-label="byteHevy - Ir a la pestaña Explorador"
+        {/* Left: Brand with Michi Easter Egg */}
+        <div
+          className="relative flex items-center"
+          onMouseEnter={() => setMichiVisible(true)}
+          onMouseLeave={() => setMichiVisible(false)}
         >
-          <ByteHevyLogo className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 transition-transform duration-200 group-hover:scale-105" />
-          <div className="flex flex-col justify-center">
-            <span className="text-2xl sm:text-[26px] font-extrabold tracking-tight leading-none">
-              <span className="text-foreground group-hover:text-accent transition-colors">byte</span>
-              <span className="text-accent-light">Hevy</span>
-            </span>
-            <span className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-1 tracking-normal group-hover:text-zinc-400 transition-colors">
-              Visualizador de Entrenamientos
-            </span>
+          <Link
+            href="/"
+            onClick={() => {
+              if (setActiveTab) setActiveTab("explorer");
+            }}
+            className="header-brand-link h-11 flex items-center gap-3 shrink-0 text-left cursor-pointer group transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-lg"
+            title="Ir al Explorador de Entrenamientos"
+            aria-label="byteHevy - Ir a la pestaña Explorador"
+          >
+            <ByteHevyLogo className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 transition-transform duration-200 group-hover:scale-105" />
+            <div className="flex flex-col justify-center">
+              <span className="text-2xl sm:text-[26px] font-extrabold tracking-tight leading-none">
+                <span className="text-foreground group-hover:text-accent transition-colors">byte</span>
+                <span className="text-accent-light">Hevy</span>
+              </span>
+              <span className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-1 tracking-normal group-hover:text-zinc-400 transition-colors">
+                Visualizador de Entrenamientos
+              </span>
+            </div>
+          </Link>
+
+          {/* Michi Spotter Easter Egg */}
+          <div
+            onClick={handleMichiClick}
+            className={`absolute -top-4 sm:-top-5 left-14 sm:left-16 z-50 transition-all duration-300 ease-out select-none cursor-pointer ${
+              michiVisible
+                ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
+                : "opacity-0 -translate-y-2 scale-90 pointer-events-none"
+            }`}
+            title="🐾 ¡Miau!"
+          >
+            <img
+              src="/michi.png"
+              alt="Michi Spotter"
+              className={`w-28 sm:w-32 h-auto object-contain transition-all duration-200 select-none hover:scale-105 active:scale-95 ${
+                michiBouncing ? "animate-michi-bounce" : ""
+              } ${headerGlow ? "drop-shadow-[0_0_16px_rgba(245,158,11,0.95)]" : "drop-shadow-[0_4px_10px_rgba(0,0,0,0.6)]"}`}
+              draggable={false}
+            />
           </div>
-        </Link>
+        </div>
 
         {/* Center: Season Selector (Prominent, Left of Tabs) + Tabs */}
         <div className="flex items-center gap-2.5 sm:gap-3.5">

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Header } from "@/components/Header";
 import { HevySyncModal } from "@/components/HevySyncModal";
 import { XiaomiSyncModal } from "@/components/XiaomiSyncModal";
@@ -13,6 +13,7 @@ import {
   InfoIcon,
   XIcon,
 } from "@/components/Icons";
+import { playMichiMeow, triggerMichiConfetti } from "@/lib/michi";
 
 function AppShellContent({ children }: { children: React.ReactNode }) {
   const [stats, setStats] = useState<{
@@ -33,6 +34,31 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     syncToast,
     clearToast,
   } = useSync();
+
+  // Footer Michi Easter Egg State
+  const [footerMichiVisible, setFooterMichiVisible] = useState(false);
+  const [footerMichiBouncing, setFooterMichiBouncing] = useState(false);
+  const [footerGlow, setFooterGlow] = useState(false);
+  const footerGlowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleFooterMichiClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    playMichiMeow();
+
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    triggerMichiConfetti(rect.left + rect.width / 2, rect.top + rect.height / 2);
+
+    setFooterMichiBouncing(false);
+    requestAnimationFrame(() => setFooterMichiBouncing(true));
+    setTimeout(() => setFooterMichiBouncing(false), 600);
+
+    setFooterGlow(false);
+    requestAnimationFrame(() => setFooterGlow(true));
+    if (footerGlowTimeoutRef.current) clearTimeout(footerGlowTimeoutRef.current);
+    footerGlowTimeoutRef.current = setTimeout(() => setFooterGlow(false), 2400);
+  };
 
   const loadStats = useCallback(async () => {
     try {
@@ -139,9 +165,44 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <footer className="border-t border-zinc-900/80 py-8 text-center text-xs text-zinc-500 font-normal">
-        <span className="font-semibold text-zinc-400">byteHevy</span> ·
-        Visualizador de entrenamientos y progresión
+      <footer
+        className={`border-t border-zinc-900/80 py-8 text-center text-xs text-zinc-500 font-normal transition-all duration-300 relative ${
+          footerGlow ? "michi-footer-glow" : ""
+        }`}
+      >
+        <div
+          className="inline-block relative group/michi-footer cursor-pointer"
+          onMouseEnter={() => setFooterMichiVisible(true)}
+          onMouseLeave={() => setFooterMichiVisible(false)}
+        >
+          {/* Michi Spotter Easter Egg in Footer */}
+          <div
+            onClick={handleFooterMichiClick}
+            className={`absolute -top-11 sm:-top-12 left-1/2 -translate-x-1/2 z-30 transition-all duration-300 ease-out select-none cursor-pointer ${
+              footerMichiVisible
+                ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
+                : "opacity-0 translate-y-2 scale-90 pointer-events-none"
+            }`}
+            title="🐾 ¡Miau!"
+          >
+            <img
+              src="/michi.png"
+              alt="Michi Footer"
+              className={`w-24 sm:w-28 h-auto object-contain transition-all duration-200 select-none hover:scale-105 active:scale-95 ${
+                footerMichiBouncing ? "animate-michi-bounce" : ""
+              } ${footerGlow ? "drop-shadow-[0_0_16px_rgba(245,158,11,0.95)]" : "drop-shadow-[0_4px_10px_rgba(0,0,0,0.6)]"}`}
+              draggable={false}
+            />
+          </div>
+
+          <span className="font-semibold text-zinc-400 group-hover/michi-footer:text-accent-light transition-colors">
+            byteHevy
+          </span>{" "}
+          ·{" "}
+          <span className="group-hover/michi-footer:text-zinc-300 transition-colors">
+            Visualizador de entrenamientos y progresión
+          </span>
+        </div>
       </footer>
     </div>
   );
