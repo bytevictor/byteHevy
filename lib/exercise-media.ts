@@ -59,7 +59,13 @@ export const EXERCISE_MEDIA_REGISTRY: ExerciseMedia[] = [
   {
     id: "iso-lateral-chest-press",
     name: "Iso-Lateral Chest Press (Machine)",
-    aliases: ["iso lateral", "iso-lateral", "press convergente"],
+    aliases: [
+      "iso-lateral chest press",
+      "iso lateral chest press",
+      "press convergente de pecho",
+      "press convergente pecho",
+      "press convergente",
+    ],
     primaryMuscle: "chest",
     secondaryMuscles: ["triceps", "shoulders"],
     equipment: "Máquina convergente de pecho",

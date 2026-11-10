@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { ExerciseMedia } from "@/types/exercise-media";
+import { getExerciseMedia } from "@/lib/exercise-media";
 import {
   FilmIcon,
   SearchIcon,
@@ -221,13 +222,17 @@ export function ExerciseMediaPickerModal({
 
         // Asignar inmediatamente al ejercicio
         if (exerciseName) {
+          const fallbackMedia = getExerciseMedia(exerciseName);
+          const resolvedMuscle = currentMedia?.primaryMuscle || fallbackMedia.primaryMuscle || "chest";
+          const resolvedEquipment = currentMedia?.equipment || fallbackMedia.equipment || "Gimnasio";
+
           const updatedMedia: ExerciseMedia = {
             id: `custom-${file.name}`,
             name: exerciseName,
             aliases: [exerciseName],
-            primaryMuscle: currentMedia?.primaryMuscle || "chest",
-            secondaryMuscles: currentMedia?.secondaryMuscles || [],
-            equipment: currentMedia?.equipment || "Other",
+            primaryMuscle: resolvedMuscle,
+            secondaryMuscles: currentMedia?.secondaryMuscles || fallbackMedia.secondaryMuscles || [],
+            equipment: resolvedEquipment,
             gifUrl: item.gifUrl || item.url,
             videoUrl: item.videoUrl,
             posterUrl: item.posterUrl || item.gifUrl || item.url,
@@ -339,6 +344,7 @@ export function ExerciseMediaPickerModal({
           videoUrl: item.videoUrl,
           posterUrl: item.posterUrl,
           title: item.title,
+          category: currentMedia?.primaryMuscle || undefined,
         }),
       });
 

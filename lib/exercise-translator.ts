@@ -118,7 +118,7 @@ const TRANSLATION_RULES: TranslationRule[] = [
   { pattern: /rueda abdominal|ab wheel/i, english: "ab wheel rollout", muscle: "abs", equipment: "Rueda Abdominal" },
   { pattern: /plancha( frontal)?|plank/i, english: "plank", muscle: "abs", equipment: "Esterilla" },
   { pattern: /abdominales?|encogimientos?|crunch/i, english: "crunch", muscle: "abs", equipment: "Esterilla" },
-  { pattern: /front lever/i, english: "front lever", muscle: "abs", equipment: "Barra de Dominadas" },
+  { pattern: /front lever/i, english: "front lever", muscle: "lats", equipment: "Barra de Dominadas" },
 
   // --- CARDIO ---
   { pattern: /cinta( de correr)?|treadmill|correr|carrera/i, english: "treadmill", muscle: "cardio", equipment: "Cinta de Correr" },
@@ -174,7 +174,9 @@ export function translateExerciseNameToEnglish(name: string): TranslationResult 
 
   // Deducción heurística de grupo muscular por palabras sueltas
   let detectedMuscle: MuscleGroup | undefined;
-  if (/pecho|pectoral|bench|chest|fly/i.test(stripped)) detectedMuscle = "chest";
+  if (/reverse fly|rear delt/i.test(stripped)) detectedMuscle = "shoulders";
+  else if (/front lever/i.test(stripped)) detectedMuscle = "lats";
+  else if (/pecho|pectoral|bench|chest|fly/i.test(stripped)) detectedMuscle = "chest";
   else if (/dorsal|lats|pull[- ]?up|pulldown|dominada|chest pull/i.test(stripped)) detectedMuscle = "lats";
   else if (/espalda|trapecio|row|remo/i.test(stripped)) detectedMuscle = "upper_back";
   else if (/b[ií]ceps?|curl|martillo|preacher/i.test(stripped)) detectedMuscle = "biceps";

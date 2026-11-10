@@ -3,7 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { getDb, ensureSchema } from "@/lib/db";
-import { ExerciseMedia } from "@/types/exercise-media";
+import { ExerciseMedia, MuscleGroup } from "@/types/exercise-media";
+import { translateExerciseNameToEnglish } from "@/lib/exercise-translator";
+import { getExerciseMedia } from "@/lib/exercise-media";
 
 const MEDIA_DIR = path.join(process.cwd(), "public", "media", "exercises");
 
@@ -302,6 +304,18 @@ export async function POST(request: Request) {
       mediaObj.gifUrl = finalGifUrl;
       mediaObj.videoUrl = finalVideoUrl;
       mediaObj.posterUrl = finalPosterUrl || finalGifUrl;
+
+      // Preservar o inferir el grupo muscular correcto del ejercicio
+      if (!mediaObj.primaryMuscle) {
+        const trans = translateExerciseNameToEnglish(exerciseName);
+        mediaObj.primaryMuscle = trans.detectedMuscle || getExerciseMedia(exerciseName).primaryMuscle || "chest";
+      }
+      if (!mediaObj.equipment) {
+        mediaObj.equipment = getExerciseMedia(exerciseName).equipment || "Gimnasio";
+      }
+      if (!mediaObj.secondaryMuscles) {
+        mediaObj.secondaryMuscles = [];
+      }
 
       await db.execute({
         sql: `INSERT OR REPLACE INTO exercisedb_cache (exercise_name, data_json, updated_at)

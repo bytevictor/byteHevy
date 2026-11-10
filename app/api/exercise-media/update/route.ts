@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 import { getDb, ensureSchema } from "@/lib/db";
-import { ExerciseMedia } from "@/types/exercise-media";
+import { ExerciseMedia, MuscleGroup } from "@/types/exercise-media";
 import { mapCategoryToMuscleGroup, detectEquipmentFromTitle } from "@/lib/exercise-catalog";
+import { translateExerciseNameToEnglish } from "@/lib/exercise-translator";
+import { getExerciseMedia } from "@/lib/exercise-media";
 
 const MEDIA_DIR = path.join(process.cwd(), "public", "media", "exercises");
 
@@ -102,7 +104,23 @@ export async function POST(request: Request) {
     }
 
     // 3. Crear el objeto ExerciseMedia
-    const primaryMuscle = mapCategoryToMuscleGroup(category || "");
+    // Prioridad para determinar el grupo muscular del ejercicio:
+    // 1) Si la categoría fue especificada explícitamente y no es vacía/genérica (ej. elegida en el catálogo)
+    // 2) Si no, deducir el músculo real del nombre del ejercicio mediante el traductor/heurística
+    // 3) Si no, fallback de ejercicio
+    // La imagen o vídeo asignado NO debe sobreescribir el músculo natural del ejercicio a 'chest'
+    let primaryMuscle: MuscleGroup = "chest";
+    if (category && category !== "all" && category !== "custom") {
+      primaryMuscle = mapCategoryToMuscleGroup(category);
+    } else {
+      const trans = translateExerciseNameToEnglish(exerciseName);
+      if (trans.detectedMuscle) {
+        primaryMuscle = trans.detectedMuscle;
+      } else {
+        const fallback = getExerciseMedia(exerciseName);
+        primaryMuscle = fallback.primaryMuscle || "chest";
+      }
+    }
     const equipment = detectEquipmentFromTitle(title || exerciseName);
 
     const updatedMedia: ExerciseMedia = {
