@@ -195,7 +195,7 @@ export function HevySyncModal({
     }
   };
 
-  const consoleCommand = `copy(decodeURIComponent((document.cookie.match(/auth2\\.0-token=([^;]+)/) || [,''])[1] || (document.cookie.match(/access-token=([^;]+)/) || [,''])[1]))`;
+  const consoleCommand = `(() => { const m = document.cookie.match(/auth2\\.0-token=([^;]+)/); if (m) { const v = decodeURIComponent(m[1]); try { copy(v); } catch(e){} console.log('%c✅ TOKEN PERMANENTE COPIADO:', 'color:#10b981;font-weight:bold;'); console.log(v); return v; } const m2 = document.cookie.match(/access-token=([^;]+)/); if (m2) { const v2 = decodeURIComponent(m2[1]); try { copy(v2); } catch(e){} console.warn('⚠️ Solo se encontró token temporal. Para permanente, copia la cookie auth2.0-token.'); return v2; } console.error('❌ No se encontró sesión. Inicia sesión en hevy.com primero.'); })()`;
 
   if (!isOpen) return null;
 
