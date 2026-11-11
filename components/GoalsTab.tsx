@@ -9,6 +9,17 @@ import { WeightGoalPanel } from "./WeightGoalPanel";
 import { useSeason } from "@/lib/season-context";
 import { getSeasonColor, hexToRgba } from "@/lib/season-colors";
 
+function isVideoMediaUrl(url?: string | null): boolean {
+  if (!url) return false;
+  const clean = url.split("?")[0].toLowerCase();
+  return (
+    clean.endsWith(".mp4") ||
+    clean.endsWith(".webm") ||
+    clean.endsWith(".mov") ||
+    clean.endsWith(".ogg")
+  );
+}
+
 export function GoalsTab() {
   const { activeSeasonId, activeSeason, setActiveSeasonId } = useSeason();
   const [goals, setGoals] = useState<GoalItem[]>([]);
@@ -279,7 +290,11 @@ export function GoalsTab() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {goals.map((goal) => {
             const media = getExerciseMedia(goal.exerciseName);
+            const videoUrl = goal.videoUrl || media.videoUrl;
             const gifUrl = goal.gifUrl || media.gifUrl;
+            const posterUrl = goal.posterUrl || media.posterUrl;
+            const isVideo = Boolean(videoUrl) || isVideoMediaUrl(gifUrl);
+            const mediaSrc = videoUrl || gifUrl || posterUrl;
             const isCompleted = goal.isCompleted || goal.progressPct >= 100;
             const progress = Math.min(100, Math.max(0, goal.progressPct));
 
@@ -296,13 +311,29 @@ export function GoalsTab() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     {/* 3D Exercise Thumbnail */}
-                    <div className="w-12 h-12 rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 flex-shrink-0 flex items-center justify-center relative">
-                      <img
-                        src={gifUrl}
-                        alt={goal.exerciseName}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
+                    <div className="w-12 h-12 rounded-xl overflow-hidden border border-zinc-800 bg-white flex-shrink-0 flex items-center justify-center relative">
+                      {isVideo && mediaSrc ? (
+                        <video
+                          src={mediaSrc}
+                          poster={posterUrl}
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          className="w-full h-full object-contain pointer-events-none"
+                        />
+                      ) : mediaSrc ? (
+                        <img
+                          src={mediaSrc}
+                          alt={goal.exerciseName}
+                          className="w-full h-full object-contain"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-zinc-900 flex items-center justify-center text-[10px] font-mono text-zinc-500">
+                          3D
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex flex-col min-w-0">

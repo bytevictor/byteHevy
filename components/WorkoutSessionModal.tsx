@@ -21,6 +21,17 @@ function formatDuration(seconds: number): string {
   return `${h}h ${m}m`;
 }
 
+function isVideoMediaUrl(url?: string | null): boolean {
+  if (!url) return false;
+  const clean = url.split("?")[0].toLowerCase();
+  return (
+    clean.endsWith(".mp4") ||
+    clean.endsWith(".webm") ||
+    clean.endsWith(".mov") ||
+    clean.endsWith(".ogg")
+  );
+}
+
 export function WorkoutSessionModal({
   workout,
   isOpen,
@@ -129,7 +140,11 @@ export function WorkoutSessionModal({
                 highlightExerciseName &&
                 ex.name.toLowerCase().trim() === highlightExerciseName.toLowerCase().trim();
               const media = getExerciseMedia(ex.name);
+              const videoUrl = ex.videoUrl || media.videoUrl;
               const gifUrl = ex.gifUrl || media.gifUrl;
+              const posterUrl = ex.posterUrl || media.posterUrl;
+              const isVideo = Boolean(videoUrl) || isVideoMediaUrl(gifUrl);
+              const mediaSrc = videoUrl || gifUrl || posterUrl;
 
               return (
                 <div
@@ -145,9 +160,19 @@ export function WorkoutSessionModal({
                     <div className="flex items-center gap-3 min-w-0">
                       {/* 3D Visual thumbnail */}
                       <div className="w-10 h-10 rounded-lg overflow-hidden bg-white shrink-0 border border-zinc-800 flex items-center justify-center">
-                        {gifUrl ? (
+                        {isVideo && mediaSrc ? (
+                          <video
+                            src={mediaSrc}
+                            poster={posterUrl}
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            className="w-full h-full object-contain pointer-events-none"
+                          />
+                        ) : mediaSrc ? (
                           <img
-                            src={gifUrl}
+                            src={mediaSrc}
                             alt={ex.name}
                             className="w-full h-full object-contain p-0.5"
                           />

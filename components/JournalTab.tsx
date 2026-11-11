@@ -53,6 +53,36 @@ export function JournalTab() {
     loadJournal();
   }, [activeSeasonId]);
 
+  // Listen for real-time exercise media updates (e.g. from ExerciseMediaPickerModal)
+  useEffect(() => {
+    const handleMediaUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ exerciseName: string; media: any }>;
+      if (!customEvent.detail) return;
+      const { exerciseName, media } = customEvent.detail;
+      const key = exerciseName.toLowerCase().trim();
+
+      setWorkouts((prevWorkouts) =>
+        prevWorkouts.map((w) => ({
+          ...w,
+          exercises: w.exercises.map((ex) =>
+            ex.name.toLowerCase().trim() === key
+              ? {
+                  ...ex,
+                  gifUrl: media.gifUrl,
+                  videoUrl: media.videoUrl,
+                  posterUrl: media.posterUrl,
+                  primaryMuscle: media.primaryMuscle,
+                }
+              : ex
+          ),
+        }))
+      );
+    };
+
+    window.addEventListener("exercise-media-updated", handleMediaUpdated);
+    return () => window.removeEventListener("exercise-media-updated", handleMediaUpdated);
+  }, []);
+
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);

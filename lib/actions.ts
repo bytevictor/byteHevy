@@ -38,6 +38,8 @@ export interface ExerciseSummary {
   seasonBestValue?: number | null;
   inSeason?: boolean;
   gifUrl?: string;
+  videoUrl?: string;
+  posterUrl?: string;
   primaryMuscle?: MuscleGroup;
 }
 
@@ -540,6 +542,8 @@ export async function getExercisesList(seasonId?: string | null): Promise<Exerci
     const cachedMedia = cacheMap.get(exName.toLowerCase().trim());
     const fallbackMedia = getExerciseMedia(exName);
     const resolvedGifUrl = cachedMedia?.gifUrl || fallbackMedia.gifUrl;
+    const resolvedVideoUrl = cachedMedia?.videoUrl || fallbackMedia.videoUrl;
+    const resolvedPosterUrl = cachedMedia?.posterUrl || fallbackMedia.posterUrl;
     const resolvedPrimaryMuscle = cachedMedia?.primaryMuscle || fallbackMedia.primaryMuscle;
 
     results.push({
@@ -557,6 +561,8 @@ export async function getExercisesList(seasonId?: string | null): Promise<Exerci
       seasonBestValue: season ? (seasonBestVal > 0 ? seasonBestVal : null) : allTimeBestVal,
       inSeason: season ? seasonWorkouts.length > 0 : true,
       gifUrl: resolvedGifUrl,
+      videoUrl: resolvedVideoUrl,
+      posterUrl: resolvedPosterUrl,
       primaryMuscle: resolvedPrimaryMuscle,
     });
   }
@@ -1216,6 +1222,8 @@ export interface GoalItem {
   current1RM?: number;
   currentLabel: string;
   gifUrl?: string;
+  videoUrl?: string;
+  posterUrl?: string;
   primaryMuscle?: MuscleGroup;
 }
 
@@ -1250,6 +1258,7 @@ export async function getGoals(seasonId?: string | null): Promise<GoalItem[]> {
     const exId = String(g.exercise_id);
     const exName = String(g.exercise_name);
     const metricType = String(g.metric_type) as GoalItem["metricType"];
+    const gMedia = cacheMap.get(exName.toLowerCase().trim()) || getExerciseMedia(exName);
 
     const targetWeight = g.target_weight !== null && g.target_weight !== undefined ? Number(g.target_weight) : undefined;
     const targetReps = g.target_reps !== null && g.target_reps !== undefined ? Number(g.target_reps) : undefined;
@@ -1685,8 +1694,10 @@ export async function getGoals(seasonId?: string | null): Promise<GoalItem[]> {
       currentReps: activeCurrent.reps > 0 ? activeCurrent.reps : undefined,
       currentSeconds: activeCurrent.seconds > 0 ? activeCurrent.seconds : undefined,
       currentDistanceKm: activeCurrent.distanceKm > 0 ? activeCurrent.distanceKm : undefined,
-      gifUrl: cacheMap.get(exName.toLowerCase().trim())?.gifUrl || getExerciseMedia(exName).gifUrl,
-      primaryMuscle: cacheMap.get(exName.toLowerCase().trim())?.primaryMuscle || getExerciseMedia(exName).primaryMuscle,
+      gifUrl: gMedia.gifUrl,
+      videoUrl: gMedia.videoUrl,
+      posterUrl: gMedia.posterUrl,
+      primaryMuscle: gMedia.primaryMuscle,
     });
   }
 
@@ -2127,6 +2138,8 @@ export interface JournalExercise {
   sets: SetDetail[];
   topSetLabel: string;
   gifUrl?: string;
+  videoUrl?: string;
+  posterUrl?: string;
   primaryMuscle?: MuscleGroup | string;
   volumeKg?: number;
   best1RM?: number;
@@ -2282,6 +2295,8 @@ export async function getJournalWorkouts(seasonId?: string | null): Promise<Jour
         ...ex,
         topSetLabel: topLabel,
         gifUrl: media.gifUrl,
+        videoUrl: media.videoUrl,
+        posterUrl: media.posterUrl,
         primaryMuscle: media.primaryMuscle,
         volumeKg: Math.round(exVol),
         best1RM: exBest1RM > 0 ? exBest1RM : undefined,
@@ -2435,6 +2450,8 @@ export async function getWorkoutDetail(workoutId: string): Promise<JournalWorkou
       ...ex,
       topSetLabel: topLabel,
       gifUrl: media.gifUrl,
+      videoUrl: media.videoUrl,
+      posterUrl: media.posterUrl,
       primaryMuscle: media.primaryMuscle,
       volumeKg: Math.round(exVol),
       best1RM: exBest1RM > 0 ? exBest1RM : undefined,

@@ -562,6 +562,17 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
             const cachedMedia = mediaCache[key];
             const fallbackMedia = getExerciseMedia(ex.name);
             const gifUrl = cachedMedia?.gifUrl || ex.gifUrl || fallbackMedia.gifUrl;
+            const videoUrl = cachedMedia?.videoUrl || ex.videoUrl || fallbackMedia.videoUrl;
+            const posterUrl = cachedMedia?.posterUrl || ex.posterUrl || fallbackMedia.posterUrl;
+            const isVideo =
+              Boolean(videoUrl) ||
+              Boolean(
+                gifUrl &&
+                  (gifUrl.toLowerCase().includes(".mp4") ||
+                    gifUrl.toLowerCase().includes(".webm") ||
+                    gifUrl.toLowerCase().includes(".mov"))
+              );
+            const mediaSrc = videoUrl || gifUrl || posterUrl;
             const primaryMuscle = cachedMedia?.primaryMuscle || ex.primaryMuscle || fallbackMedia.primaryMuscle;
             const muscleName = MUSCLE_LABELS[primaryMuscle] || primaryMuscle;
             const displaySessionCount = activeSeason
@@ -588,22 +599,27 @@ export function ExplorerTab({ initialExercises = [], onGoToSync }: ExplorerTabPr
                         : "border-zinc-300 group-hover:border-zinc-200"
                       }`}
                   >
-                    {gifUrl?.toLowerCase().endsWith(".mp4") || gifUrl?.toLowerCase().endsWith(".webm") ? (
+                    {isVideo && mediaSrc ? (
                       <video
-                        src={gifUrl}
+                        src={mediaSrc}
+                        poster={posterUrl}
                         autoPlay
                         loop
                         muted
                         playsInline
-                        className="w-full h-full object-contain"
+                        className="w-full h-full object-contain pointer-events-none"
                       />
-                    ) : (
+                    ) : mediaSrc ? (
                       <img
-                        src={gifUrl}
+                        src={mediaSrc}
                         alt={ex.name}
                         className="w-full h-full object-contain"
                         loading="lazy"
                       />
+                    ) : (
+                      <div className="w-full h-full bg-zinc-900 flex items-center justify-center text-[10px] font-mono text-zinc-500">
+                        3D
+                      </div>
                     )}
                   </div>
                   {idx < 3 && !searchQuery && categoryFilter === "all" && (

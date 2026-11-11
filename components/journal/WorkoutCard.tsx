@@ -42,6 +42,17 @@ export function formatVolume(volumeKg?: number): string {
   return `${Math.round(volumeKg).toLocaleString("es-ES")} kg`;
 }
 
+function isVideoMediaUrl(url?: string | null): boolean {
+  if (!url) return false;
+  const clean = url.split("?")[0].toLowerCase();
+  return (
+    clean.endsWith(".mp4") ||
+    clean.endsWith(".webm") ||
+    clean.endsWith(".mov") ||
+    clean.endsWith(".ogg")
+  );
+}
+
 export function WorkoutCard({
   workout,
   isExpanded,
@@ -137,6 +148,8 @@ export function WorkoutCard({
             const isMatch =
               highlightExerciseName &&
               ex.name.toLowerCase().trim() === highlightExerciseName.toLowerCase().trim();
+            const isVideo = Boolean(ex.videoUrl) || isVideoMediaUrl(ex.gifUrl);
+            const mediaSrc = ex.videoUrl || ex.gifUrl || ex.posterUrl;
 
             return (
               <div
@@ -147,9 +160,21 @@ export function WorkoutCard({
                     : "bg-zinc-950/70 border-zinc-800/80 text-zinc-300"
                 }`}
               >
-                {ex.gifUrl && (
+                {mediaSrc && (
                   <div className="w-5 h-5 rounded-md overflow-hidden bg-white shrink-0 border border-zinc-700/50 flex items-center justify-center">
-                    <img src={ex.gifUrl} alt="" className="w-full h-full object-contain" />
+                    {isVideo ? (
+                      <video
+                        src={mediaSrc}
+                        poster={ex.posterUrl}
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        className="w-full h-full object-contain pointer-events-none"
+                      />
+                    ) : (
+                      <img src={mediaSrc} alt="" className="w-full h-full object-contain" />
+                    )}
                   </div>
                 )}
                 <span className="font-semibold text-zinc-200">{ex.name}</span>
@@ -211,6 +236,9 @@ export function WorkoutCard({
                 }
               });
 
+              const isVideo = Boolean(ex.videoUrl) || isVideoMediaUrl(ex.gifUrl);
+              const mediaSrc = ex.videoUrl || ex.gifUrl || ex.posterUrl;
+
               return (
                 <div
                   key={ex.id || exIdx}
@@ -220,14 +248,24 @@ export function WorkoutCard({
                       : "bg-zinc-950/70 border-zinc-800/80 hover:border-zinc-750"
                   }`}
                 >
-                  {/* Exercise Header Card with 3D GIF */}
+                  {/* Exercise Header Card with 3D GIF / Video */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      {/* 3D Visual GIF Container */}
+                      {/* 3D Visual Container */}
                       <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-white shrink-0 border border-zinc-750 flex items-center justify-center shadow-inner">
-                        {ex.gifUrl ? (
+                        {isVideo && mediaSrc ? (
+                          <video
+                            src={mediaSrc}
+                            poster={ex.posterUrl}
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            className="w-full h-full object-contain p-0.5"
+                          />
+                        ) : mediaSrc ? (
                           <img
-                            src={ex.gifUrl}
+                            src={mediaSrc}
                             alt={ex.name}
                             className="w-full h-full object-contain p-1"
                             loading="lazy"
