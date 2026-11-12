@@ -359,15 +359,23 @@ export function WeightProjectionModal({
     const d3mRateWeekly = Math.round((kgToGoal / (90 / 7)) * 100) / 100;
 
     // Evaluación dinámica para identificar cuál de los 3 plazos es el más equilibrado
+    // Sweet spot para corte estándar en fitness: ~550 kcal/d (~0.5 kg/sem)
+    // Para volumen limpio: ~350 kcal/d (~0.3 kg/sem)
     const optionsDaily = [d1mDaily, d2mDaily, d3mDaily];
-    const idealKcal = isGain ? 350 : 500;
-    const scores = optionsDaily.map((kcal) => {
+    const idealKcal = isGain ? 350 : 550;
+
+    // Si todas las opciones son excesivas (> 1250 kcal/d), la menos inviable es la más larga (3 meses)
+    const allExtreme = isLoss && optionsDaily.every((k) => k > 1250);
+
+    const scores = optionsDaily.map((kcal, idx) => {
+      if (allExtreme) return -idx;
       if (isLoss && kcal > 1250) return 99999;
-      if (isLoss && kcal < 180) return 88888;
+      if (isLoss && kcal < 200) return 88888;
       if (isGain && kcal > 550) return 99999;
+      if (isGain && kcal < 120) return 88888;
       return Math.abs(kcal - idealKcal);
     });
-    const bestIndex = scores.indexOf(Math.min(...scores));
+    const bestIndex = allExtreme ? 2 : scores.indexOf(Math.min(...scores));
 
     // Función que juzga cada intervalo de forma 100% dinámica según la meta y calorías
     const evaluateOption = (dailyKcal: number, rateWeekly: number, days: number, isBest: boolean) => {
@@ -391,7 +399,7 @@ export function WeightProjectionModal({
         }
         if (rateWeekly >= 0.20 && rateWeekly <= 0.45) {
           return {
-            label: isBest ? "⭐ Recomendado" : "Óptimo",
+            label: isBest ? "⭐ Recomendado" : "⚖️ Ritmo Óptimo",
             badgeClass: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
             textClass: "text-emerald-400",
             description: `Ritmo limpio y óptimo (+${rateWeekly} kg/sem). Máxima masa muscular con mínima grasa.`,
@@ -406,7 +414,7 @@ export function WeightProjectionModal({
           };
         }
         return {
-          label: isBest ? "⭐ Recomendado (Suave)" : "🌱 Cómodo",
+          label: isBest ? "⭐ Recomendado" : "🌱 Cómodo",
           badgeClass: "bg-blue-500/15 text-blue-400 border border-blue-500/30",
           textClass: "text-blue-400",
           description: `Superávit moderado (+${dailyKcal} kcal/d). Ganancia progresiva y controlada.`,
@@ -448,20 +456,20 @@ export function WeightProjectionModal({
         };
       }
 
-      // 4. Recomendado: déficit entre 400 y 700 kcal/d (ritmo entre 0.35 y 0.65 kg/sem)
-      if (dailyKcal >= 400 && dailyKcal <= 700) {
+      // 4. Recomendado estándar: déficit entre 480 y 700 kcal/d (ritmo entre 0.45 y 0.65 kg/sem)
+      if (dailyKcal >= 480 && dailyKcal <= 700) {
         return {
-          label: isBest ? "⭐ Recomendado" : "Equilibrado",
+          label: isBest ? "⭐ Recomendado" : "⚖️ Sostenible",
           badgeClass: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
           textClass: "text-emerald-400",
           description: `Equilibrio óptimo (-${dailyKcal} kcal/d, -${rateWeekly} kg/sem). Quema grasa a buen ritmo protegiendo 100% de fuerza y músculo.`,
         };
       }
 
-      // 5. Cómodo y Sostenible: déficit entre 200 y 400 kcal/d (ritmo entre 0.20 y 0.35 kg/sem)
-      if (dailyKcal >= 200 && dailyKcal < 400) {
+      // 5. Cómodo y Sostenible: déficit entre 200 y 480 kcal/d (ritmo entre 0.20 y 0.45 kg/sem)
+      if (dailyKcal >= 200 && dailyKcal < 480) {
         return {
-          label: isBest ? "⭐ Recomendado (Cómodo)" : "🌱 Cómodo y Fácil",
+          label: isBest ? "⭐ Recomendado" : "🌱 Cómodo y Fácil",
           badgeClass: isBest
             ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
             : "bg-blue-500/15 text-blue-400 border border-blue-500/30",
@@ -971,19 +979,19 @@ export function WeightProjectionModal({
                   "¡Ya estás en tu meta de peso! Tu objetivo actual es mantenerte."
                 ) : timeTargets.bestIndex === 0 ? (
                   <>
-                    Para tus <strong>{kgToGoal} kg</strong> restantes, el plazo más lógico y equilibrado es <strong>En 1 Mes</strong> (déficit de <strong>-{timeTargets.oneMonth.dailyKcal} kcal/día</strong>). Ampliarlo a 2 o 3 meses sería innecesariamente lento.
+                    Para tus <strong>{kgToGoal} kg</strong> restantes, el plazo más lógico y equilibrado es <strong>En 1 Mes</strong> ({isGain ? "superávit" : "déficit"} de <strong>{isGain ? "+" : "-"}{timeTargets.oneMonth.dailyKcal} kcal/día</strong>). Ampliarlo a 2 o 3 meses sería innecesariamente lento.
                   </>
                 ) : timeTargets.bestIndex === 1 ? (
                   <>
-                    Para tus <strong>{kgToGoal} kg</strong> restantes, el plazo más equilibrado es <strong>En 2 Meses</strong> (déficit de <strong>-{timeTargets.twoMonths.dailyKcal} kcal/día</strong>, ~{timeTargets.twoMonths.rateWeekly} kg/sem).
+                    Para tus <strong>{kgToGoal} kg</strong> restantes, el plazo más equilibrado es <strong>En 2 Meses</strong> ({isGain ? "superávit" : "déficit"} de <strong>{isGain ? "+" : "-"}{timeTargets.twoMonths.dailyKcal} kcal/día</strong>, ~{timeTargets.twoMonths.rateWeekly} kg/sem).
                   </>
                 ) : timeTargets.threeMonths.dailyKcal > 1000 ? (
                   <>
-                    Para una meta de <strong>{kgToGoal} kg</strong>, incluso 3 meses exige un ritmo muy agresivo (-{timeTargets.threeMonths.dailyKcal} kcal/d). Se aconseja un horizonte de <strong>4 a 6 meses</strong> para no perder masa muscular.
+                    Para una meta de <strong>{kgToGoal} kg</strong>, incluso 3 meses exige un ritmo muy agresivo ({isGain ? "+" : "-"}{timeTargets.threeMonths.dailyKcal} kcal/d). Se aconseja un horizonte de <strong>4 a 6 meses</strong> para no perder masa muscular.
                   </>
                 ) : (
                   <>
-                    Para tus <strong>{kgToGoal} kg</strong> restantes, el plazo más sostenible es <strong>En 3 Meses</strong> (déficit de <strong>-{timeTargets.threeMonths.dailyKcal} kcal/día</strong>, ~{timeTargets.threeMonths.rateWeekly} kg/sem).
+                    Para tus <strong>{kgToGoal} kg</strong> restantes, el plazo más sostenible es <strong>En 3 Meses</strong> ({isGain ? "superávit" : "déficit"} de <strong>{isGain ? "+" : "-"}{timeTargets.threeMonths.dailyKcal} kcal/día</strong>, ~{timeTargets.threeMonths.rateWeekly} kg/sem).
                   </>
                 )}
               </span>
@@ -1015,22 +1023,22 @@ export function WeightProjectionModal({
 
                 <div className="space-y-1.5 py-1">
                   <div className="flex items-baseline justify-between">
-                    <span className="text-xs text-zinc-400">Déficit diario:</span>
+                    <span className="text-xs text-zinc-400">{isGain ? "Superávit diario:" : "Déficit diario:"}</span>
                     <strong className={`text-lg font-mono font-bold ${timeTargets.oneMonth.verdict.textClass}`}>
-                      -{timeTargets.oneMonth.dailyKcal}{" "}
+                      {isGain ? "+" : "-"}{timeTargets.oneMonth.dailyKcal}{" "}
                       <span className="text-xs font-normal text-zinc-400">kcal/d</span>
                     </strong>
                   </div>
                   <div className="flex items-baseline justify-between text-xs text-zinc-400">
-                    <span>Déficit semanal:</span>
+                    <span>{isGain ? "Superávit semanal:" : "Déficit semanal:"}</span>
                     <strong className="font-mono text-zinc-200">
-                      -{timeTargets.oneMonth.weeklyKcal.toLocaleString("es-ES")} kcal/sem
+                      {isGain ? "+" : "-"}{timeTargets.oneMonth.weeklyKcal.toLocaleString("es-ES")} kcal/sem
                     </strong>
                   </div>
                   <div className="flex items-baseline justify-between text-xs text-zinc-400">
-                    <span>Ritmo de pérdida:</span>
+                    <span>{isGain ? "Ritmo de subida:" : "Ritmo de pérdida:"}</span>
                     <strong className="font-mono text-zinc-200">
-                      -{timeTargets.oneMonth.rateWeekly} kg/sem
+                      {isGain ? "+" : "-"}{timeTargets.oneMonth.rateWeekly} kg/sem
                     </strong>
                   </div>
                 </div>
@@ -1063,22 +1071,22 @@ export function WeightProjectionModal({
 
                 <div className="space-y-1.5 py-1">
                   <div className="flex items-baseline justify-between">
-                    <span className="text-xs text-zinc-400">Déficit diario:</span>
+                    <span className="text-xs text-zinc-400">{isGain ? "Superávit diario:" : "Déficit diario:"}</span>
                     <strong className={`text-lg font-mono font-bold ${timeTargets.twoMonths.verdict.textClass}`}>
-                      -{timeTargets.twoMonths.dailyKcal}{" "}
+                      {isGain ? "+" : "-"}{timeTargets.twoMonths.dailyKcal}{" "}
                       <span className="text-xs font-normal text-zinc-400">kcal/d</span>
                     </strong>
                   </div>
                   <div className="flex items-baseline justify-between text-xs text-zinc-400">
-                    <span>Déficit semanal:</span>
+                    <span>{isGain ? "Superávit semanal:" : "Déficit semanal:"}</span>
                     <strong className="font-mono text-zinc-200">
-                      -{timeTargets.twoMonths.weeklyKcal.toLocaleString("es-ES")} kcal/sem
+                      {isGain ? "+" : "-"}{timeTargets.twoMonths.weeklyKcal.toLocaleString("es-ES")} kcal/sem
                     </strong>
                   </div>
                   <div className="flex items-baseline justify-between text-xs text-zinc-400">
-                    <span>Ritmo de pérdida:</span>
+                    <span>{isGain ? "Ritmo de subida:" : "Ritmo de pérdida:"}</span>
                     <strong className="font-mono text-zinc-200">
-                      -{timeTargets.twoMonths.rateWeekly} kg/sem
+                      {isGain ? "+" : "-"}{timeTargets.twoMonths.rateWeekly} kg/sem
                     </strong>
                   </div>
                 </div>
@@ -1111,22 +1119,22 @@ export function WeightProjectionModal({
 
                 <div className="space-y-1.5 py-1">
                   <div className="flex items-baseline justify-between">
-                    <span className="text-xs text-zinc-400">Déficit diario:</span>
+                    <span className="text-xs text-zinc-400">{isGain ? "Superávit diario:" : "Déficit diario:"}</span>
                     <strong className={`text-lg font-mono font-bold ${timeTargets.threeMonths.verdict.textClass}`}>
-                      -{timeTargets.threeMonths.dailyKcal}{" "}
+                      {isGain ? "+" : "-"}{timeTargets.threeMonths.dailyKcal}{" "}
                       <span className="text-xs font-normal text-zinc-400">kcal/d</span>
                     </strong>
                   </div>
                   <div className="flex items-baseline justify-between text-xs text-zinc-400">
-                    <span>Déficit semanal:</span>
+                    <span>{isGain ? "Superávit semanal:" : "Déficit semanal:"}</span>
                     <strong className="font-mono text-zinc-200">
-                      -{timeTargets.threeMonths.weeklyKcal.toLocaleString("es-ES")} kcal/sem
+                      {isGain ? "+" : "-"}{timeTargets.threeMonths.weeklyKcal.toLocaleString("es-ES")} kcal/sem
                     </strong>
                   </div>
                   <div className="flex items-baseline justify-between text-xs text-zinc-400">
-                    <span>Ritmo de pérdida:</span>
+                    <span>{isGain ? "Ritmo de subida:" : "Ritmo de pérdida:"}</span>
                     <strong className="font-mono text-zinc-200">
-                      -{timeTargets.threeMonths.rateWeekly} kg/sem
+                      {isGain ? "+" : "-"}{timeTargets.threeMonths.rateWeekly} kg/sem
                     </strong>
                   </div>
                 </div>
