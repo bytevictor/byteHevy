@@ -6,26 +6,21 @@ import {
   XIcon,
   SparklesIcon,
   ScaleIcon,
-  ActivityIcon,
   FlameIcon,
   TrendingUpIcon,
   TrendingDownIcon,
   TargetIcon,
-  InfoIcon,
-  CalendarIcon,
   CheckCircleIcon,
   AlertTriangleIcon,
   ZapIcon,
+  ActivityIcon,
+  CalendarIcon,
+  ClockIcon,
+  CheckIcon,
   RefreshCwIcon,
-  ChevronDownIcon,
+  ChevronRightIcon,
 } from "./Icons";
-import {
-  buildFullProjectionReport,
-  HORIZON_PRESETS,
-  ProjectionHorizonId,
-  FullProjectionReport,
-  WeightDataPoint,
-} from "@/lib/weight-projection-engine";
+import { useUserProfile } from "@/lib/user-profile-context";
 
 interface WeightProjectionModalProps {
   isOpen: boolean;
@@ -40,60 +35,7 @@ interface WeightProjectionModalProps {
   defaultTargetWeight?: number;
 }
 
-/**
- * Genera un trazado cúbico monótono (Fritsch-Carlson) para unir los puntos
- * de forma ultra-suave y continua, idéntico al modo de tendencia.
- */
-function buildSplinePath(points: { x: number; y: number }[]): string {
-  if (points.length === 0) return "";
-  if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
-  if (points.length === 2) {
-    return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)} L ${points[1].x.toFixed(1)} ${points[1].y.toFixed(1)}`;
-  }
-
-  const n = points.length;
-  const dxs: number[] = [];
-  const dys: number[] = [];
-  const ms: number[] = [];
-
-  for (let i = 0; i < n - 1; i++) {
-    const dx = points[i + 1].x - points[i].x;
-    const dy = points[i + 1].y - points[i].y;
-    dxs.push(dx);
-    dys.push(dy);
-    ms.push(dx === 0 ? 0 : dy / dx);
-  }
-
-  const tangents: number[] = [ms[0]];
-  for (let i = 1; i < n - 1; i++) {
-    const m0 = ms[i - 1];
-    const m1 = ms[i];
-    if (m0 * m1 <= 0) {
-      tangents.push(0);
-    } else {
-      const dx0 = dxs[i - 1];
-      const dx1 = dxs[i];
-      const common = dx0 + dx1;
-      tangents.push(common === 0 ? 0 : (3 * common) / ((common + dx1) / m0 + (common + dx0) / m1));
-    }
-  }
-  tangents.push(ms[n - 2]);
-
-  let path = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
-  for (let i = 0; i < n - 1; i++) {
-    const p0 = points[i];
-    const p1 = points[i + 1];
-    const dx = (p1.x - p0.x) / 3;
-    const cp1x = p0.x + dx;
-    const cp1y = p0.y + tangents[i] * dx;
-    const cp2x = p1.x - dx;
-    const cp2y = p1.y - tangents[i + 1] * dx;
-
-    path += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p1.x.toFixed(1)} ${p1.y.toFixed(1)}`;
-  }
-
-  return path;
-}
+export type TrajectoryKey = "current" | "1m" | "2m" | "3m" | "def500" | "def1000" | "adf";
 
 export function WeightProjectionModal({
   isOpen,
@@ -102,46 +44,31 @@ export function WeightProjectionModal({
   activeSeasonName,
   defaultTargetWeight,
 }: WeightProjectionModalProps) {
-  // Estado de interactividad
-  const [selectedHorizonId, setSelectedHorizonId] = useState<ProjectionHorizonId>("30d");
-  const [calibrationWindowDays, setCalibrationWindowDays] = useState<number>(30);
+  const { profile } = useUserProfile();
+  const [mounted, setMounted] = useState(false);
+  const [calibrationDays, setCalibrationDays] = useState<number>(30);
   const [userTargetWeight, setUserTargetWeight] = useState<string>(() =>
     defaultTargetWeight ? String(defaultTargetWeight) : ""
   );
-
-  // Simulador What-If (ajuste calórico dinámico de -600 a +600 kcal/día)
-  const [whatIfKcal, setWhatIfKcal] = useState<number>(0);
-
-  // Complejidad de las explicaciones (simple vs técnica)
-  const [explanationMode, setExplanationMode] = useState<"simple" | "technical">("simple");
-  // Toggle para expandir detalles matemáticos profundos
-  const [showMathDetails, setShowMathDetails] = useState<boolean>(false);
+  const [selectedTrajectory, setSelectedTrajectory] = useState<TrajectoryKey>("current");
+  const [savingTarget, setSavingTarget] = useState(false);
+  const [targetSavedSuccess, setTargetSavedSuccess] = useState(false);
 
   const [hoveredPoint, setHoveredPoint] = useState<{
     x: number;
     y: number;
-    screenX: number;
-    isHistorical: boolean;
     dateLabel: string;
     weight: number;
-    diffFromLatest: number;
-    daysAgoOrAhead: number;
-    lower95?: number;
-    upper95?: number;
-    lower68?: number;
-    upper68?: number;
-    isSimulation?: boolean;
+    isProjected: boolean;
   } | null>(null);
 
-  const [mounted, setMounted] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const chartContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Cargar meta fijada globalmente desde la base de datos si no vino por props
+  // Cargar meta desde la base de datos si no vino fijada por prop
   useEffect(() => {
     if (!defaultTargetWeight) {
       fetch("/api/weight/goal")
@@ -155,486 +82,661 @@ export function WeightProjectionModal({
     }
   }, [defaultTargetWeight]);
 
-  // Escuchar tecla Escape
+  // Cerrar con Escape
   useEffect(() => {
+    if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
-    if (isOpen) {
-      window.addEventListener("keydown", handleKeyDown);
-    }
+    window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Transformar registros a puntos válidos
-  const points: WeightDataPoint[] = useMemo(() => {
+  // 1. Filtrar y ordenar los pesajes reales válidos
+  const points = useMemo(() => {
     return rawRecords
-      .filter((r) => typeof r.peso === "number" && r.peso > 0 && !isNaN(r.peso))
+      .filter((r) => typeof r.peso === "number" && r.peso > 0 && r.timestamp > 0)
       .map((r) => ({
         timestamp: r.timestamp,
-        dateKey: r.fecha || r.date || new Date(r.timestamp).toISOString().slice(0, 10),
+        dateKey: r.fecha || r.date || new Date(r.timestamp).toISOString().split("T")[0],
         weight: r.peso,
       }))
       .sort((a, b) => a.timestamp - b.timestamp);
   }, [rawRecords]);
 
-  // Meta numérica coherente
+  // 2. Peso actual y fecha más reciente
+  const latestPoint = points[points.length - 1];
+  const currentWeight = latestPoint ? latestPoint.weight : 75;
+  const latestTimestamp = latestPoint ? latestPoint.timestamp : Date.now();
+
   const targetWeightNum = useMemo(() => {
-    const parsed = parseFloat(userTargetWeight);
-    if (!isNaN(parsed) && parsed > 20 && parsed < 300) return parsed;
-    if (points.length === 0) return 70;
-    const latest = points[points.length - 1].weight;
-    return Math.round((latest - 3) * 10) / 10;
-  }, [userTargetWeight, points]);
+    const val = parseFloat(userTargetWeight);
+    return !isNaN(val) && val > 0 ? val : currentWeight - 4;
+  }, [userTargetWeight, currentWeight]);
 
-  // Ejecutar motor estadístico base
-  const report: FullProjectionReport | null = useMemo(() => {
-    if (points.length < 2) return null;
-    return buildFullProjectionReport(
-      points,
-      selectedHorizonId,
-      undefined,
-      targetWeightNum,
-      calibrationWindowDays
-    );
-  }, [points, selectedHorizonId, targetWeightNum, calibrationWindowDays]);
+  // Diferencia de kilos a la meta (positivo = subir, negativo = bajar)
+  const deltaKg = Math.round((targetWeightNum - currentWeight) * 10) / 10;
+  const isLoss = deltaKg < -0.05;
+  const isGain = deltaKg > 0.05;
+  const isMaint = !isLoss && !isGain;
+  const kgToGoal = Math.abs(deltaKg);
 
-  // Histórico de calibración reciente para el gráfico
-  const calibrationPoints = useMemo(() => {
-    if (!report || points.length === 0) return [];
-    if (calibrationWindowDays >= 9999) {
-      return points;
+  // Guardar meta directamente a la base de datos
+  const handleSaveTargetGoal = async () => {
+    if (!targetWeightNum || targetWeightNum <= 0) return;
+    setSavingTarget(true);
+    try {
+      const res = await fetch("/api/weight/goal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetWeight: targetWeightNum,
+          startWeight: currentWeight,
+          startDate: new Date().toISOString().split("T")[0],
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTargetSavedSuccess(true);
+        setTimeout(() => setTargetSavedSuccess(false), 2500);
+      }
+    } catch (e) {
+      console.error("Error guardando meta:", e);
+    } finally {
+      setSavingTarget(false);
     }
-    const cutoff = report.latestTimestamp - calibrationWindowDays * 86400000;
-    const filtered = points.filter((p) => p.timestamp >= cutoff);
-    return filtered.length >= 2 ? filtered : points.slice(-Math.min(5, points.length));
-  }, [report, points, calibrationWindowDays]);
+  };
 
-  // Puntos proyectados con simulación What-If aplicada en vivo
-  const simulationData = useMemo(() => {
-    if (!report) return null;
-
-    const baseSlopeDaily = report.linear.slopeDaily;
-    const baseSlopeWeekly = report.linear.slopeWeekly;
-    // Wishnofsky: 7700 kcal / kg => deltaRate diario = whatIfKcal / 7700
-    const deltaDaily = whatIfKcal / 7700;
-    const simulatedSlopeDaily = baseSlopeDaily + deltaDaily;
-    const simulatedSlopeWeekly = Math.round((baseSlopeWeekly + (whatIfKcal * 7) / 7700) * 100) / 100;
-    const simulatedNetKcalDaily = report.thermodynamics.impliedNetKcalDaily + whatIfKcal;
-
-    // Recalcular puntos proyectados de la línea de tiempo
-    const simulatedTimeline = report.timelinePoints.map((tp) => {
-      const daysAhead = (tp.timestamp - report.latestTimestamp) / 86400000;
-      const simulatedWeight = Math.round((tp.linearExpected + daysAhead * deltaDaily) * 10) / 10;
-      const lower95 = Math.round((tp.linearLower95 + daysAhead * deltaDaily) * 10) / 10;
-      const upper95 = Math.round((tp.linearUpper95 + daysAhead * deltaDaily) * 10) / 10;
-
+  // 3. Regresión lineal en la ventana de calibración para obtener el ritmo actual
+  const calibrationMetrics = useMemo(() => {
+    if (points.length < 2) {
       return {
-        ...tp,
-        simulatedWeight,
-        simulatedLower95: lower95,
-        simulatedUpper95: upper95,
+        slopeDaily: 0,
+        slopeWeekly: 0,
+        currentDailyKcal: 0,
+        sampleCount: points.length,
+        calibrationPoints: points,
       };
-    });
+    }
 
-    // Recalcular llegada a la meta objetivo (proyección inversa simulada)
-    const deltaToTarget = targetWeightNum - report.latestWeight;
-    const isLossTarget = deltaToTarget < -0.1;
-    const isGainTarget = deltaToTarget > 0.1;
+    const cutoff = latestTimestamp - calibrationDays * 86400000;
+    const windowPoints = points.filter((p) => p.timestamp >= cutoff);
+    const validPoints = windowPoints.length >= 2 ? windowPoints : points.slice(-Math.min(6, points.length));
 
-    let simulatedDaysToTarget: number | null = null;
-    let simulatedArrivalDate: string | null = null;
-    let isSimulatedDiverging = false;
+    const n = validPoints.length;
+    const t0 = validPoints[0].timestamp;
+    let sumX = 0;
+    let sumY = 0;
+    let sumXY = 0;
+    let sumXX = 0;
 
-    if (isLossTarget && simulatedSlopeDaily >= -0.003) {
-      isSimulatedDiverging = true;
-    } else if (isGainTarget && simulatedSlopeDaily <= 0.003) {
-      isSimulatedDiverging = true;
-    } else if (Math.abs(simulatedSlopeDaily) > 0.003) {
-      simulatedDaysToTarget = Math.round(deltaToTarget / simulatedSlopeDaily);
-      if (simulatedDaysToTarget > 0 && simulatedDaysToTarget < 3650) {
-        const targetTs = Date.now() + simulatedDaysToTarget * 86400000;
-        simulatedArrivalDate = new Date(targetTs).toLocaleDateString("es-ES", {
+    for (let i = 0; i < n; i++) {
+      const x = (validPoints[i].timestamp - t0) / 86400000;
+      const y = validPoints[i].weight;
+      sumX += x;
+      sumY += y;
+      sumXY += x * y;
+      sumXX += x * x;
+    }
+
+    const denom = n * sumXX - sumX * sumX;
+    const slopeDaily = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+    const slopeWeekly = Math.round(slopeDaily * 7 * 100) / 100;
+    const currentDailyKcal = Math.round((slopeWeekly * 7700) / 7);
+
+    return {
+      slopeDaily,
+      slopeWeekly,
+      currentDailyKcal,
+      sampleCount: n,
+      calibrationPoints: validPoints,
+    };
+  }, [points, latestTimestamp, calibrationDays]);
+
+  const { slopeWeekly, currentDailyKcal, calibrationPoints } = calibrationMetrics;
+
+  // 4. Diagnóstico Claro: ¿Voy bien o voy mal? (Semáforo)
+  const trafficLight = useMemo(() => {
+    if (isMaint) {
+      const isSteady = Math.abs(slopeWeekly) <= 0.15;
+      return {
+        status: isSteady ? "optimal" : "plateau",
+        title: isSteady ? "En Mantenimiento Perfecto" : "Variación en Mantenimiento",
+        badgeText: isSteady ? "Ritmo Estable" : "Ajustar Balance",
+        badgeClass: isSteady
+          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+          : "bg-blue-500/10 text-blue-400 border-blue-500/30",
+        message: isSteady
+          ? `Tu peso está perfectamente estabilizado (${slopeWeekly > 0 ? "+" : ""}${slopeWeekly} kg/sem). Balance calórico neutro.`
+          : `Tu peso oscila (${slopeWeekly > 0 ? "+" : ""}${slopeWeekly} kg/sem, ~${currentDailyKcal > 0 ? "+" : ""}${currentDailyKcal} kcal/d).`,
+        color: isSteady ? "emerald" : "blue",
+        isOptimal: isSteady,
+        daysToTarget: 0,
+        arrivalDate: "En la meta",
+      };
+    }
+
+    if (isLoss) {
+      // Objetivo: Pérdida de peso
+      if (slopeWeekly <= -0.3 && slopeWeekly >= -0.9) {
+        // Óptimo (-0.3 a -0.9 kg/sem)
+        const days = Math.round((kgToGoal * 7700) / Math.abs(currentDailyKcal || 400));
+        const arrivalDate = new Date(Date.now() + days * 86400000).toLocaleDateString("es-ES", {
           day: "numeric",
           month: "short",
           year: "numeric",
         });
+        const weeks = Math.round((days / 7) * 10) / 10;
+        return {
+          status: "optimal",
+          title: "Vas Muy Bien (Ritmo Óptimo)",
+          badgeText: "Ritmo Saludable",
+          badgeClass: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+          message: `Estás perdiendo peso a un ritmo excelente de ${Math.abs(slopeWeekly)} kg/sem (déficit real de ~${Math.abs(currentDailyKcal)} kcal/día). A este paso alcanzarás los ${targetWeightNum} kg en ~${weeks} semanas (${arrivalDate}) preservando tu masa muscular.`,
+          color: "emerald",
+          isOptimal: true,
+          daysToTarget: days,
+          arrivalDate,
+        };
       }
+
+      if (slopeWeekly < -0.9) {
+        // Agresivo (> 0.9 kg/sem)
+        const days = Math.round((kgToGoal * 7700) / Math.abs(currentDailyKcal || 1000));
+        const arrivalDate = new Date(Date.now() + days * 86400000).toLocaleDateString("es-ES", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        });
+        const weeks = Math.round((days / 7) * 10) / 10;
+        return {
+          status: "aggressive",
+          title: "Vas Demasiado Rápido (>0.9 kg/sem)",
+          badgeText: "Ritmo Muy Agresivo",
+          badgeClass: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+          message: `Estás bajando a ${Math.abs(slopeWeekly)} kg/sem (déficit de ~${Math.abs(currentDailyKcal)} kcal/día). Llegarías a la meta en ~${weeks} semanas (${arrivalDate}), pero a este ritmo corres riesgo alto de perder masa muscular y pasar hambre extrema.`,
+          color: "amber",
+          isOptimal: false,
+          daysToTarget: days,
+          arrivalDate,
+        };
+      }
+
+      if (slopeWeekly > -0.3 && slopeWeekly <= 0.05) {
+        // Meseta / Estancado
+        return {
+          status: "plateau",
+          title: "Estancado / Pérdida Muy Lenta",
+          badgeText: "En Meseta",
+          badgeClass: "bg-amber-500/10 text-amber-300 border-amber-500/30",
+          message: `Tu peso apenas se mueve (${Math.abs(slopeWeekly)} kg/sem). Tu ingesta actual está prácticamente en mantenimiento. Para volver a bajar hacia los ${targetWeightNum} kg necesitas recortar unas 300-500 kcal en la dieta o aumentar tu actividad diaria.`,
+          color: "amber",
+          isOptimal: false,
+          daysToTarget: null,
+          arrivalDate: "Sin avance detectable",
+        };
+      }
+
+      // Divergiendo (subiendo peso)
+      return {
+        status: "diverging",
+        title: "Vas al Revés (Divergiendo)",
+        badgeText: "Peso Subiendo",
+        badgeClass: "bg-red-500/10 text-red-400 border-red-500/30",
+        message: `¡Atención! Tu peso está subiendo (+${slopeWeekly} kg/sem) en vez de bajar. Estás comiendo en superávit de ~+${currentDailyKcal} kcal/día. Para alcanzar tu meta de ${targetWeightNum} kg es imprescindible entrar en déficit calórico.`,
+        color: "red",
+        isOptimal: false,
+        daysToTarget: null,
+        arrivalDate: "No se alcanzará sin déficit",
+      };
     }
 
-    // Comparación con la fecha base pura
-    let timeDeltaWeeks = 0;
-    if (report.inverseTarget?.expectedDays && simulatedDaysToTarget) {
-      const diffDays = report.inverseTarget.expectedDays - simulatedDaysToTarget;
-      timeDeltaWeeks = Math.round((diffDays / 7) * 10) / 10;
-    }
-
-    return {
-      simulatedSlopeDaily,
-      simulatedSlopeWeekly,
-      simulatedNetKcalDaily,
-      simulatedTimeline,
-      simulatedDaysToTarget,
-      simulatedArrivalDate,
-      isSimulatedDiverging,
-      timeDeltaWeeks,
-    };
-  }, [report, whatIfKcal, targetWeightNum]);
-
-  // SEMÁFORO DEPORTIVO & CLÍNICO UNIFICADO
-  const trafficLight = useMemo(() => {
-    if (!report || !simulationData) return null;
-
-    const currentWeight = report.latestWeight;
-    const target = targetWeightNum;
-    const delta = target - currentWeight;
-    const slopeWeekly = simulationData.simulatedSlopeWeekly;
-
-    // Fase corporal
-    const phase: "deficit" | "surplus" | "maintenance" =
-      delta < -0.2 ? "deficit" : delta > 0.2 ? "surplus" : "maintenance";
-
-    let status: "optimal" | "aggressive" | "plateau" | "diverging" = "optimal";
-    let statusLabel = "";
-    let badgeClass = "";
-    let simpleExplanation = "";
-    let technicalExplanation = "";
-
-    if (phase === "deficit") {
-      if (slopeWeekly <= -1.0) {
-        status = "aggressive";
-        statusLabel = "Ritmo Agresivo (>1.0 kg/sem)";
-        badgeClass = "text-amber-400 bg-amber-500/10 border-amber-500/30";
-        simpleExplanation = `Vas demasiado rápido (${Math.abs(slopeWeekly)} kg/sem). Si pierdes más de 1 kg por semana, tu cuerpo empezará a quemar músculo y notarás fatiga y debilidad.`;
-        technicalExplanation = `Tasa de pérdida elevada (|dW/dt| > 1.2% MC/sem). Supera la tasa lipolítica máxima de Klein & Wolfe (0.007 kg/kg grasa/día). Alto riesgo de catabolismo de masa magra contráctil y caída del gasto metabólico basal.`;
-      } else if (slopeWeekly <= -0.3 && slopeWeekly > -1.0) {
-        status = "optimal";
-        statusLabel = "Ritmo Óptimo (Estándar de Oro)";
-        badgeClass = "text-emerald-400 bg-emerald-500/10 border-emerald-500/30";
-        simpleExplanation = `Vas a un ritmo perfecto (${Math.abs(slopeWeekly)} kg/sem). Estás quemando grasa corporal mientras proteges tu músculo y mantienes tu fuerza intacta.`;
-        technicalExplanation = `Cinemática en zona de máxima conservación de masa libre de grasa (0.5% a 1.0% de peso corporal/semana). Balance termodinámico negativo controlado sin desencadenar respuesta neuroendocrina de leptina ni aumento masivo de grelina.`;
-      } else if (slopeWeekly > -0.3 && slopeWeekly <= 0.05) {
-        status = "plateau";
-        statusLabel = "Meseta / Pérdida Lenta";
-        badgeClass = "text-amber-300 bg-amber-500/10 border-amber-500/30";
-        simpleExplanation = `Tu peso apenas se mueve (${Math.abs(slopeWeekly)} kg/sem). Para continuar perdiendo hacia los ${target} kg necesitas ajustar tu comida o aumentar tus pasos.`;
-        technicalExplanation = `Deceleración asintótica (d²W/dt² ≈ 0, dW/dt → 0). Adaptación homeostática del modelo de Hall donde la caída de masa corporal activa y la termogénesis no adaptativa (NEAT) igualaron el gasto total a la ingesta.`;
-      } else {
-        status = "diverging";
-        statusLabel = "Divergencia con la Meta";
-        badgeClass = "text-red-400 bg-red-500/10 border-red-500/30";
-        simpleExplanation = `Tu peso está subiendo (+${slopeWeekly} kg/sem) en vez de bajar. Para alcanzar tu objetivo de ${target} kg necesitas entrar en déficit calórico.`;
-        technicalExplanation = `Vector de velocidad divergente: dW/dt > 0 con objetivo ΔW < 0. Balance de energía neto positivo (+${simulationData.simulatedNetKcalDaily} kcal/día) opuesto a la dirección cinemática hacia el objetivo.`;
-      }
-    } else if (phase === "surplus") {
-      if (slopeWeekly >= 0.4) {
-        status = "aggressive";
-        statusLabel = "Volumen Rápido (>0.4 kg/sem)";
-        badgeClass = "text-amber-400 bg-amber-500/10 border-amber-500/30";
-        simpleExplanation = `Estás ganando peso muy rápido (+${slopeWeekly} kg/sem). El cuerpo no puede crear músculo tan deprisa, por lo que gran parte del peso extra será grasa.`;
-        technicalExplanation = `Superávit excesivo que sobrepasa la tasa fisiológica máxima de síntesis proteica muscular miofibrilar natural (~100-200 g/semana de tejido contráctil). Partición de nutrientes desfavorable (acumulación adiposa predominante).`;
-      } else if (slopeWeekly >= 0.1 && slopeWeekly < 0.4) {
-        status = "optimal";
-        statusLabel = "Volumen Limpio Óptimo";
-        badgeClass = "text-emerald-400 bg-emerald-500/10 border-emerald-500/30";
-        simpleExplanation = `Ritmo excelente de volumen (+${slopeWeekly} kg/sem). Ganancia muscular limpia minimizando la acumulación de grasa.`;
-        technicalExplanation = `Tasa de ganancia de masa magra óptima (+0.25% a +0.50% de peso corporal/mes). Disponibilidad energética anabólica sin saturación de vías lipogénicas.`;
-      } else if (slopeWeekly < -0.05) {
-        status = "diverging";
-        statusLabel = "Divergencia (Peso en Caída)";
-        badgeClass = "text-red-400 bg-red-500/10 border-red-500/30";
-        simpleExplanation = `Tu peso está bajando (${slopeWeekly} kg/sem) en vez de subir. Para ganar músculo necesitas comer más calorías.`;
-        technicalExplanation = `Déficit involuntario: dW/dt < 0 en fase de hipertrofia. Balance calórico negativo incompatible con la tasa metabólica de adición tisular de Forbes.`;
-      } else {
-        status = "plateau";
-        statusLabel = "Mantenimiento / Sin Ganancia";
-        badgeClass = "text-zinc-300 bg-zinc-800 border-zinc-700";
-        simpleExplanation = `Tu peso está estancado (~0.0 kg/sem). Necesitas un ligero superávit de unas 200-300 kcal/día para empezar a ganar volumen.`;
-        technicalExplanation = `Equilibrio isoenergético en régimen normocalórico (dW/dt ≈ 0). Se requiere un incremento de ~200-350 kcal/día para reiniciar la trayectoria positiva hacia la meta.`;
-      }
-    } else {
-      // Mantenimiento
-      if (Math.abs(slopeWeekly) <= 0.15) {
-        status = "optimal";
-        statusLabel = "Mantenimiento Perfecto";
-        badgeClass = "text-emerald-400 bg-emerald-500/10 border-emerald-500/30";
-        simpleExplanation = `Tu peso está totalmente estabilizado (fluctuaciones mínimas de ±${Math.abs(slopeWeekly)} kg/sem). Buen control calórico.`;
-        technicalExplanation = `Estabilidad ergogénica óptima (|dW/dt| < 0.15 kg/sem). Homeostasis energética en perfecto balance de ingesta vs gasto total.`;
-      } else {
-        status = "plateau";
-        statusLabel = "Fluctuación Fuera de Margen";
-        badgeClass = "text-amber-400 bg-amber-500/10 border-amber-500/30";
-        simpleExplanation = `Tu peso está oscilando (${slopeWeekly > 0 ? "+" : ""}${slopeWeekly} kg/sem). Ajusta ligeramente tu comida para mantenerte en ${target} kg.`;
-        technicalExplanation = `Deriva energética leve (|dW/dt| > 0.15 kg/sem) fuera del rango de recomposición / estabilidad isoenergética.`;
-      }
-    }
-
-    // Prescripción de Wishnofsky exacta para la meta
-    // Ritmo óptimo recomendado: -0.5 kg/sem para déficit, +0.25 kg/sem para volumen
-    const targetWeeklyRate = phase === "deficit" ? -0.5 : phase === "surplus" ? 0.25 : 0;
-    const requiredKcalAdjustment = Math.round((targetWeeklyRate - slopeWeekly) * 1100);
-
-    return {
-      phase,
-      status,
-      statusLabel,
-      badgeClass,
-      simpleExplanation,
-      technicalExplanation,
-      requiredKcalAdjustment,
-      currentPace: slopeWeekly,
-    };
-  }, [report, simulationData, targetWeightNum]);
-
-  // Dimensiones y escalas del SVG Maestro
-  const svgDimensions = { width: 960, height: 420, padding: { top: 35, right: 80, bottom: 45, left: 65 } };
-  const innerWidth = svgDimensions.width - svgDimensions.padding.left - svgDimensions.padding.right;
-  const innerHeight = svgDimensions.height - svgDimensions.padding.top - svgDimensions.padding.bottom;
-
-  const scales = useMemo(() => {
-    if (!report || calibrationPoints.length === 0 || !simulationData) return null;
-
-    const minTs = calibrationPoints[0].timestamp;
-    const maxTs = report.targetTimestamp;
-    const timeSpan = maxTs - minTs || 1;
-
-    // Recolectar valores Y
-    const histWeights = calibrationPoints.map((p) => p.weight);
-    const simWeights = simulationData.simulatedTimeline.map((p) => p.simulatedWeight);
-    const lower95s = simulationData.simulatedTimeline.map((p) => p.simulatedLower95);
-    const upper95s = simulationData.simulatedTimeline.map((p) => p.simulatedUpper95);
-
-    const allY = [
-      ...histWeights,
-      ...simWeights,
-      ...lower95s,
-      ...upper95s,
-      report.latestWeight,
-      targetWeightNum,
-    ].filter((v) => !isNaN(v) && isFinite(v));
-
-    const rawMinY = Math.min(...allY);
-    const rawMaxY = Math.max(...allY);
-
-    const paddingY = Math.max(0.6, (rawMaxY - rawMinY) * 0.12);
-    const minY = Math.floor((rawMinY - paddingY) * 2) / 2;
-    const maxY = Math.ceil((rawMaxY + paddingY) * 2) / 2;
-    const ySpan = maxY - minY || 1;
-
-    const getX = (ts: number) => {
-      const frac = (ts - minTs) / timeSpan;
-      return svgDimensions.padding.left + Math.max(0, Math.min(innerWidth, frac * innerWidth));
-    };
-
-    const getY = (val: number) => {
-      const frac = (val - minY) / ySpan;
-      return svgDimensions.padding.top + innerHeight - Math.max(0, Math.min(innerHeight, frac * innerHeight));
-    };
-
-    // Ticks para eje Y
-    const yStep = ySpan > 12 ? 2 : ySpan > 6 ? 1 : 0.5;
-    const yTicks: number[] = [];
-    for (let w = minY; w <= maxY + 0.001; w += yStep) {
-      yTicks.push(Math.round(w * 10) / 10);
-    }
-
-    // Ticks para eje X
-    const xTicks: { ts: number; label: string }[] = [];
-    const numXTicks = 6;
-    for (let i = 0; i <= numXTicks; i++) {
-      const ts = minTs + (timeSpan * i) / numXTicks;
-      const d = new Date(ts);
-      xTicks.push({
-        ts,
-        label: d.toLocaleDateString("es-ES", { day: "numeric", month: "short" }),
+    // Objetivo: Ganancia de peso (Volumen)
+    if (slopeWeekly >= 0.15 && slopeWeekly <= 0.45) {
+      const days = Math.round((kgToGoal * 7700) / Math.abs(currentDailyKcal || 300));
+      const arrivalDate = new Date(Date.now() + days * 86400000).toLocaleDateString("es-ES", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
       });
+      return {
+        status: "optimal",
+        title: "Volumen Óptimo y Limpio",
+        badgeText: "Ritmo Saludable",
+        badgeClass: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+        message: `Ganando +${slopeWeekly} kg/sem (superávit de ~+${currentDailyKcal} kcal/día). Maximiza la ganancia muscular minimizando la grasa. Llegada estimada: ${arrivalDate}.`,
+        color: "emerald",
+        isOptimal: true,
+        daysToTarget: days,
+        arrivalDate,
+      };
     }
 
-    return { getX, getY, minY, maxY, yTicks, xTicks, minTs, maxTs };
-  }, [report, calibrationPoints, simulationData, targetWeightNum]);
-
-  // Manejador del Hover en SVG con resolución geométrica exacta sin desfase
-  const handleSvgMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (!svgRef.current || !scales || !report || !simulationData) return;
-
-    const rect = svgRef.current.getBoundingClientRect();
-    const clientX = e.clientX - rect.left;
-    const clientY = e.clientY - rect.top;
-
-    const viewBoxWidth = svgDimensions.width;
-    const viewBoxHeight = svgDimensions.height;
-    const elemAspect = rect.width / rect.height;
-    const viewBoxAspect = viewBoxWidth / viewBoxHeight;
-
-    let scale: number;
-    let offsetX = 0;
-    let offsetY = 0;
-
-    if (elemAspect > viewBoxAspect) {
-      scale = rect.height / viewBoxHeight;
-      offsetX = (rect.width - viewBoxWidth * scale) / 2;
-    } else {
-      scale = rect.width / viewBoxWidth;
-      offsetY = (rect.height - viewBoxHeight * scale) / 2;
+    if (slopeWeekly > 0.45) {
+      return {
+        status: "aggressive",
+        title: "Volumen Demasiado Rápido",
+        badgeText: "Ganando Grasa Excesiva",
+        badgeClass: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+        message: `Subiendo a +${slopeWeekly} kg/sem. Gran parte del peso ganado será grasa corporal. Reduce ligeramente las calorías.`,
+        color: "amber",
+        isOptimal: false,
+        daysToTarget: null,
+        arrivalDate: "Revisar superávit",
+      };
     }
 
-    const svgX = (clientX - offsetX) / scale;
-    const t0X = scales.getX(report.latestTimestamp);
+    return {
+      status: "diverging",
+      title: "Peso Bajando en Volumen",
+      badgeText: "Divergente",
+      badgeClass: "bg-red-500/10 text-red-400 border-red-500/30",
+      message: `Tu peso está bajando (${slopeWeekly} kg/sem) cuando tu meta es subir a ${targetWeightNum} kg. Necesitas aumentar tu ingesta calórica.`,
+      color: "red",
+      isOptimal: false,
+      daysToTarget: null,
+      arrivalDate: "Sin superávit",
+    };
+  }, [isLoss, isMaint, slopeWeekly, currentDailyKcal, kgToGoal, targetWeightNum]);
 
-    if (svgX <= t0X) {
-      // Puntos previos a T0
-      let closestPt = calibrationPoints[0];
-      let minDiff = Math.abs(scales.getX(closestPt.timestamp) - svgX);
-      for (let i = 1; i < calibrationPoints.length; i++) {
-        const diff = Math.abs(scales.getX(calibrationPoints[i].timestamp) - svgX);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestPt = calibrationPoints[i];
-        }
-      }
+  // 5. APARTADO 1: ¿Cuántas kcal diarias y semanales de déficit necesito para llegar en 1, 2 y 3 meses?
+  const totalKcalDeficitNeeded = kgToGoal * 7700;
 
-      const ptX = scales.getX(closestPt.timestamp);
-      const ptY = scales.getY(closestPt.weight);
-      const screenX = offsetX + ptX * scale;
-      const diffFromLatest = Math.round((closestPt.weight - report.latestWeight) * 10) / 10;
-      const daysAgo = Math.max(0, Math.round((report.latestTimestamp - closestPt.timestamp) / 86400000));
+  const timeTargets = useMemo(() => {
+    // 1 Mes = 30 días (~4.29 semanas)
+    const d1mDaily = Math.round(totalKcalDeficitNeeded / 30);
+    const d1mWeekly = Math.round(d1mDaily * 7);
+    const d1mRateWeekly = Math.round((kgToGoal / (30 / 7)) * 100) / 100;
 
-      setHoveredPoint({
-        x: ptX,
-        y: ptY,
-        screenX,
-        isHistorical: true,
-        dateLabel: new Date(closestPt.timestamp).toLocaleDateString("es-ES", {
-          weekday: "short",
+    // 2 Meses = 60 días (~8.57 semanas)
+    const d2mDaily = Math.round(totalKcalDeficitNeeded / 60);
+    const d2mWeekly = Math.round(d2mDaily * 7);
+    const d2mRateWeekly = Math.round((kgToGoal / (60 / 7)) * 100) / 100;
+
+    // 3 Meses = 90 días (~12.86 semanas)
+    const d3mDaily = Math.round(totalKcalDeficitNeeded / 90);
+    const d3mWeekly = Math.round(d3mDaily * 7);
+    const d3mRateWeekly = Math.round((kgToGoal / (90 / 7)) * 100) / 100;
+
+    return {
+      oneMonth: {
+        days: 30,
+        weeksText: "~4 semanas (1 mes)",
+        dailyKcal: d1mDaily,
+        weeklyKcal: d1mWeekly,
+        rateWeekly: d1mRateWeekly,
+        arrivalDate: new Date(Date.now() + 30 * 86400000).toLocaleDateString("es-ES", {
           day: "numeric",
           month: "short",
         }),
-        weight: closestPt.weight,
-        diffFromLatest,
-        daysAgoOrAhead: daysAgo,
-      });
-    } else {
-      // Puntos proyectados (futuro)
-      const timeline = simulationData.simulatedTimeline;
-      if (timeline.length > 0) {
-        let closestProj = timeline[0];
-        let minDiff = Math.abs(scales.getX(closestProj.timestamp) - svgX);
-        for (let i = 1; i < timeline.length; i++) {
-          const diff = Math.abs(scales.getX(timeline[i].timestamp) - svgX);
-          if (diff < minDiff) {
-            minDiff = diff;
-            closestProj = timeline[i];
-          }
-        }
+        isExtreme: d1mDaily > 1050,
+        isHard: d1mDaily > 700 && d1mDaily <= 1050,
+        isComfortable: d1mDaily <= 700,
+      },
+      twoMonths: {
+        days: 60,
+        weeksText: "~8 semanas (2 meses)",
+        dailyKcal: d2mDaily,
+        weeklyKcal: d2mWeekly,
+        rateWeekly: d2mRateWeekly,
+        arrivalDate: new Date(Date.now() + 60 * 86400000).toLocaleDateString("es-ES", {
+          day: "numeric",
+          month: "short",
+        }),
+        isRecommended: true,
+      },
+      threeMonths: {
+        days: 90,
+        weeksText: "~13 semanas (3 meses)",
+        dailyKcal: d3mDaily,
+        weeklyKcal: d3mWeekly,
+        rateWeekly: d3mRateWeekly,
+        arrivalDate: new Date(Date.now() + 90 * 86400000).toLocaleDateString("es-ES", {
+          day: "numeric",
+          month: "short",
+        }),
+        isComfortable: true,
+      },
+    };
+  }, [totalKcalDeficitNeeded, kgToGoal]);
 
-        const projX = scales.getX(closestProj.timestamp);
-        const activeVal = closestProj.simulatedWeight;
-        const projY = scales.getY(activeVal);
-        const screenX = offsetX + projX * scale;
-        const diffFromLatest = Math.round((activeVal - report.latestWeight) * 10) / 10;
-        const daysAhead = Math.max(0, Math.round((closestProj.timestamp - report.latestTimestamp) / 86400000));
+  // 6. APARTADO 2: Estrategias fijas (Déficit 500 kcal, Déficit 1000 kcal y Ayuno alterno 24h)
+  // Estimación del TDEE personalizado para el ayuno alterno (ADF)
+  const estimatedTdee = useMemo(() => {
+    const w = currentWeight || 75;
+    const h = profile?.alturaCm || 180;
+    const a = profile?.edad || 27;
+    const s = profile?.sexo || "male";
 
-        setHoveredPoint({
-          x: projX,
-          y: projY,
-          screenX,
-          isHistorical: false,
-          dateLabel: closestProj.dateLabel,
-          weight: activeVal,
-          diffFromLatest,
-          daysAgoOrAhead: daysAhead,
-          lower95: closestProj.simulatedLower95,
-          upper95: closestProj.simulatedUpper95,
-          isSimulation: whatIfKcal !== 0,
-        });
+    // Fórmula de Mifflin-St Jeor con factor moderado de entrenamiento (1.45)
+    let bmr = 10 * w + 6.25 * h - 5 * a + (s === "female" ? -161 : 5);
+    if (!bmr || bmr < 1200) bmr = w * 22;
+    return Math.round(bmr * 1.45);
+  }, [currentWeight, profile]);
+
+  const strategies = useMemo(() => {
+    // 1. Déficit Estándar 500 kcal/día
+    const def500Days = Math.max(1, Math.round(totalKcalDeficitNeeded / 500));
+    const def500Weeks = Math.round((def500Days / 7) * 10) / 10;
+    const def500Arrival = new Date(Date.now() + def500Days * 86400000).toLocaleDateString("es-ES", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+
+    // 2. Déficit Agresivo 1000 kcal/día
+    const def1000Days = Math.max(1, Math.round(totalKcalDeficitNeeded / 1000));
+    const def1000Weeks = Math.round((def1000Days / 7) * 10) / 10;
+    const def1000Arrival = new Date(Date.now() + def1000Days * 86400000).toLocaleDateString("es-ES", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+
+    // 3. Ayuno Alterno cada 24h (Alternate-Day Fasting / ADF)
+    // Se ayuna en días alternos: 3.5 días de ayuno a la semana.
+    // Días de comida = mantenimiento (TDEE). Días de ayuno = 0 kcal.
+    // Ahorro semanal = 3.5 * TDEE. Déficit diario promedio = (3.5 * TDEE) / 7 = TDEE / 2.
+    const adfDailyDeficit = Math.round(estimatedTdee / 2);
+    const adfWeeklyDeficit = Math.round(3.5 * estimatedTdee);
+    const adfDays = Math.max(1, Math.round(totalKcalDeficitNeeded / adfDailyDeficit));
+    const adfWeeks = Math.round((adfDays / 7) * 10) / 10;
+    const adfRateWeekly = Math.round(((3.5 * estimatedTdee) / 7700) * 100) / 100;
+    const adfArrival = new Date(Date.now() + adfDays * 86400000).toLocaleDateString("es-ES", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+
+    return {
+      def500: {
+        dailyKcal: 500,
+        weeklyKcal: 3500,
+        rateWeekly: 0.45,
+        days: def500Days,
+        weeks: def500Weeks,
+        arrivalDate: def500Arrival,
+      },
+      def1000: {
+        dailyKcal: 1000,
+        weeklyKcal: 7000,
+        rateWeekly: 0.91,
+        days: def1000Days,
+        weeks: def1000Weeks,
+        arrivalDate: def1000Arrival,
+      },
+      adf: {
+        dailyDeficitAverage: adfDailyDeficit,
+        weeklyDeficit: adfWeeklyDeficit,
+        rateWeekly: adfRateWeekly,
+        days: adfDays,
+        weeks: adfWeeks,
+        arrivalDate: adfArrival,
+        tdee: estimatedTdee,
+      },
+    };
+  }, [totalKcalDeficitNeeded, estimatedTdee]);
+
+  // 7. Preparación de la trayectoria a mostrar en el gráfico interactivo
+  const trajectoryData = useMemo(() => {
+    let daysToTarget = 60;
+    let dailyRateKg = -0.05;
+
+    if (selectedTrajectory === "current") {
+      dailyRateKg = calibrationMetrics.slopeDaily || -0.05;
+      if (Math.abs(dailyRateKg) > 0.005) {
+        daysToTarget = Math.max(14, Math.min(365, Math.round(deltaKg / dailyRateKg)));
+      } else {
+        daysToTarget = 60;
       }
+    } else if (selectedTrajectory === "1m") {
+      daysToTarget = 30;
+      dailyRateKg = deltaKg / 30;
+    } else if (selectedTrajectory === "2m") {
+      daysToTarget = 60;
+      dailyRateKg = deltaKg / 60;
+    } else if (selectedTrajectory === "3m") {
+      daysToTarget = 90;
+      dailyRateKg = deltaKg / 90;
+    } else if (selectedTrajectory === "def500") {
+      daysToTarget = strategies.def500.days;
+      dailyRateKg = isLoss ? -500 / 7700 : 500 / 7700;
+    } else if (selectedTrajectory === "def1000") {
+      daysToTarget = strategies.def1000.days;
+      dailyRateKg = isLoss ? -1000 / 7700 : 1000 / 7700;
+    } else if (selectedTrajectory === "adf") {
+      daysToTarget = strategies.adf.days;
+      dailyRateKg = isLoss ? -strategies.adf.dailyDeficitAverage / 7700 : strategies.adf.dailyDeficitAverage / 7700;
     }
-  };
+
+    daysToTarget = Math.max(7, Math.min(365, daysToTarget));
+    const targetTs = latestTimestamp + daysToTarget * 86400000;
+    const finalWeight = currentWeight + dailyRateKg * daysToTarget;
+
+    // Generar 10 puntos intermedios en la proyección
+    const projectedPoints: { timestamp: number; weight: number; dateLabel: string }[] = [];
+    const steps = 10;
+    for (let s = 1; s <= steps; s++) {
+      const frac = s / steps;
+      const ts = latestTimestamp + frac * daysToTarget * 86400000;
+      const w = Math.round((currentWeight + dailyRateKg * daysToTarget * frac) * 10) / 10;
+      const dLabel = new Date(ts).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+      projectedPoints.push({ timestamp: ts, weight: w, dateLabel: dLabel });
+    }
+
+    return {
+      daysToTarget,
+      targetTs,
+      finalWeight: Math.round(finalWeight * 10) / 10,
+      projectedPoints,
+    };
+  }, [selectedTrajectory, calibrationMetrics.slopeDaily, deltaKg, isLoss, latestTimestamp, currentWeight, strategies]);
+
+  // 8. Escalas del gráfico SVG simplificado
+  const chartScales = useMemo(() => {
+    const historical = calibrationPoints;
+    const projected = trajectoryData.projectedPoints;
+
+    const allTs = [
+      ...historical.map((p) => p.timestamp),
+      latestTimestamp,
+      ...projected.map((p) => p.timestamp),
+    ];
+    const allWeights = [
+      ...historical.map((p) => p.weight),
+      currentWeight,
+      targetWeightNum,
+      ...projected.map((p) => p.weight),
+    ];
+
+    const minTs = Math.min(...allTs);
+    const maxTs = Math.max(...allTs);
+    const minW = Math.floor(Math.min(...allWeights) - 1);
+    const maxW = Math.ceil(Math.max(...allWeights) + 1);
+
+    const width = 800;
+    const height = 260;
+    const padding = { top: 25, right: 35, bottom: 35, left: 50 };
+    const innerW = width - padding.left - padding.right;
+    const innerH = height - padding.top - padding.bottom;
+
+    const getX = (ts: number) => {
+      if (maxTs === minTs) return padding.left + innerW / 2;
+      return padding.left + ((ts - minTs) / (maxTs - minTs)) * innerW;
+    };
+
+    const getY = (w: number) => {
+      if (maxW === minW) return padding.top + innerH / 2;
+      return padding.top + ((maxW - w) / (maxW - minW)) * innerH;
+    };
+
+    // Ticks de Y (3 o 4 líneas de peso)
+    const yTicks: number[] = [];
+    const step = (maxW - minW) > 8 ? 2 : 1;
+    for (let w = minW; w <= maxW; w += step) {
+      yTicks.push(w);
+    }
+
+    // Ticks de X (fechas)
+    const xTicks = [
+      { ts: minTs, label: new Date(minTs).toLocaleDateString("es-ES", { day: "numeric", month: "short" }) },
+      { ts: latestTimestamp, label: "Hoy" },
+      { ts: maxTs, label: new Date(maxTs).toLocaleDateString("es-ES", { day: "numeric", month: "short" }) },
+    ];
+
+    return {
+      width,
+      height,
+      padding,
+      getX,
+      getY,
+      yTicks,
+      xTicks,
+      minTs,
+      maxTs,
+      minW,
+      maxW,
+    };
+  }, [calibrationPoints, trajectoryData.projectedPoints, latestTimestamp, currentWeight, targetWeightNum]);
+
+  // Manejo de movimiento del ratón en SVG para Tooltip
+  const handleSvgMouseMove = useCallback(
+    (e: React.MouseEvent<SVGSVGElement>) => {
+      if (!svgRef.current || !chartScales) return;
+      const rect = svgRef.current.getBoundingClientRect();
+      const mouseX = ((e.clientX - rect.left) / rect.width) * chartScales.width;
+
+      // Buscar el punto más cercano entre histórico y proyectado
+      const allPoints = [
+        ...calibrationPoints.map((p) => ({
+          x: chartScales.getX(p.timestamp),
+          y: chartScales.getY(p.weight),
+          weight: p.weight,
+          dateLabel: p.dateKey,
+          isProjected: false,
+        })),
+        {
+          x: chartScales.getX(latestTimestamp),
+          y: chartScales.getY(currentWeight),
+          weight: currentWeight,
+          dateLabel: "Hoy",
+          isProjected: false,
+        },
+        ...trajectoryData.projectedPoints.map((p) => ({
+          x: chartScales.getX(p.timestamp),
+          y: chartScales.getY(p.weight),
+          weight: p.weight,
+          dateLabel: p.dateLabel,
+          isProjected: true,
+        })),
+      ];
+
+      let closest = allPoints[0];
+      let minDist = Infinity;
+      for (const pt of allPoints) {
+        const dist = Math.abs(pt.x - mouseX);
+        if (dist < minDist) {
+          minDist = dist;
+          closest = pt;
+        }
+      }
+
+      if (minDist < 45) {
+        setHoveredPoint(closest);
+      } else {
+        setHoveredPoint(null);
+      }
+    },
+    [chartScales, calibrationPoints, latestTimestamp, currentWeight, trajectoryData.projectedPoints]
+  );
 
   if (!isOpen || !mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-150 select-none">
-      {/* Backdrop */}
-      <div className="absolute inset-0" onClick={onClose} />
-
-      {/* Modal Container */}
-      <div className="relative w-full max-w-[1440px] max-h-[95vh] flex flex-col rounded-3xl bg-zinc-950 border border-zinc-800 shadow-2xl overflow-hidden z-10 text-zinc-100">
-        
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div
+        className="w-full max-w-4xl max-h-[92vh] flex flex-col rounded-3xl bg-zinc-950 border border-zinc-800 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+        role="dialog"
+        aria-modal="true"
+      >
         {/* =========================================================================
-            HEADER LIMPIO: CONTROLES HORIZONTALES SIN SOLAPAMIENTO
+            1. HEADER LIMPIO & CONCRETO
            ========================================================================= */}
-        <div className="px-5 sm:px-6 py-4 border-b border-zinc-800/90 bg-zinc-900/80 backdrop-blur-md flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b border-zinc-800/80 bg-zinc-900/60 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-accent/15 border border-accent/40 flex items-center justify-center text-accent-light shrink-0">
+            <div className="w-9 h-9 rounded-2xl bg-accent/15 border border-accent/30 flex items-center justify-center text-accent-light shrink-0">
               <SparklesIcon className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-bold tracking-tight text-zinc-100">
-                  Panel Unificado de Proyección & Decisión
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-zinc-100">
+                  Calculadora y Proyección de Déficit
                 </h2>
                 {activeSeasonName && (
-                  <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-accent/15 border border-accent/40 text-accent-light font-bold">
+                  <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700">
                     {activeSeasonName}
                   </span>
                 )}
-                {report && (
-                  <span className="text-[11px] font-mono text-zinc-400 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-md">
-                    N={report.sampleCount} pesajes ({report.timeSpanDays}d)
-                  </span>
-                )}
               </div>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                Diagnóstico fisiológico, semáforo clínico, prescripción en kcal/día y simulación interactiva.
+              <p className="text-xs text-zinc-400">
+                Planifica tu objetivo sin rodeos: ritmo actual, plazos y calorías
               </p>
             </div>
           </div>
 
-          {/* Selectores de Ventana y Horizonte en fila horizontal estricta */}
-          <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-            {/* Ventana de calibración previa */}
-            <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-xl px-2.5 py-1.5 text-xs shrink-0">
-              <span className="text-zinc-400 font-mono text-[11px] uppercase font-semibold">Pesajes previos:</span>
-              <select
-                value={calibrationWindowDays}
-                onChange={(e) => setCalibrationWindowDays(Number(e.target.value))}
-                className="bg-transparent text-zinc-200 text-xs font-bold focus:outline-none cursor-pointer"
+          {/* Ajuste de Meta Objetivo & Cerrar */}
+          <div className="flex items-center gap-2 self-end sm:self-center">
+            {/* Meta rápida editable */}
+            <div className="flex items-center gap-1.5 bg-zinc-900 border border-accent/40 rounded-xl px-2.5 py-1 text-xs">
+              <TargetIcon className="w-3.5 h-3.5 text-accent-light" />
+              <span className="text-zinc-400 font-medium">Meta:</span>
+              <input
+                type="number"
+                step="0.1"
+                min="35"
+                max="250"
+                value={userTargetWeight}
+                onChange={(e) => setUserTargetWeight(e.target.value)}
+                className="w-13 bg-transparent text-right font-mono font-bold text-accent-light focus:outline-none"
+              />
+              <span className="text-zinc-400 font-mono text-xs">kg</span>
+
+              <button
+                type="button"
+                onClick={handleSaveTargetGoal}
+                disabled={savingTarget}
+                className="ml-1 p-1 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors cursor-pointer"
+                title="Fijar como meta principal"
               >
-                <option value={7} className="bg-zinc-900">Últimos 7 días</option>
+                {targetSavedSuccess ? (
+                  <CheckIcon className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <span className="text-[10px] font-bold text-accent-light">Fijar</span>
+                )}
+              </button>
+            </div>
+
+            {/* Selector de calibración temporal */}
+            <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-700/80 rounded-xl px-2.5 py-1.5 text-xs text-zinc-300">
+              <ClockIcon className="w-3.5 h-3.5 text-zinc-400" />
+              <select
+                value={calibrationDays}
+                onChange={(e) => setCalibrationDays(Number(e.target.value))}
+                className="bg-transparent text-zinc-200 text-xs font-semibold focus:outline-none cursor-pointer"
+              >
                 <option value={14} className="bg-zinc-900">Últimos 14 días</option>
                 <option value={30} className="bg-zinc-900">Últimos 30 días</option>
                 <option value={60} className="bg-zinc-900">Últimos 60 días</option>
                 <option value={90} className="bg-zinc-900">Últimos 90 días</option>
-                <option value={180} className="bg-zinc-900">Últimos 6 meses</option>
-                <option value={365} className="bg-zinc-900">1 año completo</option>
-                <option value={730} className="bg-zinc-900">2 años</option>
-                <option value={99999} className="bg-zinc-900">Todo el historial</option>
+                <option value={9999} className="bg-zinc-900">Todo el historial</option>
               </select>
             </div>
 
-            {/* Horizonte de proyección */}
-            <div className="flex items-center gap-1.5 bg-zinc-900 border border-accent/40 rounded-xl px-2.5 py-1.5 text-xs shrink-0">
-              <CalendarIcon className="w-3.5 h-3.5 text-accent-light shrink-0" />
-              <span className="text-accent-light font-mono text-[11px] uppercase font-semibold">Horizonte:</span>
-              <select
-                value={selectedHorizonId}
-                onChange={(e) => setSelectedHorizonId(e.target.value as ProjectionHorizonId)}
-                className="bg-transparent text-accent-light font-bold text-xs focus:outline-none cursor-pointer"
-              >
-                {HORIZON_PRESETS.map((h) => (
-                  <option key={h.id} value={h.id} className="bg-zinc-900 text-zinc-200">
-                    {h.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Botón Cerrar */}
+            {/* Botón cerrar */}
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer shrink-0 ml-1"
-              title="Cerrar modal"
+              className="w-8 h-8 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer shrink-0"
+              title="Cerrar ventana"
             >
               <XIcon className="w-4 h-4" />
             </button>
@@ -642,728 +744,611 @@ export function WeightProjectionModal({
         </div>
 
         {/* =========================================================================
-            CUERPO PRINCIPAL DEL MODAL
+            CUERPO DEL PANEL
            ========================================================================= */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 custom-scrollbar">
-          {!report || !simulationData || !trafficLight ? (
-            <div className="py-20 text-center flex flex-col items-center justify-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500">
-                <AlertTriangleIcon className="w-6 h-6 text-amber-400" />
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 custom-scrollbar">
+          {/* 1. SEMÁFORO DE DIAGNÓSTICO: ¿VOY BIEN O VOY MAL? */}
+          <div
+            className={`p-4 sm:p-5 rounded-2xl border transition-all ${
+              trafficLight.color === "emerald"
+                ? "bg-emerald-950/20 border-emerald-500/30"
+                : trafficLight.color === "amber"
+                ? "bg-amber-950/20 border-amber-500/30"
+                : trafficLight.color === "red"
+                ? "bg-red-950/20 border-red-500/30"
+                : "bg-blue-950/20 border-blue-500/30"
+            }`}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800/60 pb-3">
+              <div className="flex items-center gap-2.5">
+                {trafficLight.color === "emerald" ? (
+                  <CheckCircleIcon className="w-5 h-5 text-emerald-400 shrink-0" />
+                ) : trafficLight.color === "amber" ? (
+                  <AlertTriangleIcon className="w-5 h-5 text-amber-400 shrink-0" />
+                ) : trafficLight.color === "red" ? (
+                  <AlertTriangleIcon className="w-5 h-5 text-red-400 shrink-0" />
+                ) : (
+                  <ActivityIcon className="w-5 h-5 text-blue-400 shrink-0" />
+                )}
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-100">{trafficLight.title}</h3>
+                  <span className="text-[11px] text-zinc-400">
+                    Evaluación según tus últimos {calibrationMetrics.sampleCount} pesajes (últimos {calibrationDays} días)
+                  </span>
+                </div>
               </div>
-              <h3 className="text-base font-bold text-zinc-200">Datos Insuficientes para Proyección</h3>
-              <p className="text-xs text-zinc-400 max-w-md leading-relaxed">
-                Se requieren al menos 2 pesajes registrados dentro de la ventana de calibración seleccionada.
-              </p>
+
+              <div className="flex items-center gap-3">
+                <span className={`px-2.5 py-1 rounded-xl text-xs font-bold border ${trafficLight.badgeClass}`}>
+                  {trafficLight.badgeText}
+                </span>
+                {trafficLight.daysToTarget !== null && trafficLight.daysToTarget > 0 && (
+                  <div className="text-right">
+                    <span className="text-[10px] text-zinc-400 block font-medium">Llegada a este ritmo:</span>
+                    <strong className="text-xs text-accent-light font-mono font-bold">
+                      {trafficLight.arrivalDate}
+                    </strong>
+                  </div>
+                )}
+              </div>
             </div>
-          ) : (
-            <>
-              {/* 1. SEMÁFORO DEPORTIVO Y CLÍNICO & PRESCRIPCIÓN ACCIONABLE */}
-              <div className="p-4 sm:p-5 rounded-2xl border border-zinc-800/80 bg-zinc-900/50 backdrop-blur-sm flex flex-col gap-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold border ${trafficLight.badgeClass}`}
-                    >
-                      {trafficLight.status === "optimal" ? (
-                        <CheckCircleIcon className="w-3.5 h-3.5" />
-                      ) : trafficLight.status === "aggressive" ? (
-                        <AlertTriangleIcon className="w-3.5 h-3.5" />
-                      ) : trafficLight.status === "diverging" ? (
-                        <AlertTriangleIcon className="w-3.5 h-3.5" />
-                      ) : (
-                        <ActivityIcon className="w-3.5 h-3.5" />
-                      )}
-                      <span>{trafficLight.statusLabel}</span>
-                    </span>
 
-                    {/* Toggle Explicación Simple vs Compleja */}
-                    <div className="flex items-center bg-zinc-950 p-0.5 rounded-lg border border-zinc-800 text-[11px] font-medium">
-                      <button
-                        type="button"
-                        onClick={() => setExplanationMode("simple")}
-                        className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                          explanationMode === "simple"
-                            ? "bg-zinc-800 text-zinc-100 font-bold"
-                            : "text-zinc-400 hover:text-zinc-200"
-                        }`}
-                      >
-                        Explicación Directa
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setExplanationMode("technical")}
-                        className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                          explanationMode === "technical"
-                            ? "bg-zinc-800 text-zinc-100 font-bold"
-                            : "text-zinc-400 hover:text-zinc-200"
-                        }`}
-                      >
-                        Científica (NIH/Hall)
-                      </button>
-                    </div>
-                  </div>
+            <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed pt-3">
+              {trafficLight.message}
+            </p>
 
-                  {/* Meta numérica con opción de ajuste rápido en el modal */}
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="text-zinc-400 flex items-center gap-1">
-                      <TargetIcon className="w-3.5 h-3.5 text-accent-light" />
-                      <span>Meta:</span>
-                    </span>
-                    <div className="flex items-center gap-1 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={userTargetWeight}
-                        onChange={(e) => setUserTargetWeight(e.target.value)}
-                        className="w-14 bg-transparent text-right font-mono font-bold text-zinc-100 focus:outline-none"
-                      />
-                      <span className="text-zinc-400 font-mono">kg</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Texto del semáforo (Directo o Técnico) */}
-                <div className="text-sm text-zinc-300 leading-relaxed p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                  {explanationMode === "simple" ? (
-                    <p>{trafficLight.simpleExplanation}</p>
-                  ) : (
-                    <p className="font-mono text-xs text-zinc-300">{trafficLight.technicalExplanation}</p>
-                  )}
-                </div>
-
-                {/* Prescripción de Wishnofsky Accionable */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-zinc-800/60 text-xs">
-                  <div className="flex items-center gap-2">
-                    <FlameIcon className="w-4 h-4 text-accent-light shrink-0" />
-                    <span className="text-zinc-300">
-                      Balance real implícito actual:{" "}
-                      <strong className="text-zinc-100 font-mono">
-                        {simulationData.simulatedNetKcalDaily > 0 ? "+" : ""}
-                        {simulationData.simulatedNetKcalDaily} kcal/día
-                      </strong>
-                      {" · "}
-                      {trafficLight.requiredKcalAdjustment !== 0 ? (
-                        <>
-                          Para ritmo recomendado hacia {targetWeightNum} kg ajusta:{" "}
-                          <strong className="text-accent-light font-mono">
-                            {trafficLight.requiredKcalAdjustment > 0 ? "+" : ""}
-                            {trafficLight.requiredKcalAdjustment} kcal/día
-                          </strong>
-                          {" "}
-                          (equivale a ~{Math.round(Math.abs(trafficLight.requiredKcalAdjustment) / 0.04)} pasos diarios).
-                        </>
-                      ) : (
-                        "Ritmo calórico actualmente alineado con tu meta."
-                      )}
-                    </span>
-                  </div>
-
-                  {simulationData.simulatedArrivalDate && (
-                    <div className="flex items-center gap-1.5 font-mono text-zinc-300 shrink-0">
-                      <span className="text-zinc-500 font-sans">Llegada estimada:</span>
-                      <strong className="text-accent-light font-bold">
-                        {simulationData.simulatedArrivalDate}
-                      </strong>
-                      <span className="text-[11px] text-zinc-400">
-                        (~{Math.round((simulationData.simulatedDaysToTarget || 0) / 7)} sem)
-                      </span>
-                    </div>
-                  )}
+            {/* Fila de 4 KPIs claros */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-3">
+              <div className="p-2.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+                <span className="text-[10px] text-zinc-400 uppercase font-semibold">Peso Actual</span>
+                <div className="text-base font-bold font-mono text-zinc-100 mt-0.5">
+                  {currentWeight.toFixed(1)} <span className="text-xs text-zinc-400">kg</span>
                 </div>
               </div>
 
-              {/* 2. SIMULADOR INTERACTIVO "WHAT-IF" */}
-              <div className="p-4 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 flex flex-col gap-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <ZapIcon className="w-4 h-4 text-accent-light" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-zinc-200">
-                      Simulador Interactivo "What-If" (¿Qué pasaría si...?)
+              <div className="p-2.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+                <span className="text-[10px] text-zinc-400 uppercase font-semibold">Meta Objetivo</span>
+                <div className="text-base font-bold font-mono text-accent-light mt-0.5">
+                  {targetWeightNum.toFixed(1)} <span className="text-xs text-zinc-400">kg</span>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+                <span className="text-[10px] text-zinc-400 uppercase font-semibold">Distancia Restante</span>
+                <div className={`text-base font-bold font-mono mt-0.5 ${isLoss ? "text-amber-400" : isGain ? "text-sky-400" : "text-emerald-400"}`}>
+                  {deltaKg > 0 ? `+${deltaKg}` : deltaKg} <span className="text-xs text-zinc-400">kg</span>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+                <span className="text-[10px] text-zinc-400 uppercase font-semibold">Velocidad Actual</span>
+                <div className="text-base font-bold font-mono text-zinc-200 mt-0.5">
+                  {slopeWeekly > 0 ? `+${slopeWeekly}` : slopeWeekly} <span className="text-xs text-zinc-400">kg/sem</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* =========================================================================
+              2. APARTADO: DÉFICIT NECESARIO SEGÚN PLAZO (1 MES, 2 MESES, 3 MESES)
+             ========================================================================= */}
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <h3 className="text-xs sm:text-sm font-bold text-zinc-200 flex items-center gap-2">
+                <FlameIcon className="w-4 h-4 text-accent-light" />
+                <span>¿Cuánto déficit necesitas para llegar a la meta?</span>
+              </h3>
+              <span className="text-[11px] text-zinc-400 font-mono">
+                Total a quemar: {Math.round(totalKcalDeficitNeeded).toLocaleString("es-ES")} kcal ({kgToGoal} kg de grasa)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Opción 1: En 1 Mes */}
+              <div
+                onClick={() => setSelectedTrajectory("1m")}
+                className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+                  selectedTrajectory === "1m"
+                    ? "bg-accent/10 border-accent shadow-md shadow-accent/5 ring-1 ring-accent/30"
+                    : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-zinc-100">En 1 Mes</span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        timeTargets.oneMonth.isExtreme
+                          ? "bg-red-500/15 text-red-400 border border-red-500/30"
+                          : timeTargets.oneMonth.isHard
+                          ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                          : "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                      }`}
+                    >
+                      {timeTargets.oneMonth.isExtreme
+                        ? "Muy Extremo"
+                        : timeTargets.oneMonth.isHard
+                        ? "Exigente"
+                        : "Sostenible"}
                     </span>
                   </div>
-                  {whatIfKcal !== 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setWhatIfKcal(0)}
-                      className="flex items-center gap-1 text-[11px] text-accent-light hover:underline cursor-pointer"
-                    >
-                      <RefreshCwIcon className="w-3 h-3" />
-                      <span>Restablecer a tendencia real (0 kcal)</span>
-                    </button>
-                  )}
+                  <span className="text-[11px] text-zinc-400 block mt-0.5">
+                    Llegada para el <strong>{timeTargets.oneMonth.arrivalDate}</strong>
+                  </span>
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                  <div className="flex-1 flex items-center gap-3">
-                    <span className="text-xs font-mono text-zinc-400 w-16 text-right shrink-0">
-                      -600 kcal
-                    </span>
-                    <input
-                      type="range"
-                      min={-600}
-                      max={600}
-                      step={25}
-                      value={whatIfKcal}
-                      onChange={(e) => setWhatIfKcal(Number(e.target.value))}
-                      className="flex-1 accent-accent h-2 bg-zinc-800 rounded-lg cursor-pointer"
-                    />
-                    <span className="text-xs font-mono text-zinc-400 w-16 shrink-0">
-                      +600 kcal
-                    </span>
+                <div className="space-y-1.5 py-1">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-zinc-400">Déficit diario:</span>
+                    <strong className="text-lg font-mono font-bold text-accent-light">
+                      -{timeTargets.oneMonth.dailyKcal}{" "}
+                      <span className="text-xs font-normal text-zinc-400">kcal/d</span>
+                    </strong>
                   </div>
-
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-800 shrink-0 font-mono text-xs">
-                    <span className="text-zinc-400">Ajuste:</span>
-                    <strong
-                      className={
-                        whatIfKcal < 0
-                          ? "text-emerald-400 text-sm"
-                          : whatIfKcal > 0
-                          ? "text-sky-400 text-sm"
-                          : "text-zinc-100 text-sm"
-                      }
-                    >
-                      {whatIfKcal > 0 ? `+${whatIfKcal}` : whatIfKcal} kcal/día
+                  <div className="flex items-baseline justify-between text-xs text-zinc-400">
+                    <span>Déficit semanal:</span>
+                    <strong className="font-mono text-zinc-200">
+                      -{timeTargets.oneMonth.weeklyKcal.toLocaleString("es-ES")} kcal/sem
+                    </strong>
+                  </div>
+                  <div className="flex items-baseline justify-between text-xs text-zinc-400">
+                    <span>Ritmo de pérdida:</span>
+                    <strong className="font-mono text-zinc-200">
+                      -{timeTargets.oneMonth.rateWeekly} kg/sem
                     </strong>
                   </div>
                 </div>
 
-                <div className="text-xs text-zinc-400 flex items-center justify-between flex-wrap gap-2">
-                  <span>
-                    {whatIfKcal === 0 ? (
-                      "Mostrando proyección basada puramente en tu tendencia real."
-                    ) : (
-                      <>
-                        Simulando un cambio de{" "}
-                        <strong className="text-zinc-200 font-mono">
-                          {whatIfKcal > 0 ? "+" : ""}{whatIfKcal} kcal/día
-                        </strong>{" "}
-                        ({whatIfKcal > 0 ? "+" : ""}{Math.round((whatIfKcal * 7 / 7700) * 100) / 100} kg/sem).
-                        {simulationData.timeDeltaWeeks !== 0 && (
-                          <strong className="text-accent-light ml-1 font-mono">
-                            {simulationData.timeDeltaWeeks > 0
-                              ? `¡Llegarías ~${simulationData.timeDeltaWeeks} semanas antes!`
-                              : `Llegarías ~${Math.abs(simulationData.timeDeltaWeeks)} semanas después.`}
-                          </strong>
-                        )}
-                      </>
-                    )}
-                  </span>
-                  <span className="text-[11px] text-zinc-500 font-mono">
-                    Nueva velocidad: {simulationData.simulatedSlopeWeekly > 0 ? "+" : ""}{simulationData.simulatedSlopeWeekly} kg/sem
-                  </span>
+                <div className="text-[10px] text-zinc-400 border-t border-zinc-800/80 pt-2">
+                  {timeTargets.oneMonth.isExtreme
+                    ? "⚠️ Déficit excesivamente alto. Incompatible con preservar masa muscular."
+                    : "Plan de corte rápido para objetivos a muy corto plazo."}
                 </div>
               </div>
 
-              {/* 3. GRÁFICO MAESTRO UNIFICADO ("LÍNEA DE VIDA") */}
-              <div className="p-4 sm:p-5 rounded-2xl border border-zinc-800/90 bg-zinc-950 shadow-xl flex flex-col gap-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-accent animate-pulse" />
-                    <span className="text-xs sm:text-sm font-bold text-zinc-200 uppercase tracking-wide">
-                      Gráfico Maestro Unificado: Pasado Real & Proyección
+              {/* Opción 2: En 2 Meses */}
+              <div
+                onClick={() => setSelectedTrajectory("2m")}
+                className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-3 relative ${
+                  selectedTrajectory === "2m"
+                    ? "bg-accent/10 border-accent shadow-md shadow-accent/5 ring-1 ring-accent/30"
+                    : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-zinc-100">En 2 Meses</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      ⭐ Recomendado
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-zinc-300 font-mono flex-wrap">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-3.5 h-1 rounded-full bg-accent" />
-                      <span>Pesajes reales</span>
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-3.5 h-1 border-t-2 border-dashed border-accent-light" />
-                      <span>Proyección {whatIfKcal !== 0 ? "(Simulada)" : ""}</span>
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-3.5 h-2.5 bg-accent/20 border border-accent/40 rounded-xs" />
-                      <span>Incertidumbre (95%)</span>
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-3.5 h-1 border-t border-dashed border-emerald-400" />
-                      <span>Meta ({targetWeightNum} kg)</span>
-                    </span>
-                  </div>
-                </div>
-
-                {/* Contenedor SVG con crosshair */}
-                <div ref={chartContainerRef} className="relative w-full overflow-hidden">
-                  {scales && (
-                    <svg
-                      ref={svgRef}
-                      viewBox={`0 0 ${svgDimensions.width} ${svgDimensions.height}`}
-                      className="w-full h-auto max-h-[440px] overflow-visible"
-                      onMouseMove={handleSvgMouseMove}
-                      onMouseLeave={() => setHoveredPoint(null)}
-                    >
-                      <defs>
-                        <linearGradient id="unifiedConeGradient" x1="0" y1="0" x2="1" y2="0">
-                          <stop offset="0%" stopColor="var(--accent, #f59e0b)" stopOpacity="0.25" />
-                          <stop offset="100%" stopColor="var(--accent-light, #fbbf24)" stopOpacity="0.05" />
-                        </linearGradient>
-                      </defs>
-
-                      {/* Eje Y Grids & Labels */}
-                      {scales.yTicks.map((yVal) => {
-                        const y = scales.getY(yVal);
-                        return (
-                          <g key={yVal}>
-                            <line
-                              x1={svgDimensions.padding.left}
-                              y1={y}
-                              x2={svgDimensions.width - svgDimensions.padding.right}
-                              y2={y}
-                              stroke="#27272a"
-                              strokeWidth={1}
-                              strokeDasharray="2 3"
-                            />
-                            <text
-                              x={svgDimensions.padding.left - 10}
-                              y={y + 4}
-                              textAnchor="end"
-                              className="text-xs fill-zinc-400 font-mono font-medium"
-                            >
-                              {yVal.toFixed(1)}
-                            </text>
-                          </g>
-                        );
-                      })}
-
-                      {/* Eje X Grids & Labels */}
-                      {scales.xTicks.map((xt, idx) => {
-                        const x = scales.getX(xt.ts);
-                        return (
-                          <g key={idx}>
-                            <line
-                              x1={x}
-                              y1={svgDimensions.padding.top}
-                              x2={x}
-                              y2={svgDimensions.height - svgDimensions.padding.bottom}
-                              stroke="#27272a"
-                              strokeWidth={1}
-                              strokeDasharray="2 3"
-                            />
-                            <text
-                              x={x}
-                              y={svgDimensions.height - svgDimensions.padding.bottom + 18}
-                              textAnchor="middle"
-                              className="text-xs fill-zinc-400 font-mono"
-                            >
-                              {xt.label}
-                            </text>
-                          </g>
-                        );
-                      })}
-
-                      {/* Línea horizontal de Peso Meta Objetivo */}
-                      {(() => {
-                        const targetY = scales.getY(targetWeightNum);
-                        const isInside =
-                          targetY >= svgDimensions.padding.top &&
-                          targetY <= svgDimensions.height - svgDimensions.padding.bottom;
-                        if (!isInside) return null;
-
-                        return (
-                          <g pointerEvents="none">
-                            <line
-                              x1={svgDimensions.padding.left}
-                              y1={targetY}
-                              x2={svgDimensions.width - svgDimensions.padding.right}
-                              y2={targetY}
-                              stroke="#10b981"
-                              strokeWidth={1.75}
-                              strokeDasharray="4 4"
-                            />
-                            <rect
-                              x={svgDimensions.width - svgDimensions.padding.right + 4}
-                              y={targetY - 10}
-                              width={60}
-                              height={18}
-                              rx={4}
-                              fill="#064e3b"
-                              stroke="#059669"
-                              strokeWidth={1}
-                            />
-                            <text
-                              x={svgDimensions.width - svgDimensions.padding.right + 34}
-                              y={targetY + 3}
-                              textAnchor="middle"
-                              className="text-[10px] font-mono font-bold fill-emerald-300"
-                            >
-                              {targetWeightNum.toFixed(1)} kg
-                            </text>
-                          </g>
-                        );
-                      })()}
-
-                      {/* Área de Incertidumbre / Cono Estocástico al 95% */}
-                      {(() => {
-                        const timeline = simulationData.simulatedTimeline;
-                        if (timeline.length < 2) return null;
-
-                        const t0X = scales.getX(report.latestTimestamp);
-                        const t0Y = scales.getY(report.latestWeight);
-
-                        let upperPath = `M ${t0X.toFixed(1)} ${t0Y.toFixed(1)}`;
-                        let lowerPath = "";
-
-                        for (let i = 0; i < timeline.length; i++) {
-                          const x = scales.getX(timeline[i].timestamp);
-                          const yUp = scales.getY(timeline[i].simulatedUpper95);
-                          const yLow = scales.getY(timeline[i].simulatedLower95);
-                          upperPath += ` L ${x.toFixed(1)} ${yUp.toFixed(1)}`;
-                          lowerPath = ` L ${x.toFixed(1)} ${yLow.toFixed(1)}` + lowerPath;
-                        }
-
-                        const coneSvgPath = upperPath + lowerPath + " Z";
-
-                        return (
-                          <path
-                            d={coneSvgPath}
-                            fill="url(#unifiedConeGradient)"
-                            stroke="var(--accent, #f59e0b)"
-                            strokeWidth={0.75}
-                            strokeDasharray="2 2"
-                            opacity={0.7}
-                            pointerEvents="none"
-                          />
-                        );
-                      })()}
-
-                      {/* Curva Spline Cúbica Monótona Suave (Fritsch-Carlson) para Pesajes Previos */}
-                      {(() => {
-                        const histCurvePoints = calibrationPoints.map((p) => ({
-                          x: scales.getX(p.timestamp),
-                          y: scales.getY(p.weight),
-                        }));
-                        const splineD = buildSplinePath(histCurvePoints);
-
-                        return (
-                          <path
-                            d={splineD}
-                            fill="none"
-                            stroke="var(--accent, #f59e0b)"
-                            strokeWidth={2.75}
-                            strokeLinecap="round"
-                            pointerEvents="none"
-                          />
-                        );
-                      })()}
-
-                      {/* Curva Proyectada (con What-If integrado) */}
-                      {(() => {
-                        const projPoints = [
-                          { x: scales.getX(report.latestTimestamp), y: scales.getY(report.latestWeight) },
-                          ...simulationData.simulatedTimeline.map((p) => ({
-                            x: scales.getX(p.timestamp),
-                            y: scales.getY(p.simulatedWeight),
-                          })),
-                        ];
-                        const projSplineD = buildSplinePath(projPoints);
-
-                        return (
-                          <path
-                            d={projSplineD}
-                            fill="none"
-                            stroke="var(--accent-light, #fbbf24)"
-                            strokeWidth={2.5}
-                            strokeDasharray="5 4"
-                            strokeLinecap="round"
-                            pointerEvents="none"
-                          />
-                        );
-                      })()}
-
-                      {/* Puntos individuales de pesaje previo */}
-                      {calibrationPoints.map((pt, idx) => {
-                        const cx = scales.getX(pt.timestamp);
-                        const cy = scales.getY(pt.weight);
-                        const isHovered =
-                          hoveredPoint?.isHistorical &&
-                          Math.abs(hoveredPoint.x - cx) < 1;
-
-                        return (
-                          <g key={idx} pointerEvents="none">
-                            <circle
-                              cx={cx}
-                              cy={cy}
-                              r={isHovered ? 5.5 : 3}
-                              fill={isHovered ? "var(--accent-light, #fbbf24)" : "#ffffff"}
-                              stroke="var(--accent, #f59e0b)"
-                              strokeWidth={isHovered ? 2 : 1.5}
-                              className="transition-all duration-150"
-                            />
-                          </g>
-                        );
-                      })}
-
-                      {/* Baliza T0 (Momento Actual) */}
-                      {(() => {
-                        const t0X = scales.getX(report.latestTimestamp);
-                        const t0Y = scales.getY(report.latestWeight);
-
-                        return (
-                          <g pointerEvents="none">
-                            <line
-                              x1={t0X}
-                              y1={svgDimensions.padding.top}
-                              x2={t0X}
-                              y2={svgDimensions.height - svgDimensions.padding.bottom}
-                              stroke="#52525b"
-                              strokeWidth={1.5}
-                              strokeDasharray="3 3"
-                            />
-                            <circle cx={t0X} cy={t0Y} r={11} fill="var(--accent, #f59e0b)" opacity={0.25} />
-                            <circle cx={t0X} cy={t0Y} r={5} fill="var(--accent-light, #fbbf24)" stroke="#ffffff" strokeWidth={2} />
-                          </g>
-                        );
-                      })()}
-
-                      {/* Crosshair en Hover */}
-                      {hoveredPoint && (
-                        <g pointerEvents="none">
-                          <line
-                            x1={hoveredPoint.x}
-                            y1={svgDimensions.padding.top}
-                            x2={hoveredPoint.x}
-                            y2={svgDimensions.height - svgDimensions.padding.bottom}
-                            stroke="var(--accent-light, #fbbf24)"
-                            strokeWidth={1.25}
-                            strokeDasharray="3 2"
-                            opacity={0.8}
-                          />
-                          <line
-                            x1={svgDimensions.padding.left}
-                            y1={hoveredPoint.y}
-                            x2={svgDimensions.width - svgDimensions.padding.right}
-                            y2={hoveredPoint.y}
-                            stroke="var(--accent-light, #fbbf24)"
-                            strokeWidth={1.25}
-                            strokeDasharray="3 2"
-                            opacity={0.8}
-                          />
-                          <circle
-                            cx={hoveredPoint.x}
-                            cy={hoveredPoint.y}
-                            r={6}
-                            fill="#ffffff"
-                            stroke="var(--accent, #f59e0b)"
-                            strokeWidth={2.5}
-                          />
-                        </g>
-                      )}
-                    </svg>
-                  )}
-
-                  {/* Tooltip flotante */}
-                  {hoveredPoint && (
-                    <div
-                      className="absolute top-2 z-20 pointer-events-none p-2.5 rounded-xl bg-zinc-950/95 border border-zinc-700 shadow-2xl text-xs font-mono space-y-1 backdrop-blur-md"
-                      style={{
-                        left: `${Math.max(10, Math.min(window.innerWidth - 240, hoveredPoint.screenX - 70))}px`,
-                      }}
-                    >
-                      <div className="flex items-center justify-between gap-3 text-zinc-400 border-b border-zinc-800 pb-1">
-                        <span className="font-semibold text-zinc-200">{hoveredPoint.dateLabel}</span>
-                        <span className="text-[10px]">
-                          {hoveredPoint.isHistorical
-                            ? hoveredPoint.daysAgoOrAhead === 0
-                              ? "Hoy (T₀)"
-                              : `hace ${hoveredPoint.daysAgoOrAhead}d`
-                            : `en ${hoveredPoint.daysAgoOrAhead}d`}
-                        </span>
-                      </div>
-                      <div className="flex items-baseline justify-between gap-4">
-                        <span className="text-zinc-400 font-sans">
-                          {hoveredPoint.isHistorical ? "Peso medido:" : "Proyección:"}
-                        </span>
-                        <strong className="text-sm text-accent-light font-bold">
-                          {hoveredPoint.weight.toFixed(1)} kg
-                        </strong>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 text-[11px] text-zinc-400">
-                        <span>Dif. respecto a hoy:</span>
-                        <span
-                          className={
-                            hoveredPoint.diffFromLatest > 0
-                              ? "text-sky-400"
-                              : hoveredPoint.diffFromLatest < 0
-                              ? "text-emerald-400"
-                              : "text-zinc-300"
-                          }
-                        >
-                          {hoveredPoint.diffFromLatest > 0 ? `+${hoveredPoint.diffFromLatest}` : hoveredPoint.diffFromLatest} kg
-                        </span>
-                      </div>
-                      {!hoveredPoint.isHistorical && hoveredPoint.lower95 !== undefined && (
-                        <div className="text-[10px] text-zinc-500 pt-0.5 border-t border-zinc-850">
-                          Rango (95%): {hoveredPoint.lower95.toFixed(1)} - {hoveredPoint.upper95?.toFixed(1)} kg
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* 4. RIBBON DE TELEMETRÍA FISIOLÓGICA & MÉTRICAS CLAVE */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-                {/* 1. Velocidad (dW/dt) */}
-                <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 flex flex-col justify-between">
-                  <span className="text-xs font-mono uppercase text-zinc-400 font-semibold flex items-center gap-1.5">
-                    <ActivityIcon className="w-3.5 h-3.5 text-zinc-400" />
-                    <span>Velocidad (dW/dt)</span>
+                  <span className="text-[11px] text-zinc-400 block mt-0.5">
+                    Llegada para el <strong>{timeTargets.twoMonths.arrivalDate}</strong>
                   </span>
-                  <div className="mt-1.5">
-                    <span
-                      className={`text-xl font-bold font-mono ${
-                        simulationData.simulatedSlopeWeekly < 0
-                          ? "text-emerald-400"
-                          : simulationData.simulatedSlopeWeekly > 0
-                          ? "text-amber-400"
-                          : "text-zinc-200"
-                      }`}
-                    >
-                      {simulationData.simulatedSlopeWeekly > 0
-                        ? `+${simulationData.simulatedSlopeWeekly}`
-                        : simulationData.simulatedSlopeWeekly}{" "}
-                      <span className="text-xs font-normal text-zinc-400">kg/sem</span>
-                    </span>
-                    <span className="block text-[11px] text-zinc-400 font-mono mt-0.5">
-                      {Math.round(simulationData.simulatedSlopeDaily * 1000)} g/día
-                    </span>
-                  </div>
                 </div>
 
-                {/* 2. Balance Calórico Implícito */}
-                <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 flex flex-col justify-between">
-                  <span className="text-xs font-mono uppercase text-zinc-400 font-semibold flex items-center gap-1.5">
-                    <FlameIcon className="w-3.5 h-3.5 text-accent-light" />
-                    <span>Balance Termodinámico</span>
-                  </span>
-                  <div className="mt-1.5">
-                    <span className="text-xl font-bold font-mono text-accent-light">
-                      {simulationData.simulatedNetKcalDaily > 0 ? `+${simulationData.simulatedNetKcalDaily}` : simulationData.simulatedNetKcalDaily}{" "}
+                <div className="space-y-1.5 py-1">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-zinc-400">Déficit diario:</span>
+                    <strong className="text-lg font-mono font-bold text-emerald-400">
+                      -{timeTargets.twoMonths.dailyKcal}{" "}
                       <span className="text-xs font-normal text-zinc-400">kcal/d</span>
-                    </span>
-                    <span className="block text-[11px] text-zinc-400 font-mono mt-0.5">
-                      Wishnofsky (7.700 kcal/kg)
-                    </span>
+                    </strong>
+                  </div>
+                  <div className="flex items-baseline justify-between text-xs text-zinc-400">
+                    <span>Déficit semanal:</span>
+                    <strong className="font-mono text-zinc-200">
+                      -{timeTargets.twoMonths.weeklyKcal.toLocaleString("es-ES")} kcal/sem
+                    </strong>
+                  </div>
+                  <div className="flex items-baseline justify-between text-xs text-zinc-400">
+                    <span>Ritmo de pérdida:</span>
+                    <strong className="font-mono text-zinc-200">
+                      -{timeTargets.twoMonths.rateWeekly} kg/sem
+                    </strong>
                   </div>
                 </div>
 
-                {/* 3. Aceleración (d2W/dt2) */}
-                <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 flex flex-col justify-between">
-                  <span className="text-xs font-mono uppercase text-zinc-400 font-semibold">
-                    Aceleración (d²W/dt²)
-                  </span>
-                  <div className="mt-1.5">
-                    <span className="text-xl font-bold font-mono text-zinc-100">
-                      {report.metabolic.currentDeceleration > 0 ? `+${report.metabolic.currentDeceleration}` : report.metabolic.currentDeceleration}{" "}
-                      <span className="text-xs font-normal text-zinc-400">g/d²</span>
-                    </span>
-                    <span className="block text-[11px] text-zinc-400 truncate mt-0.5">
-                      {report.metabolic.hasPlateauTendency ? "Freno adaptativo detectado" : "Ritmo cinemático sostenido"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* 4. Meta & Tiempo Estimado */}
-                <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 flex flex-col justify-between">
-                  <span className="text-xs font-mono uppercase text-zinc-400 font-semibold flex items-center gap-1.5">
-                    <TargetIcon className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Meta Objetivo</span>
-                  </span>
-                  <div className="mt-1.5">
-                    <span className="text-xl font-bold font-mono text-emerald-400">
-                      {targetWeightNum.toFixed(1)}{" "}
-                      <span className="text-xs font-normal text-zinc-400">kg</span>
-                    </span>
-                    <span className="block text-[11px] text-zinc-400 truncate mt-0.5">
-                      {simulationData.simulatedArrivalDate
-                        ? `Llegada: ${simulationData.simulatedArrivalDate}`
-                        : simulationData.isSimulatedDiverging
-                        ? "Divergente (ajustar)"
-                        : "En equilibrio"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* 5. Ruido Biológico (RMSE) */}
-                <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 flex flex-col justify-between col-span-2 sm:col-span-1">
-                  <span className="text-xs font-mono uppercase text-zinc-400 font-semibold">
-                    Ruido Biológico (RMSE)
-                  </span>
-                  <div className="mt-1.5">
-                    <span className="text-xl font-bold font-mono text-zinc-100">
-                      ±{report.linear.rmse.toFixed(2)}{" "}
-                      <span className="text-xs font-normal text-zinc-400">kg</span>
-                    </span>
-                    <span className="block text-[11px] text-zinc-400 font-mono mt-0.5">
-                      R²={report.linear.r2.toFixed(2)} (Filtro Kalman)
-                    </span>
-                  </div>
+                <div className="text-[10px] text-zinc-400 border-t border-zinc-800/80 pt-2">
+                  Equilibrio óptimo: quema grasa a buen ritmo sin comprometer la fuerza en el gimnasio.
                 </div>
               </div>
 
-              {/* 5. PANEL PLEGABLE: DETALLES DE MODELADO CIENTÍFICO PROFUNDO */}
-              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/30 overflow-hidden">
+              {/* Opción 3: En 3 Meses */}
+              <div
+                onClick={() => setSelectedTrajectory("3m")}
+                className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+                  selectedTrajectory === "3m"
+                    ? "bg-accent/10 border-accent shadow-md shadow-accent/5 ring-1 ring-accent/30"
+                    : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-zinc-100">En 3 Meses</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                      🌱 Muy Cómodo
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-zinc-400 block mt-0.5">
+                    Llegada para el <strong>{timeTargets.threeMonths.arrivalDate}</strong>
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 py-1">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-zinc-400">Déficit diario:</span>
+                    <strong className="text-lg font-mono font-bold text-blue-400">
+                      -{timeTargets.threeMonths.dailyKcal}{" "}
+                      <span className="text-xs font-normal text-zinc-400">kcal/d</span>
+                    </strong>
+                  </div>
+                  <div className="flex items-baseline justify-between text-xs text-zinc-400">
+                    <span>Déficit semanal:</span>
+                    <strong className="font-mono text-zinc-200">
+                      -{timeTargets.threeMonths.weeklyKcal.toLocaleString("es-ES")} kcal/sem
+                    </strong>
+                  </div>
+                  <div className="flex items-baseline justify-between text-xs text-zinc-400">
+                    <span>Ritmo de pérdida:</span>
+                    <strong className="font-mono text-zinc-200">
+                      -{timeTargets.threeMonths.rateWeekly} kg/sem
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-zinc-400 border-t border-zinc-800/80 pt-2">
+                  Déficit suave y fácil de cumplir. Cero ansiedad y máxima adherencia a largo plazo.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* =========================================================================
+              3. APARTADO: ESTRATEGIAS NUTRICIONALES ESTÁNDAR
+             ========================================================================= */}
+          <div className="space-y-3">
+            <h3 className="text-xs sm:text-sm font-bold text-zinc-200 flex items-center gap-2">
+              <ZapIcon className="w-4 h-4 text-emerald-400" />
+              <span>Planes según tu estrategia nutricional</span>
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Estrategia A: Déficit Estándar 500 kcal */}
+              <div
+                onClick={() => setSelectedTrajectory("def500")}
+                className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+                  selectedTrajectory === "def500"
+                    ? "bg-emerald-500/10 border-emerald-500 shadow-md ring-1 ring-emerald-500/30"
+                    : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-zinc-100">Déficit Estándar</span>
+                    <span className="text-[10px] font-mono font-bold text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
+                      -500 kcal/d
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-zinc-400 block mt-0.5">
+                    -3.500 kcal/sem (~0.45 kg/sem)
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80 space-y-1">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-zinc-400">Tiempo necesario:</span>
+                    <strong className="text-sm font-mono text-zinc-100">
+                      ~{strategies.def500.weeks} semanas
+                    </strong>
+                  </div>
+                  <div className="flex items-baseline justify-between text-xs text-zinc-400">
+                    <span>Fecha de llegada:</span>
+                    <strong className="font-mono text-emerald-400">
+                      {strategies.def500.arrivalDate}
+                    </strong>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  El protocolo clásico de recomposición: preservación total de masa muscular sin fatiga.
+                </p>
+              </div>
+
+              {/* Estrategia B: Déficit Agresivo 1000 kcal */}
+              <div
+                onClick={() => setSelectedTrajectory("def1000")}
+                className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+                  selectedTrajectory === "def1000"
+                    ? "bg-amber-500/10 border-amber-500 shadow-md ring-1 ring-amber-500/30"
+                    : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-zinc-100">Déficit Agresivo</span>
+                    <span className="text-[10px] font-mono font-bold text-amber-400 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30">
+                      -1.000 kcal/d
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-zinc-400 block mt-0.5">
+                    -7.000 kcal/sem (~0.91 kg/sem)
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80 space-y-1">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-zinc-400">Tiempo necesario:</span>
+                    <strong className="text-sm font-mono text-zinc-100">
+                      ~{strategies.def1000.weeks} semanas
+                    </strong>
+                  </div>
+                  <div className="flex items-baseline justify-between text-xs text-zinc-400">
+                    <span>Fecha de llegada:</span>
+                    <strong className="font-mono text-amber-400">
+                      {strategies.def1000.arrivalDate}
+                    </strong>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  Pérdida rápida. Requiere asegurar al menos 2.0g de proteína por kg y no exceder 4-6 semanas seguidas.
+                </p>
+              </div>
+
+              {/* Estrategia C: Ayuno Alterno 24h (ADF) */}
+              <div
+                onClick={() => setSelectedTrajectory("adf")}
+                className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+                  selectedTrajectory === "adf"
+                    ? "bg-purple-500/10 border-purple-500 shadow-md ring-1 ring-purple-500/30"
+                    : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-zinc-100">Ayuno Alterno (24h)</span>
+                    <span className="text-[10px] font-mono font-bold text-purple-300 px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/30">
+                      ADF (~3.5d/sem)
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-zinc-400 block mt-0.5 font-mono">
+                    ~-{strategies.adf.dailyDeficitAverage} kcal/d promedio (-{strategies.adf.rateWeekly} kg/sem)
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80 space-y-1">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-zinc-400">Tiempo necesario:</span>
+                    <strong className="text-sm font-mono text-zinc-100">
+                      ~{strategies.adf.weeks} semanas
+                    </strong>
+                  </div>
+                  <div className="flex items-baseline justify-between text-xs text-zinc-400">
+                    <span>Fecha de llegada:</span>
+                    <strong className="font-mono text-purple-300">
+                      {strategies.adf.arrivalDate}
+                    </strong>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  Ayunar 24h en días alternos y comer a mantenimiento ({strategies.adf.tdee} kcal) los días normales. Sin necesidad de pesar comida a diario.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* =========================================================================
+              4. GRÁFICO LIMPIO & INTERACTIVO DE TRAYECTORIA A LA META
+             ========================================================================= */}
+          <div className="p-4 sm:p-5 rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold text-zinc-200 flex items-center gap-2">
+                  <ActivityIcon className="w-4 h-4 text-accent-light" />
+                  <span>Trayectoria de Peso hacia los {targetWeightNum} kg</span>
+                </h4>
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  Mostrando proyección según:{" "}
+                  <strong className="text-accent-light font-medium">
+                    {selectedTrajectory === "current"
+                      ? "Tu ritmo actual registrado"
+                      : selectedTrajectory === "1m"
+                      ? "Plan Meta en 1 Mes"
+                      : selectedTrajectory === "2m"
+                      ? "Plan Meta en 2 Meses"
+                      : selectedTrajectory === "3m"
+                      ? "Plan Meta en 3 Meses"
+                      : selectedTrajectory === "def500"
+                      ? "Déficit estándar (-500 kcal/d)"
+                      : selectedTrajectory === "def1000"
+                      ? "Déficit agresivo (-1.000 kcal/d)"
+                      : "Ayuno alterno (ADF cada 24h)"}
+                  </strong>
+                </p>
+              </div>
+
+              {/* Botón rápido para volver a 'Mi ritmo actual' */}
+              {selectedTrajectory !== "current" && (
                 <button
                   type="button"
-                  onClick={() => setShowMathDetails(!showMathDetails)}
-                  className="w-full px-5 py-3.5 flex items-center justify-between text-left hover:bg-zinc-850/40 transition-colors cursor-pointer"
+                  onClick={() => setSelectedTrajectory("current")}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold text-accent-light bg-accent/10 border border-accent/30 hover:bg-accent/20 transition-all cursor-pointer self-start sm:self-center"
                 >
-                  <span className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-2">
-                    <InfoIcon className="w-4 h-4 text-accent-light" />
-                    <span>Ver Fundamentos Matemáticos y Parámetros del Motor (NIH / Hall / Wishnofsky)</span>
-                  </span>
-                  <ChevronDownIcon
-                    className={`w-4 h-4 text-zinc-400 transition-transform duration-200 ${
-                      showMathDetails ? "rotate-180" : ""
-                    }`}
-                  />
+                  <RefreshCwIcon className="w-3 h-3" />
+                  <span>Ver con mi ritmo actual</span>
                 </button>
+              )}
+            </div>
 
-                {showMathDetails && (
-                  <div className="p-5 border-t border-zinc-800/80 space-y-4 text-xs text-zinc-400 animate-in fade-in duration-150">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* 1. Kevin Hall Dynamics */}
-                      <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 space-y-2">
-                        <strong className="text-zinc-200 block text-xs">1. Modelo Metabólico de Kevin Hall (NIH)</strong>
-                        <p className="leading-relaxed">
-                          Resuelve la ecuación diferencial de relajación de primer orden:{" "}
-                          <span className="font-mono text-accent-light font-semibold">dW/dt = -k(W - W∞)</span>.
-                        </p>
-                        <p className="font-mono text-zinc-400 text-[11px]">
-                          Constante k = {report.metabolic.rateConstantK} d⁻¹ (Vida media t½ = {report.metabolic.halfLifeDays} días).
-                        </p>
-                      </div>
+            {/* Canvas SVG */}
+            <div className="relative w-full overflow-hidden">
+              <svg
+                ref={svgRef}
+                viewBox={`0 0 ${chartScales.width} ${chartScales.height}`}
+                className="w-full h-auto max-h-[280px] overflow-visible select-none"
+                onMouseMove={handleSvgMouseMove}
+                onMouseLeave={() => setHoveredPoint(null)}
+              >
+                {/* Líneas de rejilla horizontal (peso) */}
+                {chartScales.yTicks.map((wVal) => {
+                  const y = chartScales.getY(wVal);
+                  return (
+                    <g key={wVal}>
+                      <line
+                        x1={chartScales.padding.left}
+                        y1={y}
+                        x2={chartScales.width - chartScales.padding.right}
+                        y2={y}
+                        stroke="#27272a"
+                        strokeWidth={1}
+                        strokeDasharray="2 3"
+                      />
+                      <text
+                        x={chartScales.padding.left - 8}
+                        y={y + 3}
+                        textAnchor="end"
+                        className="text-[10px] fill-zinc-500 font-mono"
+                      >
+                        {wVal} kg
+                      </text>
+                    </g>
+                  );
+                })}
 
-                      {/* 2. Wishnofsky First Principles */}
-                      <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 space-y-2">
-                        <strong className="text-zinc-200 block text-xs">2. Termodinámica de Wishnofsky</strong>
-                        <p className="leading-relaxed">
-                          Aplica la densidad energética de tejido mixto humano (<span className="font-mono text-accent-light">κ ≈ 7.700 kcal/kg</span>) sobre la derivada temporal:{" "}
-                          <span className="font-mono text-zinc-300">ΔE = κ · (dW/dt)</span>.
-                        </p>
-                        <p className="font-mono text-zinc-400 text-[11px]">
-                          Margen de confianza al 95%: ±{report.thermodynamics.confidenceKcalMargin} kcal/día.
-                        </p>
-                      </div>
+                {/* Línea horizontal destacada de la META OBJETIVO */}
+                <line
+                  x1={chartScales.padding.left}
+                  y1={chartScales.getY(targetWeightNum)}
+                  x2={chartScales.width - chartScales.padding.right}
+                  y2={chartScales.getY(targetWeightNum)}
+                  stroke="#10b981"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 3"
+                  opacity={0.8}
+                />
+                <text
+                  x={chartScales.width - chartScales.padding.right}
+                  y={chartScales.getY(targetWeightNum) - 6}
+                  textAnchor="end"
+                  className="text-[10px] font-mono font-bold fill-emerald-400"
+                >
+                  Meta {targetWeightNum} kg
+                </text>
 
-                      {/* 3. Monte Carlo Simulation */}
-                      <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 space-y-2">
-                        <strong className="text-zinc-200 block text-xs">3. Distribución Monte Carlo (1.000 iteraciones)</strong>
-                        <p className="leading-relaxed">
-                          Propaga la incertidumbre del ruido hídrico mediante remuestreo estocástico:
-                        </p>
-                        <p className="font-mono text-zinc-400 text-[11px]">
-                          P10={report.monteCarlo.finalP10.toFixed(1)} kg · P50={report.monteCarlo.finalP50.toFixed(1)} kg · P90={report.monteCarlo.finalP90.toFixed(1)} kg.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                {/* Eje X (fechas) */}
+                {chartScales.xTicks.map((xt, i) => {
+                  const x = chartScales.getX(xt.ts);
+                  return (
+                    <text
+                      key={i}
+                      x={x}
+                      y={chartScales.height - 10}
+                      textAnchor={i === 0 ? "start" : i === chartScales.xTicks.length - 1 ? "end" : "middle"}
+                      className="text-[10px] fill-zinc-500 font-mono"
+                    >
+                      {xt.label}
+                    </text>
+                  );
+                })}
+
+                {/* Línea histórica sólida de pesajes reales */}
+                {calibrationPoints.length >= 2 && (
+                  <path
+                    d={calibrationPoints
+                      .map((p, idx) => `${idx === 0 ? "M" : "L"} ${chartScales.getX(p.timestamp).toFixed(1)} ${chartScales.getY(p.weight).toFixed(1)}`)
+                      .join(" ")}
+                    fill="none"
+                    stroke="#3b82f6"
+                    strokeWidth={2.5}
+                  />
                 )}
-              </div>
-            </>
-          )}
+
+                {/* Puntos individuales históricos */}
+                {calibrationPoints.map((p, idx) => (
+                  <circle
+                    key={idx}
+                    cx={chartScales.getX(p.timestamp)}
+                    cy={chartScales.getY(p.weight)}
+                    r={3}
+                    fill="#3b82f6"
+                    stroke="#18181b"
+                    strokeWidth={1}
+                  />
+                ))}
+
+                {/* Punto T0 (HOY) */}
+                <circle
+                  cx={chartScales.getX(latestTimestamp)}
+                  cy={chartScales.getY(currentWeight)}
+                  r={5}
+                  fill="#ffffff"
+                  stroke="#3b82f6"
+                  strokeWidth={2.5}
+                />
+
+                {/* Línea Proyectada discontinua hacia la meta */}
+                <path
+                  d={`M ${chartScales.getX(latestTimestamp).toFixed(1)} ${chartScales.getY(currentWeight).toFixed(1)} ${trajectoryData.projectedPoints
+                    .map((p) => `L ${chartScales.getX(p.timestamp).toFixed(1)} ${chartScales.getY(p.weight).toFixed(1)}`)
+                    .join(" ")}`}
+                  fill="none"
+                  stroke="var(--accent-light, #fbbf24)"
+                  strokeWidth={2.5}
+                  strokeDasharray="4 3"
+                />
+
+                {/* Punto Final Meta */}
+                <circle
+                  cx={chartScales.getX(trajectoryData.targetTs)}
+                  cy={chartScales.getY(trajectoryData.finalWeight)}
+                  r={5}
+                  fill="#10b981"
+                  stroke="#ffffff"
+                  strokeWidth={1.5}
+                />
+
+                {/* Tooltip crosshair */}
+                {hoveredPoint && (
+                  <g pointerEvents="none">
+                    <line
+                      x1={hoveredPoint.x}
+                      y1={chartScales.padding.top}
+                      x2={hoveredPoint.x}
+                      y2={chartScales.height - chartScales.padding.bottom}
+                      stroke="#fbbf24"
+                      strokeWidth={1}
+                      strokeDasharray="2 2"
+                    />
+                    <circle
+                      cx={hoveredPoint.x}
+                      cy={hoveredPoint.y}
+                      r={6}
+                      fill="#ffffff"
+                      stroke="#fbbf24"
+                      strokeWidth={2}
+                    />
+                  </g>
+                )}
+              </svg>
+
+              {/* Tooltip flotante */}
+              {hoveredPoint && (
+                <div
+                  className="absolute top-2 z-10 pointer-events-none px-3 py-1.5 rounded-xl bg-zinc-950/90 border border-zinc-700 shadow-xl text-xs font-mono backdrop-blur-sm"
+                  style={{ left: `${Math.max(10, Math.min(600, hoveredPoint.x - 40))}px` }}
+                >
+                  <span className="text-zinc-400 block text-[10px]">
+                    {hoveredPoint.isProjected ? "Proyección" : "Medición"}: {hoveredPoint.dateLabel}
+                  </span>
+                  <strong className="text-accent-light font-bold text-sm">
+                    {hoveredPoint.weight.toFixed(1)} kg
+                  </strong>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>,

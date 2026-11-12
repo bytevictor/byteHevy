@@ -2540,7 +2540,7 @@ export function WeightTab() {
                 </span>
               </div>
               <div className="flex items-center gap-1.5 text-zinc-300">
-                <span className="text-zinc-400">Variación proyectada:</span>
+                <span className="text-zinc-400">Variación de tendencia:</span>
                 <span className="font-mono font-semibold text-blue-300">
                   {trendAnalysis.totalTrendDelta > 0 ? `+${trendAnalysis.totalTrendDelta}` : trendAnalysis.totalTrendDelta} kg
                 </span>
