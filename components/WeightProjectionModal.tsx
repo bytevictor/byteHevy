@@ -358,7 +358,129 @@ export function WeightProjectionModal({
     const d3mWeekly = Math.round(d3mDaily * 7);
     const d3mRateWeekly = Math.round((kgToGoal / (90 / 7)) * 100) / 100;
 
+    // Evaluación dinámica para identificar cuál de los 3 plazos es el más equilibrado
+    const optionsDaily = [d1mDaily, d2mDaily, d3mDaily];
+    const idealKcal = isGain ? 350 : 500;
+    const scores = optionsDaily.map((kcal) => {
+      if (isLoss && kcal > 1250) return 99999;
+      if (isLoss && kcal < 180) return 88888;
+      if (isGain && kcal > 550) return 99999;
+      return Math.abs(kcal - idealKcal);
+    });
+    const bestIndex = scores.indexOf(Math.min(...scores));
+
+    // Función que juzga cada intervalo de forma 100% dinámica según la meta y calorías
+    const evaluateOption = (dailyKcal: number, rateWeekly: number, days: number, isBest: boolean) => {
+      if (isMaint || kgToGoal <= 0.2) {
+        return {
+          label: "En Meta",
+          badgeClass: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
+          textClass: "text-emerald-400",
+          description: "Ya estás en tu meta objetivo. Mantén tu balance neutro.",
+        };
+      }
+
+      if (isGain) {
+        if (rateWeekly > 0.50 || dailyKcal > 550) {
+          return {
+            label: "⚠️ Grasa Excesiva",
+            badgeClass: "bg-red-500/15 text-red-400 border border-red-500/30",
+            textClass: "text-red-400",
+            description: `Superávit excesivo (+${dailyKcal} kcal/d). Gran parte del peso ganado será grasa.`,
+          };
+        }
+        if (rateWeekly >= 0.20 && rateWeekly <= 0.45) {
+          return {
+            label: isBest ? "⭐ Recomendado" : "Óptimo",
+            badgeClass: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
+            textClass: "text-emerald-400",
+            description: `Ritmo limpio y óptimo (+${rateWeekly} kg/sem). Máxima masa muscular con mínima grasa.`,
+          };
+        }
+        if (rateWeekly < 0.15) {
+          return {
+            label: "🐢 Demasiado Lento",
+            badgeClass: "bg-zinc-800 text-zinc-400 border border-zinc-700",
+            textClass: "text-zinc-400",
+            description: `Ritmo muy bajo (+${rateWeekly} kg/sem). Plazo excesivamente largo para solo ${kgToGoal} kg.`,
+          };
+        }
+        return {
+          label: isBest ? "⭐ Recomendado (Suave)" : "🌱 Cómodo",
+          badgeClass: "bg-blue-500/15 text-blue-400 border border-blue-500/30",
+          textClass: "text-blue-400",
+          description: `Superávit moderado (+${dailyKcal} kcal/d). Ganancia progresiva y controlada.`,
+        };
+      }
+
+      // Pérdida de peso (Déficit)
+      // 1. Inviable: déficit diario > 1250 kcal/d o ritmo > 1.25 kg/sem
+      if (dailyKcal > 1250 || rateWeekly > 1.25) {
+        return {
+          label: "⛔ Inviable",
+          badgeClass: "bg-red-500/20 text-red-400 border border-red-500/40",
+          textClass: "text-red-400",
+          description: `Déficit brutal de -${dailyKcal.toLocaleString("es-ES")} kcal/d (-${rateWeekly} kg/sem). Incompatible con retener músculo o mantener la salud.`,
+        };
+      }
+
+      // 2. Muy Extremo: déficit entre 950 y 1250 kcal/d o ritmo entre 0.90 y 1.25 kg/sem
+      if (dailyKcal > 950 || rateWeekly > 0.90) {
+        return {
+          label: isBest ? "⚡ Mejor Opción (Muy Exigente)" : "⚠️ Muy Extremo",
+          badgeClass: isBest
+            ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+            : "bg-red-500/15 text-red-400 border border-red-500/30",
+          textClass: "text-amber-400",
+          description: `Déficit agresivo (-${dailyKcal} kcal/d, -${rateWeekly} kg/sem). Alto riesgo de catabolismo muscular, fatiga y rebote.`,
+        };
+      }
+
+      // 3. Exigente: déficit entre 700 y 950 kcal/d o ritmo entre 0.65 y 0.90 kg/sem
+      if (dailyKcal > 700 || rateWeekly > 0.65) {
+        return {
+          label: isBest ? "⭐ Mejor Opción (Exigente)" : "⚡ Exigente",
+          badgeClass: isBest
+            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+            : "bg-amber-500/15 text-amber-400 border border-amber-500/30",
+          textClass: isBest ? "text-emerald-400" : "text-amber-400",
+          description: `Pérdida rápida (-${dailyKcal} kcal/d, -${rateWeekly} kg/sem). Requiere disciplina, proteína alta (≥2g/kg) y descanso estricto.`,
+        };
+      }
+
+      // 4. Recomendado: déficit entre 400 y 700 kcal/d (ritmo entre 0.35 y 0.65 kg/sem)
+      if (dailyKcal >= 400 && dailyKcal <= 700) {
+        return {
+          label: isBest ? "⭐ Recomendado" : "Equilibrado",
+          badgeClass: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
+          textClass: "text-emerald-400",
+          description: `Equilibrio óptimo (-${dailyKcal} kcal/d, -${rateWeekly} kg/sem). Quema grasa a buen ritmo protegiendo 100% de fuerza y músculo.`,
+        };
+      }
+
+      // 5. Cómodo y Sostenible: déficit entre 200 y 400 kcal/d (ritmo entre 0.20 y 0.35 kg/sem)
+      if (dailyKcal >= 200 && dailyKcal < 400) {
+        return {
+          label: isBest ? "⭐ Recomendado (Cómodo)" : "🌱 Cómodo y Fácil",
+          badgeClass: isBest
+            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+            : "bg-blue-500/15 text-blue-400 border border-blue-500/30",
+          textClass: isBest ? "text-emerald-400" : "text-blue-400",
+          description: `Déficit suave (-${dailyKcal} kcal/d, -${rateWeekly} kg/sem). Cero ansiedad, gran energía diaria y máxima adherencia.`,
+        };
+      }
+
+      // 6. Demasiado Lento: déficit < 200 kcal/d (ritmo < 0.20 kg/sem)
+      return {
+        label: "🐢 Demasiado Lento",
+        badgeClass: "bg-zinc-800 text-zinc-400 border border-zinc-700",
+        textClass: "text-zinc-400",
+        description: `Déficit casi nulo de apenas -${dailyKcal} kcal/d (-${rateWeekly} kg/sem). ${days} días es excesivo para solo ${kgToGoal} kg; se diluye fácilmente con cualquier comida libre.`,
+      };
+    };
+
     return {
+      bestIndex,
       oneMonth: {
         days: 30,
         weeksText: "~4 semanas (1 mes)",
@@ -369,9 +491,7 @@ export function WeightProjectionModal({
           day: "numeric",
           month: "short",
         }),
-        isExtreme: d1mDaily > 1050,
-        isHard: d1mDaily > 700 && d1mDaily <= 1050,
-        isComfortable: d1mDaily <= 700,
+        verdict: evaluateOption(d1mDaily, d1mRateWeekly, 30, bestIndex === 0),
       },
       twoMonths: {
         days: 60,
@@ -383,7 +503,7 @@ export function WeightProjectionModal({
           day: "numeric",
           month: "short",
         }),
-        isRecommended: true,
+        verdict: evaluateOption(d2mDaily, d2mRateWeekly, 60, bestIndex === 1),
       },
       threeMonths: {
         days: 90,
@@ -395,10 +515,10 @@ export function WeightProjectionModal({
           day: "numeric",
           month: "short",
         }),
-        isComfortable: true,
+        verdict: evaluateOption(d3mDaily, d3mRateWeekly, 90, bestIndex === 2),
       },
     };
-  }, [totalKcalDeficitNeeded, kgToGoal]);
+  }, [totalKcalDeficitNeeded, kgToGoal, isLoss, isGain, isMaint]);
 
   // 6. APARTADO 2: Estrategias fijas (Déficit 500 kcal, Déficit 1000 kcal y Ayuno alterno 24h)
   // Estimación del TDEE personalizado para el ayuno alterno (ADF)
@@ -843,6 +963,32 @@ export function WeightProjectionModal({
               </span>
             </div>
 
+            {/* Banner Dinámico con Veredicto Global según los kg restantes */}
+            <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-200">
+              <SparklesIcon className="w-4 h-4 text-blue-400 shrink-0" />
+              <span>
+                {isMaint || kgToGoal <= 0.2 ? (
+                  "¡Ya estás en tu meta de peso! Tu objetivo actual es mantenerte."
+                ) : timeTargets.bestIndex === 0 ? (
+                  <>
+                    Para tus <strong>{kgToGoal} kg</strong> restantes, el plazo más lógico y equilibrado es <strong>En 1 Mes</strong> (déficit de <strong>-{timeTargets.oneMonth.dailyKcal} kcal/día</strong>). Ampliarlo a 2 o 3 meses sería innecesariamente lento.
+                  </>
+                ) : timeTargets.bestIndex === 1 ? (
+                  <>
+                    Para tus <strong>{kgToGoal} kg</strong> restantes, el plazo más equilibrado es <strong>En 2 Meses</strong> (déficit de <strong>-{timeTargets.twoMonths.dailyKcal} kcal/día</strong>, ~{timeTargets.twoMonths.rateWeekly} kg/sem).
+                  </>
+                ) : timeTargets.threeMonths.dailyKcal > 1000 ? (
+                  <>
+                    Para una meta de <strong>{kgToGoal} kg</strong>, incluso 3 meses exige un ritmo muy agresivo (-{timeTargets.threeMonths.dailyKcal} kcal/d). Se aconseja un horizonte de <strong>4 a 6 meses</strong> para no perder masa muscular.
+                  </>
+                ) : (
+                  <>
+                    Para tus <strong>{kgToGoal} kg</strong> restantes, el plazo más sostenible es <strong>En 3 Meses</strong> (déficit de <strong>-{timeTargets.threeMonths.dailyKcal} kcal/día</strong>, ~{timeTargets.threeMonths.rateWeekly} kg/sem).
+                  </>
+                )}
+              </span>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {/* Opción 1: En 1 Mes */}
               <div
@@ -857,19 +1003,9 @@ export function WeightProjectionModal({
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-zinc-100">En 1 Mes</span>
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        timeTargets.oneMonth.isExtreme
-                          ? "bg-red-500/15 text-red-400 border border-red-500/30"
-                          : timeTargets.oneMonth.isHard
-                          ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
-                          : "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                      }`}
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${timeTargets.oneMonth.verdict.badgeClass}`}
                     >
-                      {timeTargets.oneMonth.isExtreme
-                        ? "Muy Extremo"
-                        : timeTargets.oneMonth.isHard
-                        ? "Exigente"
-                        : "Sostenible"}
+                      {timeTargets.oneMonth.verdict.label}
                     </span>
                   </div>
                   <span className="text-[11px] text-zinc-400 block mt-0.5">
@@ -880,7 +1016,7 @@ export function WeightProjectionModal({
                 <div className="space-y-1.5 py-1">
                   <div className="flex items-baseline justify-between">
                     <span className="text-xs text-zinc-400">Déficit diario:</span>
-                    <strong className="text-lg font-mono font-bold text-accent-light">
+                    <strong className={`text-lg font-mono font-bold ${timeTargets.oneMonth.verdict.textClass}`}>
                       -{timeTargets.oneMonth.dailyKcal}{" "}
                       <span className="text-xs font-normal text-zinc-400">kcal/d</span>
                     </strong>
@@ -899,10 +1035,8 @@ export function WeightProjectionModal({
                   </div>
                 </div>
 
-                <div className="text-[10px] text-zinc-400 border-t border-zinc-800/80 pt-2">
-                  {timeTargets.oneMonth.isExtreme
-                    ? "⚠️ Déficit excesivamente alto. Incompatible con preservar masa muscular."
-                    : "Plan de corte rápido para objetivos a muy corto plazo."}
+                <div className="text-[10px] text-zinc-400 border-t border-zinc-800/80 pt-2 leading-relaxed">
+                  {timeTargets.oneMonth.verdict.description}
                 </div>
               </div>
 
@@ -918,8 +1052,8 @@ export function WeightProjectionModal({
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-zinc-100">En 2 Meses</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                      ⭐ Recomendado
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${timeTargets.twoMonths.verdict.badgeClass}`}>
+                      {timeTargets.twoMonths.verdict.label}
                     </span>
                   </div>
                   <span className="text-[11px] text-zinc-400 block mt-0.5">
@@ -930,7 +1064,7 @@ export function WeightProjectionModal({
                 <div className="space-y-1.5 py-1">
                   <div className="flex items-baseline justify-between">
                     <span className="text-xs text-zinc-400">Déficit diario:</span>
-                    <strong className="text-lg font-mono font-bold text-emerald-400">
+                    <strong className={`text-lg font-mono font-bold ${timeTargets.twoMonths.verdict.textClass}`}>
                       -{timeTargets.twoMonths.dailyKcal}{" "}
                       <span className="text-xs font-normal text-zinc-400">kcal/d</span>
                     </strong>
@@ -949,8 +1083,8 @@ export function WeightProjectionModal({
                   </div>
                 </div>
 
-                <div className="text-[10px] text-zinc-400 border-t border-zinc-800/80 pt-2">
-                  Equilibrio óptimo: quema grasa a buen ritmo sin comprometer la fuerza en el gimnasio.
+                <div className="text-[10px] text-zinc-400 border-t border-zinc-800/80 pt-2 leading-relaxed">
+                  {timeTargets.twoMonths.verdict.description}
                 </div>
               </div>
 
@@ -966,8 +1100,8 @@ export function WeightProjectionModal({
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-zinc-100">En 3 Meses</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">
-                      🌱 Muy Cómodo
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${timeTargets.threeMonths.verdict.badgeClass}`}>
+                      {timeTargets.threeMonths.verdict.label}
                     </span>
                   </div>
                   <span className="text-[11px] text-zinc-400 block mt-0.5">
@@ -978,7 +1112,7 @@ export function WeightProjectionModal({
                 <div className="space-y-1.5 py-1">
                   <div className="flex items-baseline justify-between">
                     <span className="text-xs text-zinc-400">Déficit diario:</span>
-                    <strong className="text-lg font-mono font-bold text-blue-400">
+                    <strong className={`text-lg font-mono font-bold ${timeTargets.threeMonths.verdict.textClass}`}>
                       -{timeTargets.threeMonths.dailyKcal}{" "}
                       <span className="text-xs font-normal text-zinc-400">kcal/d</span>
                     </strong>
@@ -997,8 +1131,8 @@ export function WeightProjectionModal({
                   </div>
                 </div>
 
-                <div className="text-[10px] text-zinc-400 border-t border-zinc-800/80 pt-2">
-                  Déficit suave y fácil de cumplir. Cero ansiedad y máxima adherencia a largo plazo.
+                <div className="text-[10px] text-zinc-400 border-t border-zinc-800/80 pt-2 leading-relaxed">
+                  {timeTargets.threeMonths.verdict.description}
                 </div>
               </div>
             </div>
