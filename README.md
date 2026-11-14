@@ -2,7 +2,9 @@
 
 **ByteHevy** es una plataforma personal de analítica de fuerza, seguimiento de progresión y gestión de entrenamientos diseñada para atletas y levantadores. Permite importar historiales completos de aplicaciones como **Hevy** y **JEFIT**, visualizar curvas de progresión avanzadas, organizar el entrenamiento en temporadas (**Seasons**) y definir objetivos inteligentes de carga y repeticiones.
 
-<img width="1357" height="928" alt="image" src="https://github.com/user-attachments/assets/9374861f-9c7b-48fc-989d-b1f120819efc" />
+<img width="1503" height="923" alt="image" src="https://github.com/user-attachments/assets/a96fc90e-ded9-487e-880b-b7f544f4bd1a" />
+
+<img width="1462" height="919" alt="image" src="https://github.com/user-attachments/assets/33004b6f-e234-405b-941c-7a662ddcb7a7" />
 
 
 ---
